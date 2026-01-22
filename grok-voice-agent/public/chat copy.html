@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APB</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            min-height: 100vh;
+            color: #ffffff;
+        }
+
+        .app-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0 30px;
+        }
+
+        .header h1 {
+            font-size: 72px;
+            font-weight: 700;
+            letter-spacing: -3px;
+            background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .voice-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 50px 30px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 32px;
+            margin-top: 30px;
+        }
+
+        #voiceBtn {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 56px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #voiceBtn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
+        }
+
+        #voiceBtn.listening {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border-color: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        #voiceBtn.connecting {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border-color: #f59e0b;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+            70% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        #voiceBtn.connecting {
+            animation: none;
+        }
+
+        .voice-status {
+            margin-top: 24px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .agent-status {
+            margin-top: 16px;
+            padding: 10px 24px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 50px;
+            color: #22c55e;
+            font-size: 14px;
+            display: none;
+        }
+
+        .agent-status.active {
+            display: block;
+        }
+
+        .agent-status.speaking {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+        }
+
+        /* Audio Level Indicator */
+        .audio-level-container {
+            margin-top: 32px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .audio-level-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .audio-level-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .audio-level-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+            width: 0%;
+            transition: width 0.1s ease;
+            border-radius: 4px;
+        }
+
+        /* Debug Panel */
+        .debug-panel {
+            margin-top: 32px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 250px;
+            overflow-y: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            color: #22c55e;
+        }
+
+        .debug-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .debug-panel::-webkit-scrollbar-thumb {
+            background: rgba(34, 197, 94, 0.3);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #22c55e; }
+        .log-entry.info { color: #a0a0a0; }
+        .log-entry.warning { color: #f59e0b; }
+
+        #agentAudio {
+            display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 48px;
+            }
+            #voiceBtn {
+                width: 120px;
+                height: 120px;
+                font-size: 48px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>APB</h1>
+        </header>
+        
+        <div class="voice-container">
+            <button id="voiceBtn" onclick="toggleVoice()">🎤</button>
+            <p class="voice-status" id="voiceStatus">Tap to connect</p>
+            
+            <div class="agent-status" id="agentStatus">🤖 Agent Connected</div>
+            
+            <!-- Audio Level Indicator -->
+            <div class="audio-level-container">
+                <div class="audio-level-label">
+                    <span>Your Microphone</span>
+                    <span id="audioLevelValue">0</span>
+                </div>
+                <div class="audio-level-bar">
+                    <div class="audio-level-fill" id="audioLevelFill"></div>
+                </div>
+            </div>
+            
+            <!-- Debug Panel -->
+            <div class="debug-panel" id="debugPanel"></div>
+        </div>
+    </div>
+
+    <audio id="agentAudio" autoplay></audio>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        // Use local server endpoint - change this if deploying
+        const TOKEN_URL = '/token';  // Relative URL for local server
+        
+        // ============================================
+        // STATE
+        // ============================================
+        let room = null;
+        let isConnected = false;
+        let audioMonitorInterval = null;
+
+        // ============================================
+        // LOGGING
+        // ============================================
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = {
+                'error': '❌',
+                'success': '✅',
+                'warning': '⚠️',
+                'info': '→'
+            }[type] || '→';
+            
+            console.log(`[${timestamp}] ${prefix} ${message}`);
+            
+            const panel = document.getElementById('debugPanel');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${prefix} ${message}`;
+            panel.appendChild(entry);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // ============================================
+        // MAIN TOGGLE
+        // ============================================
+        async function toggleVoice() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                await connect();
+            }
+        }
+
+        // ============================================
+        // CONNECT
+        // ============================================
+        async function connect() {
+            const btn = document.getElementById('voiceBtn');
+            const status = document.getElementById('voiceStatus');
+            
+            btn.classList.add('connecting');
+            btn.disabled = true;
+            status.textContent = 'Connecting...';
+            
+            log('Starting connection...', 'info');
+
+            try {
+                // Step 1: Check microphone
+                log('Requesting microphone access...', 'info');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                log('Microphone access granted', 'success');
+                stream.getTracks().forEach(t => t.stop()); // Release for now
+
+                // Step 2: Get token
+                log('Fetching token from server...', 'info');
+                const response = await fetch(TOKEN_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`Token received for room: ${data.roomName}`, 'success');
+                log(`LiveKit URL: ${data.url}`, 'info');
+                
+                // Validate URL
+                if (!data.url?.startsWith('wss://')) {
+                    log('WARNING: URL should be wss://', 'warning');
+                }
+
+                // Step 3: Create room
+                log('Creating LiveKit room...', 'info');
+                room = new LivekitClient.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                    audioCaptureDefaults: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    }
+                });
+
+                // Step 4: Set up event handlers
+                setupEventHandlers();
+
+                // Step 5: Connect
+                log('Connecting to LiveKit...', 'info');
+                await room.connect(data.url, data.token);
+                log(`Connected to room: ${room.name}`, 'success');
+
+                // Step 6: Enable microphone - CRITICAL!
+                log('Enabling microphone...', 'info');
+                await room.localParticipant.setMicrophoneEnabled(true);
+                log('Microphone enabled and publishing audio', 'success');
+
+                // Verify
+                const tracks = room.localParticipant.audioTrackPublications;
+                log(`Audio tracks published: ${tracks.size}`, 'info');
+
+                // Step 7: Start monitoring
+                startAudioMonitoring();
+                checkForAgent();
+
+                // Update UI
+                isConnected = true;
+                btn.classList.remove('connecting');
+                btn.classList.add('listening');
+                btn.disabled = false;
+                btn.textContent = '⏹';
+                status.textContent = 'Connected — Speak now!';
+                
+                log('Voice connection ready!', 'success');
+                log('Waiting for agent to respond...', 'info');
+
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                console.error('Full error:', error);
+                
+                btn.classList.remove('connecting');
+                btn.disabled = false;
+                status.textContent = 'Connection failed. Tap to retry.';
+                
+                if (room) {
+                    room.disconnect();
+                    room = null;
+                }
+            }
+        }
+
+        // ============================================
+        // EVENT HANDLERS
+        // ============================================
+        function setupEventHandlers() {
+            // Participant joined
+            room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+                log(`Participant joined: ${participant.identity}`, 'success');
+                updateAgentStatus(true);
+            });
+
+            // Participant left
+            room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+                log(`Participant left: ${participant.identity}`, 'info');
+                updateAgentStatus(false);
+            });
+
+            // Track subscribed - when we receive audio from agent
+            room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                log(`Received ${track.kind} from ${participant.identity}`, 'success');
+                
+                if (track.kind === 'audio') {
+                    const audio = document.getElementById('agentAudio');
+                    track.attach(audio);
+                    audio.play().then(() => {
+                        log('Agent audio playing!', 'success');
+                        updateAgentStatus(true, true);
+                    }).catch(e => {
+                        log(`Audio play blocked: ${e.message}`, 'warning');
+                        log('Click anywhere to enable audio', 'info');
+                    });
+                }
+            });
+
+            // Track unsubscribed
+            room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+                log(`Track unsubscribed: ${track.kind}`, 'info');
+                track.detach();
+                updateAgentStatus(true, false);
+            });
+
+            // Our track published
+            room.on(LivekitClient.RoomEvent.LocalTrackPublished, (pub) => {
+                log(`Your ${pub.kind} track published`, 'success');
+            });
+
+            // Disconnection
+            room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+                log(`Disconnected: ${reason || 'unknown'}`, 'warning');
+                disconnect();
+            });
+
+            // Errors
+            room.on(LivekitClient.RoomEvent.MediaDevicesError, (error) => {
+                log(`Media error: ${error.message}`, 'error');
+            });
+        }
+
+        // ============================================
+        // HELPERS
+        // ============================================
+        function checkForAgent() {
+            const participants = room.remoteParticipants;
+            log(`Checking for agent (${participants.size} remote participants)`, 'info');
+            
+            participants.forEach((p, id) => {
+                log(`  Found: ${id}`, 'info');
+                updateAgentStatus(true);
+                
+                // Subscribe to existing tracks
+                p.trackPublications.forEach(pub => {
+                    if (pub.track && pub.kind === 'audio') {
+                        const audio = document.getElementById('agentAudio');
+                        pub.track.attach(audio);
+                        audio.play().catch(() => {});
+                    }
+                });
+            });
+        }
+
+        function updateAgentStatus(connected, speaking = false) {
+            const el = document.getElementById('agentStatus');
+            if (connected) {
+                el.classList.add('active');
+                if (speaking) {
+                    el.classList.add('speaking');
+                    el.textContent = '🔊 Agent Speaking';
+                } else {
+                    el.classList.remove('speaking');
+                    el.textContent = '🤖 Agent Connected';
+                }
+            } else {
+                el.classList.remove('active', 'speaking');
+            }
+        }
+
+        function startAudioMonitoring() {
+            const tracks = room.localParticipant.audioTrackPublications;
+            
+            tracks.forEach(pub => {
+                if (pub.track?.mediaStreamTrack) {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const stream = new MediaStream([pub.track.mediaStreamTrack]);
+                    const source = ctx.createMediaStreamSource(stream);
+                    const analyser = ctx.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
+                    
+                    const data = new Uint8Array(analyser.frequencyBinCount);
+                    
+                    audioMonitorInterval = setInterval(() => {
+                        if (!isConnected) {
+                            clearInterval(audioMonitorInterval);
+                            ctx.close();
+                            return;
+                        }
+                        
+                        analyser.getByteFrequencyData(data);
+                        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                        const level = Math.min(100, avg * 1.5);
+                        
+                        document.getElementById('audioLevelFill').style.width = `${level}%`;
+                        document.getElementById('audioLevelValue').textContent = Math.round(avg);
+                    }, 100);
+                }
+            });
+        }
+
+        // ============================================
+        // DISCONNECT
+        // ============================================
+        function disconnect() {
+            log('Disconnecting...', 'info');
+            
+            if (audioMonitorInterval) {
+                clearInterval(audioMonitorInterval);
+                audioMonitorInterval = null;
+            }
+            
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            
+            isConnected = false;
+            
+            const btn = document.getElementById('voiceBtn');
+            btn.classList.remove('listening', 'connecting');
+            btn.textContent = '🎤';
+            btn.disabled = false;
+            
+            document.getElementById('voiceStatus').textContent = 'Tap to connect';
+            document.getElementById('audioLevelFill').style.width = '0%';
+            document.getElementById('audioLevelValue').textContent = '0';
+            updateAgentStatus(false);
+            
+            log('Disconnected', 'info');
+        }
+
+        // ============================================
+        // PAGE EVENTS
+        // ============================================
+        window.addEventListener('beforeunload', () => {
+            if (room) room.disconnect();
+        });
+
+        // Enable audio on click (for autoplay policy)
+        document.addEventListener('click', () => {
+            const audio = document.getElementById('agentAudio');
+            if (audio.paused && audio.srcObject) {
+                audio.play().catch(() => {});
+            }
+        });
+
+        // Startup
+        log('APB Voice ready', 'success');
+        log('Click the microphone to connect', 'info');
+    </script>
+</body>
+</html>

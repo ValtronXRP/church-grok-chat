@@ -1,0 +1,5 @@
+# LiveKit Agents with xAI plugin
+livekit-agents[xai]>=1.0.0
+
+# Environment variables
+python-dotenv>=1.0.0

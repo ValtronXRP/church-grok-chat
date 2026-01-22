@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Voice Connection</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
+</head>
+<body>
+    <h1>Voice Agent Test</h1>
+    <button onclick="connect()">Connect to Room</button>
+    <div id="status"></div>
+    <div id="log"></div>
+
+    <script>
+        let room;
+        
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`;
+            console.log(msg);
+        }
+        
+        async function connect() {
+            try {
+                log('Fetching token...');
+                const response = await fetch('http://localhost:3001/token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({roomName: 'test-room-' + Date.now()})
+                });
+                
+                const data = await response.json();
+                log(`Got token for room: ${data.roomName}`);
+                
+                room = new LivekitClient.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                });
+                
+                // Set up event handlers
+                room.on('participantConnected', (participant) => {
+                    log(`Participant connected: ${participant.identity}`);
+                    if (participant.identity.includes('grok') || participant.identity.includes('agent')) {
+                        log('🎉 AGENT CONNECTED!');
+                        document.getElementById('status').innerHTML = '<h2 style="color: green">✅ Agent Connected!</h2>';
+                    }
+                });
+                
+                room.on('participantDisconnected', (participant) => {
+                    log(`Participant disconnected: ${participant.identity}`);
+                });
+                
+                room.on('trackSubscribed', (track, publication, participant) => {
+                    log(`Track subscribed: ${track.kind} from ${participant.identity}`);
+                });
+                
+                // Connect to room
+                log('Connecting to LiveKit...');
+                await room.connect(data.url, data.token);
+                log(`Connected to room: ${room.name}`);
+                
+                // Enable microphone
+                log('Enabling microphone...');
+                await room.localParticipant.setMicrophoneEnabled(true);
+                log('Microphone enabled');
+                
+                // Check for participants
+                log(`Remote participants: ${room.remoteParticipants.size}`);
+                room.remoteParticipants.forEach((p, id) => {
+                    log(`  - ${p.identity}`);
+                });
+                
+                // Wait for agent
+                log('Waiting for agent to join...');
+                document.getElementById('status').innerHTML = '<h2>Waiting for agent...</h2>';
+                
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>APB</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --vh: 1vh;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            min-height: 100vh;
+            min-height: calc(var(--vh, 1vh) * 100);
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .app-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            min-height: calc(var(--vh, 1vh) * 100);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0 30px;
+        }
+
+        .header h1 {
+            font-size: 72px;
+            font-weight: 700;
+            letter-spacing: -3px;
+            background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .voice-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 50px 30px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 32px;
+            margin-top: 30px;
+            position: relative;
+        }
+
+        /* Chat Window */
+        .chat-window {
+            width: 100%;
+            height: 400px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 32px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Text Input Container */
+        .text-input-container {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .text-input-wrapper {
+            display: flex;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            padding: 8px 8px 8px 24px;
+            transition: all 0.3s ease;
+        }
+
+        .text-input-wrapper:focus-within {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        #textInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            padding: 10px 0;
+        }
+
+        #textInput::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        #sendBtn {
+            background: #000000;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #sendBtn:not(:disabled):hover,
+        #sendBtn:not(:disabled):focus {
+            background: rgb(0, 255, 65) !important;
+            border-color: rgb(0, 255, 65) !important;
+            color: #000000 !important;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 255, 65, 0.4);
+            outline: none;
+        }
+
+        #sendBtn:active {
+            transform: scale(0.98);
+        }
+
+        #sendBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Menu Links */
+        .menu-links {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .menu-links a,
+        .menu-links a:link,
+        .menu-links a:visited {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+        }
+
+        .menu-links a:hover,
+        .menu-links a:focus {
+            color: rgb(0, 255, 65) !important;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+        }
+
+        .chat-window::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-window::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-window::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        /* Message Bubbles */
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.4;
+            color: #ffffff;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: rgb(0, 255, 65);
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+            margin-left: auto;
+            color: #000000;
+        }
+
+        .message.agent {
+            background: #2d2d2d;
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+            margin-right: auto;
+        }
+
+        /* Sermon Links and References */
+        .message .sermon-link {
+            display: inline-block;
+            color: #4CAF50;
+            text-decoration: none;
+            padding: 4px 8px;
+            margin: 2px 0;
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .message .sermon-link:hover {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: #4CAF50;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .message .sermon-ref {
+            display: block;
+            color: #64B5F6;
+            margin: 8px 0 4px 0;
+            font-weight: 600;
+            border-left: 3px solid #64B5F6;
+            padding-left: 8px;
+        }
+
+        .message .scripture-ref {
+            color: #FFD54F;
+            font-weight: 500;
+            background: rgba(255, 213, 79, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        
+        /* Embedded Video Styles */
+        .sermon-video-container {
+            margin: 15px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f9f9f9;
+            max-width: 560px;
+        }
+        
+        .video-header {
+            padding: 10px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .external-link {
+            color: white;
+            text-decoration: none;
+            font-size: 0.9em;
+            padding: 4px 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        
+        .external-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .sermon-video-container iframe {
+            display: block;
+            border: none;
+        }
+
+        .message.system {
+            background: transparent;
+            align-self: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+            padding: 8px;
+            text-align: center;
+        }
+
+        /* Typing indicator */
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #2d2d2d;
+            align-self: flex-start;
+            border-radius: 18px;
+            border-bottom-left-radius: 6px;
+            max-width: 60px;
+        }
+
+        .typing span {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0.8); }
+            40% { transform: scale(1.2); }
+        }
+
+        /* Voice Button */
+        #voiceBtn {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #voiceBtn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
+        }
+
+        #voiceBtn.listening {
+            background: linear-gradient(135deg, rgb(0, 255, 65) 0%, rgb(0, 200, 50) 100%);
+            border-color: rgb(0, 255, 65);
+            animation: pulse-green 1.5s infinite;
+        }
+
+        #voiceBtn.connecting {
+            background: linear-gradient(135deg, rgb(0, 200, 50) 0%, rgb(0, 150, 40) 100%);
+            border-color: rgb(0, 200, 50);
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.5); }
+            70% { box-shadow: 0 0 0 30px rgba(0, 255, 65, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+            70% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        #voiceBtn svg {
+            width: 56px;
+            height: 56px;
+            fill: white;
+            transition: fill 0.3s ease;
+        }
+        
+        #voiceBtn.listening svg,
+        #voiceBtn.connecting svg {
+            fill: black;
+        }
+
+        .voice-status {
+            margin-top: 24px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .agent-status {
+            margin-top: 16px;
+            padding: 10px 24px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 50px;
+            color: #22c55e;
+            font-size: 14px;
+            display: none;
+        }
+
+        .agent-status.active {
+            display: block;
+        }
+
+        .agent-status.speaking {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+        }
+
+        /* Audio Level Indicator */
+        .audio-level-container {
+            margin-top: 32px;
+            margin-bottom: 32px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .audio-level-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .audio-level-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .audio-level-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+            width: 0%;
+            transition: width 0.1s ease;
+            border-radius: 4px;
+        }
+
+        /* Voice Response Toggle */
+        .voice-response-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .toggle-response-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 22px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #22c55e;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+        }
+
+        .toggle-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-left: 8px;
+        }
+
+        .toggle-switch input:not(:checked) ~ .toggle-label {
+            opacity: 0.7;
+        }
+
+        /* Chat window needs relative positioning for absolute toggle */
+        .chat-window {
+            position: relative;
+        }
+
+        /* Clear Button */
+        .clear-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Debug Panel */
+        .debug-panel {
+            margin-top: 32px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 250px;
+            overflow-y: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            color: #22c55e;
+        }
+
+        .debug-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .debug-panel::-webkit-scrollbar-thumb {
+            background: rgba(34, 197, 94, 0.3);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #22c55e; }
+        .log-entry.info { color: #a0a0a0; }
+        .log-entry.warning { color: #f59e0b; }
+
+        #agentAudio {
+            display: none;
+        }
+
+        /* Responsive - Tablet */
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 15px;
+            }
+            
+            .header {
+                padding: 30px 0 20px;
+            }
+            
+            .header h1 {
+                font-size: 56px;
+            }
+            
+            .voice-container {
+                padding: 30px 20px;
+                border-radius: 24px;
+            }
+            
+            .chat-window {
+                height: 350px;
+            }
+            
+            .menu-links {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                gap: 15px;
+            }
+            
+            .menu-links a {
+                font-size: 13px;
+            }
+        }
+
+        /* Responsive - Mobile */
+        @media (max-width: 600px) {
+            body {
+                padding-top: 60px; /* Space for menu */
+            }
+            
+            .app-container {
+                padding: 10px;
+                max-width: 100%;
+            }
+            
+            .header {
+                padding: 20px 0 15px;
+            }
+            
+            .header h1 {
+                font-size: 42px;
+                letter-spacing: -2px;
+            }
+            
+            .menu-links {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: rgba(0, 0, 0, 0.95);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 12px 20px;
+                justify-content: center;
+                gap: 30px;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+            
+            .menu-links a {
+                font-size: 12px;
+                font-weight: 600;
+            }
+            
+            .voice-container {
+                padding: 25px 15px;
+                border-radius: 20px;
+                margin-top: 15px;
+            }
+            
+            #voiceBtn {
+                width: 100px;
+                height: 100px;
+            }
+            
+            #voiceBtn svg {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .voice-status {
+                margin-top: 16px;
+                font-size: 16px;
+            }
+            
+            .agent-status {
+                margin-top: 12px;
+                padding: 8px 20px;
+                font-size: 12px;
+            }
+            
+            /* Audio Level */
+            .audio-level-container {
+                margin-top: 20px;
+                margin-bottom: 20px;
+                max-width: 100%;
+            }
+            
+            .audio-level-label {
+                font-size: 11px;
+            }
+            
+            .audio-level-bar {
+                height: 6px;
+            }
+            
+            /* Text Input */
+            .text-input-container {
+                margin-bottom: 15px;
+            }
+            
+            .text-input-wrapper {
+                padding: 6px 6px 6px 20px;
+                gap: 8px;
+            }
+            
+            #textInput {
+                font-size: 14px;
+                padding: 8px 0;
+            }
+            
+            #sendBtn {
+                padding: 10px 20px;
+                font-size: 12px;
+            }
+            
+            /* Chat Window */
+            .chat-window {
+                height: 300px;
+                padding: 15px;
+                border-radius: 16px;
+                margin-bottom: 20px;
+            }
+            
+            .message {
+                font-size: 14px;
+                padding: 10px 14px;
+                max-width: 85%;
+            }
+            
+            /* Debug Panel */
+            .debug-panel {
+                margin-top: 20px;
+                padding: 15px;
+                border-radius: 12px;
+                max-height: 180px;
+                font-size: 11px;
+            }
+            
+            /* Clear Button */
+            .clear-btn {
+                position: static;
+                margin-top: 15px;
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+
+        /* Responsive - Small Mobile */
+        @media (max-width: 380px) {
+            .header h1 {
+                font-size: 36px;
+            }
+            
+            .menu-links {
+                gap: 20px;
+            }
+            
+            .menu-links a {
+                font-size: 11px;
+            }
+            
+            #voiceBtn {
+                width: 90px;
+                height: 90px;
+            }
+            
+            #voiceBtn svg {
+                width: 36px;
+                height: 36px;
+            }
+            
+            .chat-window {
+                height: 250px;
+            }
+            
+            #textInput {
+                font-size: 13px;
+            }
+            
+            #sendBtn {
+                padding: 10px 16px;
+                font-size: 11px;
+            }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            #voiceBtn:active {
+                transform: scale(0.95);
+            }
+            
+            #sendBtn:active {
+                transform: scale(0.95);
+            }
+            
+            .menu-links a:active {
+                color: rgb(0, 255, 65) !important;
+            }
+        }
+
+        /* Landscape mobile */
+        @media (max-height: 600px) and (orientation: landscape) {
+            .header {
+                padding: 15px 0 10px;
+            }
+            
+            .header h1 {
+                font-size: 36px;
+            }
+            
+            .voice-container {
+                padding: 20px 15px;
+            }
+            
+            #voiceBtn {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .chat-window {
+                height: 200px;
+            }
+            
+            .debug-panel {
+                max-height: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Links (outside container for viewport positioning) -->
+    <div class="menu-links">
+        <a href="https://www.youtube.com/playlist?list=PLEgYquYMZK-Sd5TXQnYge2rC-_zS0zPnm" target="_blank">APB Podcast</a>
+        <a href="https://www.youtube.com/playlist?list=PLEgYquYMZK-S5hMVvpeGJ4U-R627ZIQ94" target="_blank">Sermons</a>
+    </div>
+
+    <div class="app-container">
+        <header class="header">
+            <h1>APB</h1>
+        </header>
+        
+        <div class="voice-container">
+            <!-- Voice Button with SVG -->
+            <button id="voiceBtn" onclick="toggleVoice()">
+                <!-- Microphone SVG -->
+                <svg id="micIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+                <!-- Stop SVG (hidden initially) -->
+                <svg id="stopIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+            </button>
+            <p class="voice-status" id="voiceStatus">Tap to connect</p>
+            
+            <div class="agent-status" id="agentStatus">🤖 Agent Connected</div>
+            
+            <!-- Audio Level Indicator -->
+            <div class="audio-level-container">
+                <div class="audio-level-label">
+                    <span>Your Microphone</span>
+                    <span id="audioLevelValue">0</span>
+                </div>
+                <div class="audio-level-bar">
+                    <div class="audio-level-fill" id="audioLevelFill"></div>
+                </div>
+            </div>
+
+            <!-- Text Input Container (moved above chat) -->
+            <div class="text-input-container">
+                <div class="text-input-wrapper">
+                    <input 
+                        type="text" 
+                        id="textInput" 
+                        placeholder="Type your message here..."
+                        onkeypress="handleKeyPress(event)"
+                        onfocus="handleTextInputFocus()"
+                        autocomplete="off"
+                        autocapitalize="sentences"
+                        autocorrect="on"
+                        spellcheck="true"
+                    >
+                    <button id="sendBtn" onclick="sendTextMessage()">Send</button>
+                </div>
+            </div>
+
+            <!-- Chat Transcript Window -->
+            <div class="chat-window" id="chatWindow">
+                <!-- Voice Response Toggle -->
+                <div class="voice-response-toggle" id="voiceResponseToggle">
+                    <div class="toggle-response-label">Response</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voiceResponseCheckbox" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">VOICE</span>
+                    </label>
+                </div>
+                <div class="message system">You can type a message below or click the microphone for voice chat</div>
+            </div>
+            
+            <!-- Debug Panel -->
+            <div class="debug-panel" id="debugPanel"></div>
+            
+            <!-- Clear Button -->
+            <button class="clear-btn" onclick="clearConversation()">Clear Chat</button>
+        </div>
+    </div>
+
+    <audio id="agentAudio" autoplay></audio>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        // Use local server endpoint - change this if deploying
+        const TOKEN_URL = '/token';  // Relative URL for local server
+        const GROK_API_URL = '/api/chat';  // Use relative URL for local development
+        
+        // ============================================
+        // STATE
+        // ============================================
+        let room = null;
+        let isConnected = false;
+        let audioMonitorInterval = null;
+        let voiceResponseEnabled = true; // Track voice response preference
+        let silentConnection = false; // Track if connection was from text input
+        let typingTimeout = null;
+        let conversationHistory = [
+            {
+                role: 'system',
+                content: `You are APB (Ask Pastor Bob), a helpful AI assistant based on Pastor Bob Kopeny's teachings.
+
+CRITICAL RULES YOU MUST ALWAYS FOLLOW:
+1. When anyone mentions "Bob" or "Pastor Bob" they are ALWAYS referring to Pastor Bob Kopeny - never any other Bob.
+2. ALWAYS spell his last name correctly as "Kopeny" (K-O-P-E-N-Y), never "Copeny" or any other variation.
+3. If a user misspells it as "Copeny" or similar, silently correct it to "Kopeny" in your response.
+4. For ANY question (biblical or otherwise), frame your answer in the context of what Pastor Bob Kopeny teaches or would say.
+5. Begin responses about biblical topics with phrases like "Pastor Bob Kopeny teaches..." or "According to Pastor Bob Kopeny..."
+6. For general questions, relate them back to Pastor Bob Kopeny's perspective when possible.
+7. Maintain context across both voice and text interactions.
+8. Be warm, helpful, and concise.`
+            }
+        ];
+
+        // ============================================
+        // CHAT FUNCTIONS
+        // ============================================
+        function addMessage(text, sender) {
+            const chatWindow = document.getElementById('chatWindow');
+            
+            // Remove typing indicator if it exists
+            const existingTyping = chatWindow.querySelector('.typing');
+            if (existingTyping) existingTyping.remove();
+            
+            // Add message
+            const msg = document.createElement('div');
+            msg.className = `message ${sender}`;
+            
+            // Process text for YouTube links and sermon references
+            if (sender === 'agent' || sender === 'assistant') {
+                msg.innerHTML = formatMessageWithLinks(text);
+            } else {
+                msg.textContent = text;
+            }
+            
+            chatWindow.appendChild(msg);
+            
+            // Auto scroll
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        function formatMessageWithLinks(text) {
+            // First, extract YouTube URLs and replace them with placeholders
+            const videoPlaceholders = {};
+            let placeholderIndex = 0;
+            
+            // Find and replace YouTube URLs with placeholders
+            let processedText = text.replace(
+                /\(?(https:\/\/(www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(&t=\d+s)?)\)?/g,
+                function(match, url, www, videoId, timestamp) {
+                    const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
+                    const timeMatch = timestamp ? timestamp.match(/t=(\d+)s/) : null;
+                    const seconds = timeMatch ? parseInt(timeMatch[1]) : 0;
+                    const timeLabel = timeMatch ? formatSecondsToTime(seconds) : '';
+                    
+                    // YouTube embed URL with autoplay disabled and starting at specific time
+                    const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1`;
+                    
+                    // Store the embed HTML with fixed iframe attributes
+                    videoPlaceholders[placeholder] = `
+                        <div class="sermon-video-container">
+                            <div class="video-header">
+                                📹 Sermon Segment${timeLabel ? ' (starts at ' + timeLabel + ')' : ''}
+                                <a href="${url}" target="_blank" class="external-link">Open in YouTube →</a>
+                            </div>
+                            <iframe 
+                                width="100%" 
+                                height="315" 
+                                src="${embedUrl}"
+                                title="YouTube video player"
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                allowfullscreen>
+                            </iframe>
+                        </div>`;
+                    
+                    placeholderIndex++;
+                    return placeholder;
+                }
+            );
+            
+            // Now escape HTML in the remaining text
+            let formatted = processedText.replace(/&/g, '&amp;')
+                                         .replace(/</g, '&lt;')
+                                         .replace(/>/g, '&gt;');
+            
+            // Replace placeholders with actual video embeds
+            for (const [placeholder, embedHtml] of Object.entries(videoPlaceholders)) {
+                formatted = formatted.replace(placeholder, embedHtml);
+            }
+            
+            // Format sermon references (e.g., "From 'sermon title' (15:32):")
+            formatted = formatted.replace(
+                /From ["']([^"']+)["'] \((\d+:\d+)\):/g,
+                '<strong class="sermon-ref">From "$1" ($2):</strong>'
+            );
+            
+            // Format scripture references
+            formatted = formatted.replace(
+                /([1-3]?\s?[A-Z][a-z]+)\s+(\d+):(\d+(?:-\d+)?)/g,
+                '<span class="scripture-ref">$1 $2:$3</span>'
+            );
+            
+            // Convert line breaks
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
+        }
+        
+        function formatSecondsToTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function showTyping() {
+            const chatWindow = document.getElementById('chatWindow');
+            const existingTyping = chatWindow.querySelector('.typing');
+            
+            if (!existingTyping) {
+                const typing = document.createElement('div');
+                typing.className = 'typing';
+                typing.innerHTML = '<span></span><span></span><span></span>';
+                chatWindow.appendChild(typing);
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            }
+            
+            // Clear any existing timeout
+            if (typingTimeout) clearTimeout(typingTimeout);
+            
+            // Remove typing after 5 seconds if no response
+            typingTimeout = setTimeout(() => {
+                const typing = chatWindow.querySelector('.typing');
+                if (typing) typing.remove();
+            }, 5000);
+        }
+
+        function hideTyping() {
+            const typing = document.getElementById('chatWindow').querySelector('.typing');
+            if (typing) typing.remove();
+            if (typingTimeout) clearTimeout(typingTimeout);
+        }
+
+        // ============================================
+        // TEXT INPUT FUNCTIONS
+        // ============================================
+        async function handleTextInputFocus() {
+            // Don't auto-connect on focus - only connect when actually needed for voice response
+            // This avoids the greeting problem entirely
+            log('Text input focused - voice will connect if needed for response', 'info');
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendTextMessage();
+            }
+        }
+
+        async function sendTextMessage() {
+            const input = document.getElementById('textInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const text = input.value.trim();
+            
+            if (!text) return;
+            
+            // Add user message to chat and history
+            addMessage(text, 'user');
+            conversationHistory.push({ role: 'user', content: text });
+            
+            // Clear input and disable while sending
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+            
+            // Show typing indicator
+            showTyping();
+            
+            try {
+                log('Sending text message to Grok API: ' + text, 'info');
+                
+                // Call the Grok API
+                const response = await fetch(GROK_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        messages: conversationHistory,
+                        model: 'grok-3',  // Using latest available model
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                let currentMessage = null;
+
+                hideTyping();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.choices?.[0]?.delta?.content) {
+                                    const content = parsed.choices[0].delta.content;
+                                    fullResponse += content;
+                                    
+                                    // Create or update the message in the chat
+                                    if (!currentMessage) {
+                                        currentMessage = document.createElement('div');
+                                        currentMessage.className = 'message agent';
+                                        document.getElementById('chatWindow').appendChild(currentMessage);
+                                        document.getElementById('chatWindow').scrollTop = 
+                                            document.getElementById('chatWindow').scrollHeight;
+                                    }
+                                    // Check if response contains YouTube links
+                                    if (fullResponse.includes('youtube.com')) {
+                                        console.log('Response contains YouTube links:', fullResponse);
+                                    }
+                                    // Use innerHTML to properly format links and references
+                                    currentMessage.innerHTML = formatMessageWithLinks(fullResponse);
+                                }
+                            } catch (e) {
+                                // Skip invalid JSON
+                            }
+                        }
+                    }
+                }
+
+                // Add to conversation history
+                if (fullResponse) {
+                    conversationHistory.push({ role: 'assistant', content: fullResponse });
+                    log('Received response from Grok', 'success');
+                    
+                    // If voice response is enabled, connect if needed and speak
+                    if (voiceResponseEnabled) {
+                        if (!isConnected) {
+                            // Store the text to be spoken before connecting
+                            window.pendingTextToSpeak = fullResponse;
+                            
+                            // Connect silently just for speaking this response
+                            log('Connecting voice to speak response...', 'info');
+                            await connect(false); // false = no greeting
+                            // The connect function will handle sending the text to the agent
+                            // No need to wait here as the agent will speak automatically
+                        }
+                        
+                        if (isConnected && room && room.localParticipant) {
+                            // Voice agent should now be speaking the response
+                            log('Voice agent speaking the response', 'info');
+                            
+                            // Don't auto-disconnect here - let the agent finish speaking
+                            // The disconnect will happen from the data message handler
+                        }
+                    } else {
+                        log('Voice response disabled - text only', 'info');
+                    }
+                }
+
+            } catch (error) {
+                log('Error sending message: ' + error.message, 'error');
+                hideTyping();
+                addMessage('Failed to send message. Please try again.', 'system');
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        // ============================================
+        // CONTEXT SYNCHRONIZATION
+        // ============================================
+        function getConversationContext() {
+            // Get recent conversation for context (excluding system messages)
+            return conversationHistory
+                .filter(msg => msg.role !== 'system')
+                .slice(-20); // Last 20 messages for context
+        }
+
+        // Function to have the voice agent speak text responses
+        async function speakTextResponse(text) {
+            if (!room || !room.localParticipant) {
+                log('Cannot speak - not connected to voice room', 'warning');
+                return;
+            }
+            
+            try {
+                // For now, we'll use the agent's generate_reply capability
+                // The agent should speak the text we send
+                log('Voice agent will speak the response', 'info');
+                
+                // Don't disconnect based on estimated duration
+                // Let the agent complete speaking naturally
+                
+            } catch (error) {
+                log('Error with voice agent: ' + error.message, 'error');
+            }
+        }
+
+        function clearConversation() {
+            conversationHistory = [
+                {
+                    role: 'system',
+                    content: `You are APB (Ask Pastor Bob), a helpful AI assistant based on Pastor Bob Kopeny's teachings.
+
+CRITICAL RULES YOU MUST ALWAYS FOLLOW:
+1. When anyone mentions "Bob" or "Pastor Bob" they are ALWAYS referring to Pastor Bob Kopeny - never any other Bob.
+2. ALWAYS spell his last name correctly as "Kopeny" (K-O-P-E-N-Y), never "Copeny" or any other variation.
+3. If a user misspells it as "Copeny" or similar, silently correct it to "Kopeny" in your response.
+4. For ANY question (biblical or otherwise), frame your answer in the context of what Pastor Bob Kopeny teaches or would say.
+5. Begin responses about biblical topics with phrases like "Pastor Bob Kopeny teaches..." or "According to Pastor Bob Kopeny..."
+6. For general questions, relate them back to Pastor Bob Kopeny's perspective when possible.
+7. Maintain context across both voice and text interactions.
+8. Be warm, helpful, and concise.`
+                }
+            ];
+            const chatWindow = document.getElementById('chatWindow');
+            chatWindow.innerHTML = '<div class="message system">Conversation cleared. Start fresh with voice or text!</div>';
+        }
+
+        // ============================================
+        // LOGGING
+        // ============================================
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = {
+                'error': '❌',
+                'success': '✅',
+                'warning': '⚠️',
+                'info': '→'
+            }[type] || '→';
+            
+            console.log(`[${timestamp}] ${prefix} ${message}`);
+            
+            const panel = document.getElementById('debugPanel');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${prefix} ${message}`;
+            panel.appendChild(entry);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // ============================================
+        // MAIN TOGGLE
+        // ============================================
+        async function toggleVoice() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                await connect(true); // true = show greeting
+            }
+        }
+
+        // ============================================
+        // CONNECT
+        // ============================================
+        async function connect(showGreeting = true) {
+            const btn = document.getElementById('voiceBtn');
+            const status = document.getElementById('voiceStatus');
+            
+            // Store whether this is a silent connection
+            silentConnection = !showGreeting;
+            
+            btn.classList.add('connecting');
+            btn.disabled = true;
+            status.textContent = 'Connecting...';
+            
+            log('Starting connection...', 'info');
+            addMessage('Connecting to voice assistant...', 'system');
+
+            try {
+                // Step 1: Check microphone
+                log('Requesting microphone access...', 'info');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                log('Microphone access granted', 'success');
+                stream.getTracks().forEach(t => t.stop()); // Release for now
+
+                // Step 2: Get token with unique room name and context
+                log('Fetching token from server...', 'info');
+                // Use the fixed room name that the agent is listening to
+                const roomName = 'apb-voice-room';
+                
+                // Pass conversation context to voice agent
+                const contextMessages = getConversationContext();
+                
+                const response = await fetch(TOKEN_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        roomName,
+                        context: contextMessages // Pass conversation context to voice agent
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`Token received for room: ${data.roomName || roomName}`, 'success');
+                log(`LiveKit URL: ${data.url}`, 'info');
+                
+                // Validate URL
+                if (!data.url?.startsWith('wss://')) {
+                    log('WARNING: URL should be wss://', 'warning');
+                }
+
+                // Step 3: Create room
+                log('Creating LiveKit room...', 'info');
+                room = new LivekitClient.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                    audioCaptureDefaults: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    }
+                });
+
+                // Step 4: Set up event handlers
+                setupEventHandlers();
+
+                // Step 5: Connect with transcription enabled
+                log('Connecting to LiveKit with transcription...', 'info');
+                const roomOptions = {
+                    publishDefaults: {
+                        dtx: true,
+                        red: true,
+                    },
+                    adaptiveStream: true,
+                    dynacast: true,
+                };
+                await room.connect(data.url, data.token, roomOptions);
+                log(`Connected to room: ${room.name}`, 'success');
+
+                // Step 6: Enable microphone - CRITICAL!
+                log('Enabling microphone...', 'info');
+                await room.localParticipant.setMicrophoneEnabled(true);
+                log('Microphone enabled and publishing audio', 'success');
+                
+                // Enable transcriptions to see what's being said
+                await room.localParticipant.setTrackSubscriptionPermissions({
+                    allParticipantTracks: true,
+                    allTracks: true
+                });
+
+                // Verify
+                const tracks = room.localParticipant.audioTrackPublications;
+                log(`Audio tracks published: ${tracks.size}`, 'info');
+                
+                // Send connection type to agent and store response text if available
+                if (!showGreeting) {
+                    // Send silent connection signal IMMEDIATELY to beat the greeting timeout
+                    // The agent only waits 500ms, so we need to send this right away
+                    (async () => {
+                        try {
+                            // Store the text to be spoken
+                            const textToSpeak = window.pendingTextToSpeak || null;
+                            
+                            if (textToSpeak) {
+                                log('Sending text to voice agent: ' + textToSpeak.substring(0, 50) + '...', 'info');
+                            }
+                            
+                            const encoder = new TextEncoder();
+                            const data = encoder.encode(JSON.stringify({
+                                type: 'silent_connection',
+                                textToSpeak: textToSpeak
+                            }));
+                            await room.localParticipant.publishData(data, { reliable: true });
+                            log('Sent silent connection signal to agent immediately', 'info');
+                            
+                            // Don't set a disconnect timer here
+                            // The agent will send a 'speech_complete' signal when done
+                            // and we'll disconnect then
+                            if (textToSpeak) {
+                                log('Waiting for agent to finish speaking...', 'info');
+                            }
+                            
+                            // Clear the pending text
+                            window.pendingTextToSpeak = null;
+                        } catch (err) {
+                            log('Could not send connection type: ' + err.message, 'warning');
+                        }
+                    })(); // Execute immediately, no setTimeout
+                }
+
+                // Step 7: Start monitoring
+                startAudioMonitoring();
+                
+                // Wait a moment then check for agent
+                setTimeout(() => {
+                    checkForAgent();
+                    // Only show greeting for microphone button connections
+                    if (showGreeting) {
+                        setTimeout(() => {
+                            if (room.remoteParticipants.size > 0) {
+                                log('Agent connected, expecting greeting...', 'info');
+                            }
+                        }, 1000);
+                    } else {
+                        log('Silent connection for text input - no greeting', 'info');
+                    }
+                }, 500);
+
+                // Update UI
+                isConnected = true;
+                
+                // Always update button to show stop icon when connected
+                btn.classList.remove('connecting');
+                btn.classList.add('listening');
+                btn.disabled = false;
+                document.getElementById('micIcon').style.display = 'none';
+                document.getElementById('stopIcon').style.display = 'block';
+                
+                if (showGreeting) {
+                    // Full UI update for microphone connections
+                    status.textContent = 'Connected — Speak now!';
+                    log('Voice connection ready!', 'success');
+                    log('Speak or continue typing messages', 'info');
+                    addMessage('Voice connected! Speak now or continue typing.', 'system');
+                } else {
+                    // UI update for text-to-speech connections
+                    status.textContent = 'Speaking response...';
+                    log('Voice connected for text response', 'info');
+                }
+
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                console.error('Full error:', error);
+                
+                btn.classList.remove('connecting');
+                btn.disabled = false;
+                status.textContent = 'Connection failed. Tap to retry.';
+                addMessage('Connection failed. Please try again.', 'system');
+                
+                if (room) {
+                    room.disconnect();
+                    room = null;
+                }
+            }
+        }
+
+        // ============================================
+        // EVENT HANDLERS
+        // ============================================
+        function setupEventHandlers() {
+            // Participant joined
+            room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+                log(`Participant joined: ${participant.identity}`, 'success');
+                updateAgentStatus(true);
+            });
+
+            // Participant left
+            room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+                log(`Participant left: ${participant.identity}`, 'info');
+                updateAgentStatus(false);
+            });
+
+            // Track subscribed - when we receive audio from agent
+            room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                log(`Received ${track.kind} from ${participant.identity}`, 'success');
+                
+                if (track.kind === 'audio') {
+                    const audio = document.getElementById('agentAudio');
+                    track.attach(audio);
+                    audio.play().then(() => {
+                        log('Agent audio playing!', 'success');
+                        updateAgentStatus(true, true);
+                    }).catch(e => {
+                        log(`Audio play blocked: ${e.message}`, 'warning');
+                        log('Click anywhere to enable audio', 'info');
+                    });
+                }
+            });
+
+            // Track unsubscribed
+            room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+                log(`Track unsubscribed: ${track.kind}`, 'info');
+                track.detach();
+                updateAgentStatus(true, false);
+            });
+
+            // Our track published
+            room.on(LivekitClient.RoomEvent.LocalTrackPublished, (pub) => {
+                log(`Your ${pub.kind} track published`, 'success');
+            });
+
+            // Transcription events
+            room.on(LivekitClient.RoomEvent.TranscriptionReceived, (segments, participant) => {
+                log(`Transcription received from ${participant.identity}`, 'info');
+                const text = segments.map(s => s.text).join(' ').trim();
+                if (!text) return;
+                
+                log(`Transcription text: "${text}"`, 'info');
+                
+                if (participant.identity === 'apb-agent' || participant.identity.startsWith('apb')) {
+                    hideTyping();
+                    addMessage(text, 'agent');
+                    // Add agent response to conversation history
+                    conversationHistory.push({ role: 'assistant', content: text });
+                } else if (participant.isLocal) {
+                    addMessage(text, 'user');
+                    // Add user voice input to conversation history
+                    conversationHistory.push({ role: 'user', content: text });
+                    // Show typing when user speaks
+                    setTimeout(showTyping, 500);
+                } else {
+                    log(`Transcription from unknown participant: ${participant.identity}`, 'warning');
+                }
+            });
+
+            // Data received event for context sync
+            room.on(LivekitClient.RoomEvent.DataReceived, (data, participant) => {
+                try {
+                    const decoder = new TextDecoder();
+                    const message = JSON.parse(decoder.decode(data));
+                    
+                    if (message.type === 'context_update') {
+                        // Update conversation history with agent's context
+                        log('Received context update from agent', 'info');
+                    } else if (message.type === 'user_transcript') {
+                        // Display user's spoken text in chat
+                        log('Received user transcript', 'info');
+                        if (message.text) {
+                            addMessage(message.text, 'user');
+                            conversationHistory.push({ role: 'user', content: message.text });
+                            // Show typing indicator after user speaks
+                            setTimeout(showTyping, 500);
+                        }
+                    } else if (message.type === 'agent_transcript') {
+                        // Display agent's spoken text in chat
+                        log('Received agent transcript', 'info');
+                        if (message.text) {
+                            hideTyping();
+                            addMessage(message.text, 'agent');
+                            conversationHistory.push({ role: 'assistant', content: message.text });
+                        }
+                    } else if (message.type === 'sermon_reference') {
+                        // Display sermon reference in chat
+                        log('Received sermon reference', 'info');
+                        if (message.title && message.url) {
+                            const sermonMsg = `📖 Referenced: "${message.title}" at ${message.timestamp}\n📹 Watch: ${message.url}`;
+                            addMessage(sermonMsg, 'system');
+                        }
+                    } else if (message.type === 'speech_complete') {
+                        // Agent finished speaking
+                        log('Agent finished speaking', 'info');
+                        
+                        // Auto-disconnect after a short delay if this was a silent connection
+                        if (silentConnection) {
+                            setTimeout(() => {
+                                if (isConnected && silentConnection) {
+                                    log('Auto-disconnecting after speech complete', 'info');
+                                    disconnect();
+                                }
+                            }, 2000); // 2 second delay after speech completes
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error parsing data message:', error);
+                }
+            });
+
+            // Disconnection
+            room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+                log(`Disconnected: ${reason || 'unknown'}`, 'warning');
+                addMessage('Disconnected from voice assistant', 'system');
+                disconnect();
+            });
+
+            // Errors
+            room.on(LivekitClient.RoomEvent.MediaDevicesError, (error) => {
+                log(`Media error: ${error.message}`, 'error');
+            });
+        }
+
+        // ============================================
+        // HELPERS
+        // ============================================
+        function checkForAgent() {
+            const participants = room.remoteParticipants;
+            log(`Checking for agent (${participants.size} remote participants)`, 'info');
+            
+            participants.forEach((p, id) => {
+                log(`  Found: ${id}`, 'info');
+                updateAgentStatus(true);
+                
+                // Subscribe to existing tracks
+                p.trackPublications.forEach(pub => {
+                    if (pub.track && pub.kind === 'audio') {
+                        const audio = document.getElementById('agentAudio');
+                        pub.track.attach(audio);
+                        audio.play().catch(() => {});
+                    }
+                });
+            });
+        }
+
+        function updateAgentStatus(connected, speaking = false) {
+            const el = document.getElementById('agentStatus');
+            if (connected) {
+                el.classList.add('active');
+                if (speaking) {
+                    el.classList.add('speaking');
+                    el.textContent = '🔊 Agent Speaking';
+                } else {
+                    el.classList.remove('speaking');
+                    el.textContent = '🤖 Agent Connected';
+                }
+            } else {
+                el.classList.remove('active', 'speaking');
+            }
+        }
+
+        function startAudioMonitoring() {
+            const tracks = room.localParticipant.audioTrackPublications;
+            
+            tracks.forEach(pub => {
+                if (pub.track?.mediaStreamTrack) {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const stream = new MediaStream([pub.track.mediaStreamTrack]);
+                    const source = ctx.createMediaStreamSource(stream);
+                    const analyser = ctx.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
+                    
+                    const data = new Uint8Array(analyser.frequencyBinCount);
+                    
+                    audioMonitorInterval = setInterval(() => {
+                        if (!isConnected) {
+                            clearInterval(audioMonitorInterval);
+                            ctx.close();
+                            return;
+                        }
+                        
+                        analyser.getByteFrequencyData(data);
+                        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                        const level = Math.min(100, avg * 1.5);
+                        
+                        document.getElementById('audioLevelFill').style.width = `${level}%`;
+                        document.getElementById('audioLevelValue').textContent = Math.round(avg);
+                    }, 100);
+                }
+            });
+        }
+
+        // ============================================
+        // DISCONNECT
+        // ============================================
+        function disconnect() {
+            log('Disconnecting...', 'info');
+            
+            // Add message to chat if this was a user-initiated stop
+            if (isConnected) {
+                addMessage('Voice assistant stopped', 'system');
+            }
+            
+            if (audioMonitorInterval) {
+                clearInterval(audioMonitorInterval);
+                audioMonitorInterval = null;
+            }
+            
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            
+            isConnected = false;
+            
+            const btn = document.getElementById('voiceBtn');
+            btn.classList.remove('listening', 'connecting');
+            btn.disabled = false;
+            document.getElementById('micIcon').style.display = 'block';
+            document.getElementById('stopIcon').style.display = 'none';
+            
+            document.getElementById('voiceStatus').textContent = 'Tap to connect';
+            document.getElementById('audioLevelFill').style.width = '0%';
+            document.getElementById('audioLevelValue').textContent = '0';
+            updateAgentStatus(false);
+            hideTyping();
+            
+            log('Disconnected', 'info');
+            addMessage('Conversation ended', 'system');
+        }
+
+        // ============================================
+        // PAGE EVENTS
+        // ============================================
+        window.addEventListener('beforeunload', () => {
+            if (room) room.disconnect();
+        });
+
+        // Enable audio on click (for autoplay policy)
+        document.addEventListener('click', () => {
+            const audio = document.getElementById('agentAudio');
+            if (audio.paused && audio.srcObject) {
+                audio.play().catch(() => {});
+            }
+        });
+
+        // Fix viewport height on mobile
+        function setViewportHeight() {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('orientationchange', setViewportHeight);
+
+        // Prevent zoom on input focus (iOS)
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.nodeName === 'INPUT' || e.target.nodeName === 'TEXTAREA') {
+                e.target.style.fontSize = '16px';
+            }
+        });
+
+        // Initialize voice response toggle on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set up voice response toggle
+            const voiceToggle = document.getElementById('voiceResponseCheckbox');
+            if (voiceToggle) {
+                // Load saved preference
+                const savedPreference = localStorage.getItem('voiceResponseEnabled');
+                if (savedPreference !== null) {
+                    voiceResponseEnabled = savedPreference === 'true';
+                    voiceToggle.checked = voiceResponseEnabled;
+                    // Update initial label
+                    const label = document.querySelector('.toggle-label');
+                    if (label) {
+                        label.textContent = voiceResponseEnabled ? 'VOICE' : 'TEXT';
+                    }
+                }
+                
+                // Handle toggle changes
+                voiceToggle.addEventListener('change', (e) => {
+                    voiceResponseEnabled = e.target.checked;
+                    localStorage.setItem('voiceResponseEnabled', voiceResponseEnabled);
+                    
+                    const status = voiceResponseEnabled ? 'enabled' : 'disabled';
+                    log(`Voice response ${status} for typed messages`, 'info');
+                    
+                    // Update toggle label
+                    const label = document.querySelector('.toggle-label');
+                    if (label) {
+                        label.textContent = voiceResponseEnabled ? 'VOICE' : 'TEXT';
+                    }
+                });
+            }
+        });
+
+        // Startup
+        log('APB Voice & Chat ready', 'success');
+        log('Type a message or click the microphone', 'info');
+    </script>
+</body>
+</html>
