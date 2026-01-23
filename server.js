@@ -7,6 +7,20 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
+// Add CORS headers for all routes
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 // Add CSP headers to allow YouTube embedding
 app.use((req, res, next) => {
   res.setHeader(
