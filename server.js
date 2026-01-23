@@ -164,24 +164,22 @@ function formatSermonContext(sermonResults) {
     return '\n\n⚠️ NO SERMON SEGMENTS FOUND: Please still answer based on general biblical principles, but mention that no specific sermons from Pastor Bob Kopeny were found on this topic.\n';
   }
   
-  let context = '\n\n🔴 ABSOLUTELY CRITICAL - YOUR RESPONSE MUST INCLUDE THE FOLLOWING:\n\n';
+  let context = '\n\n🔴 IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE:\n\n';
   context += '📺 VIDEO SEGMENTS FOUND: ' + sermonResults.length + ' relevant clips\n\n';
-  context += 'MANDATORY RESPONSE STRUCTURE:\n';
-  context += '1. START with: "I found [X] sermon segments from Pastor Bob Kopeny on this topic..."\n';
-  context += '2. INCLUDE each YouTube link with timestamp\n';
-  context += '3. IF there\'s a story/illustration, QUOTE IT DIRECTLY\n';
-  context += '4. EXPLAIN what Pastor Bob teaches\n\n';
+  context += 'RESPONSE STRUCTURE:\n';
+  context += '1. Summarize what Pastor Bob teaches on this topic\n';
+  context += '2. Include YouTube links naturally (the links already have timestamps embedded)\n';
+  context += '3. IF there\'s a story/illustration, share it naturally\n';
+  context += '4. DO NOT read out timestamps like "15:32" - just say "In his sermon [title]" and include the link\n\n';
   
   context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  context += 'SERMON SEGMENTS (MUST INCLUDE ALL IN RESPONSE):\n';
+  context += 'SERMON SEGMENTS:\n';
   context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
   
   sermonResults.forEach((result, i) => {
-    // Try to detect content type
     const text_lower = result.text.toLowerCase();
     let hasIllustration = false;
     
-    // Check for story/illustration markers
     if (text_lower.includes('remember when') || text_lower.includes('story') || 
         text_lower.includes('once ') || text_lower.includes('example') ||
         text_lower.includes('illustration') || text_lower.includes('let me tell you') ||
@@ -190,32 +188,27 @@ function formatSermonContext(sermonResults) {
     }
     
     context += `\n📹 SEGMENT ${i + 1}:\n`;
-    context += `Sermon: "${result.title}"\n`;
-    context += `Timestamp: ${result.start_time} - ${result.end_time}\n`;
-    context += `YouTube Link: ${result.timestamped_url}\n`;
+    context += `Sermon Title: "${result.title}"\n`;
+    context += `YouTube Link (with timestamp): ${result.timestamped_url}\n`;
     
     if (hasIllustration) {
-      context += `\n🎯 ILLUSTRATION FOUND - QUOTE THIS:\n`;
+      context += `\n🎯 ILLUSTRATION:\n`;
       context += `"${result.text.substring(0, 400)}..."\n`;
-      context += `\n📌 INSTRUCTION: Include this illustration as a direct quote in your response!\n`;
     } else {
-      context += `\n📝 TEACHING CONTENT:\n`;
+      context += `\n📝 TEACHING:\n`;
       context += `${result.text.substring(0, 400)}...\n`;
-      context += `\n📌 INSTRUCTION: Summarize this teaching point clearly\n`;
     }
     
     context += '────────────────────────────────────\n';
   });
   
-  context += '\n🔴 RESPONSE REQUIREMENTS:\n';
-  context += '1. MENTION the number of video segments found\n';
-  context += '2. INCLUDE every YouTube link with "Watch at [timestamp]: [link]"\n';
-  context += '3. QUOTE any illustrations/stories directly\n';
-  context += '4. EXPLAIN Pastor Bob Kopeny\'s teaching clearly\n';
-  context += '5. SUGGEST watching the videos for more detail\n\n';
+  context += '\n🔴 VOICE-FRIENDLY FORMAT:\n';
+  context += '- Say "In his sermon [title]" NOT "at timestamp 15:32"\n';
+  context += '- Include YouTube links so they appear in chat\n';
+  context += '- Keep explanations conversational\n';
+  context += '- Share illustrations naturally as stories\n\n';
   
-  context += 'EXAMPLE START:\n';
-  context += '"I found 3 sermon segments from Pastor Bob Kopeny about [topic]. In his sermon \'[title]\' (watch at 15:32: [link]), he teaches that... He shares a powerful illustration: \'[quote story]\'. For more insights, watch his teaching at [timestamp]: [link]"\n';
+  context += 'EXAMPLE: "Pastor Bob teaches about this in his sermon \'[title]\'. He explains that... You can watch the full teaching here: [link]"\n';
   
   return context;
 }
