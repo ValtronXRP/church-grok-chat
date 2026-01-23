@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ['nodejs', 'python311', 'gcc']
+
+[phases.install]
+cmds = ['npm install', 'pip install -r grok-voice-agent/requirements.txt']
+
+[start]
+cmd = 'bash start.sh'

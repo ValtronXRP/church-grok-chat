@@ -10,17 +10,17 @@ logger = logging.getLogger("apb")
 
 from livekit import rtc
 from livekit.agents import Agent, AgentSession
-from livekit.plugins import xai
+from livekit.plugins import openai
 from livekit.api import AccessToken, VideoGrants
 
 LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
-XAI_API_KEY = os.getenv("XAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ROOM_NAME = "apb-voice-room"
 
-# Initialize xAI API key
-xai.api_key = XAI_API_KEY
+# Initialize OpenAI API key
+openai.api_key = OPENAI_API_KEY
 
 # Pastor Bob's context and instructions
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assistant that helps people learn about the Bible and faith based on Pastor Bob Kopeny's teachings.
@@ -114,22 +114,23 @@ async def run_session():
         logger.info(f"Starting session with {current_user.identity}")
 
         try:
-            logger.info("Creating xAI realtime model...")
-            # Try the default without any parameters first
+            logger.info("Creating OpenAI realtime model...")
+            # Use OpenAI's realtime model
             session = AgentSession(
-                llm=xai.realtime.RealtimeModel()
+                llm=openai.realtime.RealtimeModel(
+                    voice="alloy",  # OpenAI voice option
+                    model="gpt-4o-realtime-preview"
+                )
             )
-            logger.info("✅ xAI session created")
+            logger.info("✅ OpenAI session created")
 
             logger.info("Starting agent session...")
             await session.start(room=room, agent=APBAssistant())
             logger.info("✅ Agent session started")
             
-            # Only send greeting after a delay (allows silent connections to skip it)
-            # Check if this might be a silent connection
+            # Send greeting after a delay
             await asyncio.sleep(1.0)
             
-            # If no data messages received yet, assume it's a mic connection and send greeting
             logger.info("Generating greeting...")
             await session.generate_reply(
                 instructions="Say exactly: 'Welcome to Ask Pastor Bob! How can I help you today?'"
@@ -152,7 +153,7 @@ async def run_session():
 
 async def main():
     logger.info("=" * 50)
-    logger.info("APB - Ask Pastor Bob Voice Agent")
+    logger.info("APB - Ask Pastor Bob Voice Agent (OpenAI)")
     logger.info("=" * 50)
 
     while True:

@@ -1,30 +1,28 @@
-"""
-Test script to verify xAI API connection
-Run with: python test_xai.py
-"""
-
 import os
 import asyncio
 from dotenv import load_dotenv
+from livekit.plugins import xai
 
 load_dotenv()
 
-async def test():
-    print("Testing xAI API connection...")
-    print(f"XAI_API_KEY: {'*' * 20}...{os.getenv('XAI_API_KEY', '')[-4:]}")
-    
-    try:
-        from livekit.plugins import xai
-        
-        # Try to create a realtime model instance
-        model = xai.realtime.RealtimeModel(voice="Ara")
-        print("✅ xAI RealtimeModel created successfully!")
-        print(f"   Voice: Ara")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return False
+XAI_API_KEY = os.getenv("XAI_API_KEY")
+print(f"XAI_API_KEY set: {bool(XAI_API_KEY)}")
+print(f"XAI_API_KEY starts with: {XAI_API_KEY[:10] if XAI_API_KEY else 'None'}")
 
-if __name__ == "__main__":
-    asyncio.run(test())
+# Set the API key
+xai.api_key = XAI_API_KEY
+
+async def test():
+    try:
+        print("Creating RealtimeModel...")
+        model = xai.realtime.RealtimeModel(
+            voice="Ara",
+            api_key=XAI_API_KEY  # Also pass it explicitly
+        )
+        print(f"Model created: {model}")
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+asyncio.run(test())

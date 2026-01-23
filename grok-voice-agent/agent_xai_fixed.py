@@ -114,10 +114,29 @@ async def run_session():
         logger.info(f"Starting session with {current_user.identity}")
 
         try:
-            logger.info("Creating xAI realtime model...")
-            # Try the default without any parameters first
+            logger.info("Creating xAI realtime model with explicit configuration...")
+            
+            # Try to use the xAI realtime model with base_url override
+            # Based on the xAI Voice documentation, the API should be compatible with OpenAI spec
+            import httpx
+            
+            class XAIRealtimeModel:
+                """Custom wrapper for xAI Voice API"""
+                def __init__(self):
+                    self.api_key = XAI_API_KEY
+                    self.voice = "Ara"
+                    self.model = "grok-2-1212"  # Try the available Grok model
+                    
+            # For now, let's try using the standard xAI plugin but with environment variable override
+            os.environ['XAI_BASE_URL'] = 'https://api.x.ai/v1'
+            os.environ['XAI_MODEL'] = 'grok-2-1212'
+            
+            # Try to create the session with the xAI realtime model
             session = AgentSession(
-                llm=xai.realtime.RealtimeModel()
+                llm=xai.realtime.RealtimeModel(
+                    voice="Ara",
+                    api_key=XAI_API_KEY
+                )
             )
             logger.info("✅ xAI session created")
 
@@ -125,11 +144,9 @@ async def run_session():
             await session.start(room=room, agent=APBAssistant())
             logger.info("✅ Agent session started")
             
-            # Only send greeting after a delay (allows silent connections to skip it)
-            # Check if this might be a silent connection
+            # Send greeting after a delay
             await asyncio.sleep(1.0)
             
-            # If no data messages received yet, assume it's a mic connection and send greeting
             logger.info("Generating greeting...")
             await session.generate_reply(
                 instructions="Say exactly: 'Welcome to Ask Pastor Bob! How can I help you today?'"
@@ -139,6 +156,9 @@ async def run_session():
             logger.info("LISTENING - speak now!")
         except Exception as e:
             logger.error(f"Session error: {e}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
             raise
 
         # Wait until user disconnects
@@ -152,7 +172,7 @@ async def run_session():
 
 async def main():
     logger.info("=" * 50)
-    logger.info("APB - Ask Pastor Bob Voice Agent")
+    logger.info("APB - Ask Pastor Bob Voice Agent (xAI Fixed)")
     logger.info("=" * 50)
 
     while True:
