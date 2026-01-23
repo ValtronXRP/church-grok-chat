@@ -22,6 +22,11 @@ app.use((req, res, next) => {
 
 app.use(express.static('public'));
 
+// Redirect root to chat.html
+app.get('/', (req, res) => {
+  res.redirect('/chat.html');
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
