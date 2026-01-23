@@ -1029,23 +1029,23 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
                     const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
                     const seconds = secondsStr ? parseInt(secondsStr) : 0;
                     const timeLabel = seconds > 0 ? formatSecondsToTime(seconds) : '';
-                    const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1`;
+                    const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1&enablejsapi=1`;
                     
                     videoPlaceholders[placeholder] = `
                         <div class="sermon-video-container">
                             <div class="video-header">
-                                <span>📹 Sermon Segment${timeLabel ? ' (starts at ' + timeLabel + ')' : ''}</span>
-                                <a href="${url}" target="_blank" class="external-link">Open in YouTube →</a>
+                                <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
+                                <a href="${url}" target="_blank" class="external-link">YouTube ↗</a>
                             </div>
                             <iframe 
-                                width="100%" 
+                                width="560" 
                                 height="315" 
                                 src="${embedUrl}"
-                                title="YouTube video player"
+                                title="Pastor Bob Sermon"
                                 frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                referrerpolicy="strict-origin-when-cross-origin"
-                                allowfullscreen>
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen
+                                style="width:100%; max-width:560px;">
                             </iframe>
                         </div>`;
                     

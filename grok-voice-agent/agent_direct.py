@@ -79,22 +79,6 @@ def has_illustration(text):
                'let me tell you', 'imagine', 'picture this', 'there was a']
     return any(m in text.lower() for m in markers)
 
-def format_sermon_context(results):
-    if not results:
-        return ""
-    
-    context = "\n\nRELEVANT SERMON SEGMENTS FROM PASTOR BOB:\n"
-    for i, r in enumerate(results, 1):
-        context += f"\n[Segment {i}] From '{r['title']}' at {r['start_time']}:\n"
-        context += f"Watch: {r['timestamped_url']}\n"
-        if has_illustration(r['text']):
-            context += f"ILLUSTRATION: \"{r['text'][:500]}...\"\n"
-        else:
-            context += f"Teaching: {r['text'][:300]}...\n"
-    
-    context += "\nINSTRUCTIONS: Include relevant YouTube links and quote any illustrations directly in your response.\n"
-    return context
-
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
     def __init__(self, voice="Ara", api_key=None, **kwargs):
         api_key = api_key or os.environ.get("XAI_API_KEY")
@@ -123,42 +107,32 @@ ROOM_NAME = "apb-voice-room"
 
 xai.api_key = XAI_API_KEY
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assistant that helps people learn about the Bible and faith based on Pastor Bob Kopeny's teachings.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assistant based on Pastor Bob Kopeny's teachings.
 
-IMPORTANT CONTEXT:
+KEY RULES:
 - APB stands for "Ask Pastor Bob"
-- Pastor Bob Kopeny is the specific pastor whose teachings you represent
-- When given sermon segments, ALWAYS mention the YouTube links so users can watch
-- If there's an illustration or story in the segments, quote it directly
-- Keep voice responses conversational but include the video references
+- Pastor Bob Kopeny is the pastor whose teachings you represent
+- When sermon segments are provided, reference the YouTube links
+- Quote illustrations directly when available
+- Keep responses conversational for voice
 
-YOUR ROLE:
-- Answer questions about the Bible, faith, and Christian living
-- Share relevant illustrations and stories from Pastor Bob's sermons
-- Always reference the YouTube videos when available
-- Be encouraging, compassionate, and helpful
-
-SPEAKING STYLE:
-- Warm and welcoming, like a friendly pastor
-- When you have video segments, say things like "Pastor Bob teaches about this in his sermon, you can watch it at..." 
-- Quote illustrations directly: "Pastor Bob shares this story..."
-- Keep answers focused but include the resources
+STYLE:
+- Warm and welcoming
+- Reference videos: "Pastor Bob teaches about this, you can watch at..."
+- Quote stories: "Pastor Bob shares this illustration..."
 """
 
 class APBAssistant(Agent):
-    def __init__(self, extra_context=""):
-        full_instructions = PASTOR_BOB_INSTRUCTIONS
-        if extra_context:
-            full_instructions += extra_context
-        super().__init__(instructions=full_instructions)
+    def __init__(self):
+        super().__init__(instructions=PASTOR_BOB_INSTRUCTIONS)
 
 async def send_data_message(room, message_type, data):
     try:
         message = json.dumps({"type": message_type, **data})
         await room.local_participant.publish_data(message.encode('utf-8'), reliable=True)
-        logger.info(f"Sent {message_type} message to room")
+        logger.info(f"Sent {message_type}")
     except Exception as e:
-        logger.error(f"Failed to send data message: {e}")
+        logger.error(f"Failed to send data: {e}")
 
 async def run_session():
     token = AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
@@ -173,10 +147,11 @@ async def run_session():
     room = rtc.Room()
     user_disconnected = asyncio.Event()
     current_user = None
-    silent_connection = False
-    pending_text_to_speak = None
     session = None
-    current_sermon_results = []
+    
+    silent_connection = asyncio.Event()
+    pending_text = {"text": None}
+    data_received = asyncio.Event()
 
     @room.on("participant_connected")
     def on_connect(p):
@@ -197,17 +172,19 @@ async def run_session():
 
     @room.on("data_received")
     def on_data(data, participant):
-        nonlocal silent_connection, pending_text_to_speak
         try:
             message = json.loads(data.decode('utf-8'))
-            logger.info(f"Received data message: {message.get('type')}")
+            msg_type = message.get('type')
+            logger.info(f"Data received: {msg_type}")
             
-            if message.get('type') == 'silent_connection':
-                silent_connection = True
-                pending_text_to_speak = message.get('textToSpeak')
-                logger.info(f"Silent connection - text to speak: {pending_text_to_speak[:50] if pending_text_to_speak else 'None'}...")
+            if msg_type == 'silent_connection':
+                silent_connection.set()
+                pending_text["text"] = message.get('textToSpeak')
+                if pending_text["text"]:
+                    logger.info(f"Text to speak: {pending_text['text'][:50]}...")
+                data_received.set()
         except Exception as e:
-            logger.error(f"Error parsing data message: {e}")
+            logger.error(f"Data parse error: {e}")
 
     try:
         await room.connect(LIVEKIT_URL, token.to_jwt())
@@ -225,96 +202,59 @@ async def run_session():
             while current_user is None:
                 await asyncio.sleep(1.0)
                 wait_count += 1
-                if wait_count % 5 == 0:
-                    logger.info(f"Still waiting... ({wait_count}s, {len(room.remote_participants)} remote participants)")
+                if wait_count % 10 == 0:
+                    logger.info(f"Still waiting... ({wait_count}s)")
 
-        logger.info(f"Starting session with {current_user.identity}")
+        logger.info(f"User connected: {current_user.identity}")
 
+        logger.info("Creating xAI session...")
+        session = AgentSession(llm=FixedXAIRealtimeModel(voice="Ara"))
+        await session.start(room=room, agent=APBAssistant())
+        logger.info("Session started")
+        
+        logger.info("Waiting 1.5s for data message...")
         try:
-            logger.info("Creating xAI realtime model...")
-            session = AgentSession(
-                llm=FixedXAIRealtimeModel(voice="Ara")
+            await asyncio.wait_for(data_received.wait(), timeout=1.5)
+        except asyncio.TimeoutError:
+            logger.info("No data message - normal voice connection")
+        
+        if silent_connection.is_set() and pending_text["text"]:
+            text = pending_text["text"]
+            logger.info(f"Speaking text response ({len(text)} chars)...")
+            
+            await session.generate_reply(
+                instructions=f"Read this naturally, don't add anything: {text}"
             )
-            logger.info("xAI session created")
-
-            logger.info("Starting agent session...")
-            await session.start(room=room, agent=APBAssistant())
-            logger.info("Agent session started")
+            await send_data_message(room, "agent_transcript", {"text": text})
             
-            await asyncio.sleep(0.5)
-            
-            if silent_connection and pending_text_to_speak:
-                logger.info("Speaking text response...")
-                await session.generate_reply(
-                    instructions=f"Read this response naturally: {pending_text_to_speak}"
-                )
-                await send_data_message(room, "agent_transcript", {"text": pending_text_to_speak})
-                await asyncio.sleep(2)
-                await send_data_message(room, "speech_complete", {})
-                logger.info("Text-to-speech complete")
-            elif not silent_connection:
-                logger.info("Generating greeting...")
-                greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
-                await session.generate_reply(
-                    instructions=f"Say exactly: '{greeting}'"
-                )
-                await send_data_message(room, "agent_transcript", {"text": greeting})
-                logger.info("Greeting sent")
-            
-            logger.info("LISTENING - speak now!")
-            
-            @session.on("user_input_transcribed")
-            async def on_user_speech(text):
-                nonlocal current_sermon_results
-                if text and len(text) > 5:
-                    logger.info(f"User said: {text}")
-                    await send_data_message(room, "user_transcript", {"text": text})
-                    
-                    results = search_sermons(text, 3)
-                    current_sermon_results = results
-                    if results:
-                        logger.info(f"Found {len(results)} sermon segments for: {text}")
-                        for r in results:
-                            await send_data_message(room, "sermon_reference", {
-                                "title": r['title'],
-                                "url": r['timestamped_url'],
-                                "timestamp": r['start_time'],
-                                "text": r['text'][:200]
-                            })
-            
-            @session.on("agent_response")
-            async def on_agent_response(text):
-                if text:
-                    logger.info(f"Agent response: {text[:100]}...")
-                    response_with_links = text
-                    if current_sermon_results:
-                        response_with_links += "\n\nRelated sermon videos:\n"
-                        for r in current_sermon_results:
-                            response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
-                    await send_data_message(room, "agent_transcript", {"text": response_with_links})
-            
-        except Exception as e:
-            logger.error(f"Session error: {e}")
-            raise
-
+            await asyncio.sleep(3)
+            await send_data_message(room, "speech_complete", {})
+            logger.info("Text-to-speech done")
+        else:
+            logger.info("Sending greeting...")
+            greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
+            await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
+            await send_data_message(room, "agent_transcript", {"text": greeting})
+            logger.info("Greeting sent - LISTENING")
+        
         await user_disconnected.wait()
 
     except Exception as e:
         logger.error(f"Error: {e}")
     finally:
         await room.disconnect()
-        logger.info("Room disconnected")
+        logger.info("Disconnected")
 
 async def main():
     logger.info("=" * 50)
-    logger.info("APB - Ask Pastor Bob Voice Agent")
+    logger.info("APB Voice Agent Starting")
     logger.info("=" * 50)
     
     load_sermons()
 
     while True:
         await run_session()
-        logger.info("Session ended. Restarting in 2 seconds...")
+        logger.info("Session ended. Restarting...")
         await asyncio.sleep(2)
 
 if __name__ == "__main__":
