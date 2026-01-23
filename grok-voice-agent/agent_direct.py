@@ -14,12 +14,12 @@ from livekit.plugins import xai, openai
 from livekit.api import AccessToken, VideoGrants
 
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
-    """xAI Realtime Model with fixed model name that works"""
+    """xAI Realtime Model - try without model in URL"""
     def __init__(self, voice="Ara", api_key=None, **kwargs):
         api_key = api_key or os.environ.get("XAI_API_KEY")
         super().__init__(
             base_url="wss://api.x.ai/v1/realtime",
-            model="grok-1118",
+            model="",
             voice=voice,
             api_key=api_key,
             modalities=["audio"],
