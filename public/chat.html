@@ -1618,12 +1618,16 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 
             // Data received event for context sync
             room.on(LivekitClient.RoomEvent.DataReceived, (data, participant) => {
+                console.log('RAW DATA RECEIVED:', data);
                 try {
                     const decoder = new TextDecoder();
-                    const message = JSON.parse(decoder.decode(data));
+                    const decoded = decoder.decode(data);
+                    console.log('DECODED DATA:', decoded);
+                    const message = JSON.parse(decoded);
+                    console.log('PARSED MESSAGE:', message);
+                    log(`Data message received: ${message.type}`, 'info');
                     
                     if (message.type === 'context_update') {
-                        // Update conversation history with agent's context
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
                         // Display user's spoken text in chat
