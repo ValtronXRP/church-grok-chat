@@ -43,13 +43,20 @@ const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const PORT = process.env.PORT || 3001;
-const SERMON_API_URL = process.env.SERMON_API_URL || 'http://localhost:5001';
+// For Railway deployment, sermons are disabled unless SERMON_API_URL is set to a public URL
+const SERMON_API_URL = process.env.SERMON_API_URL || '';
 const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://') : '';
 
 // ============================================
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
 async function searchSermons(query) {
+  // Skip if no sermon API URL configured
+  if (!SERMON_API_URL) {
+    console.log('Sermon API not configured');
+    return [];
+  }
+  
   try {
     // Add timeout to prevent hanging
     const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
