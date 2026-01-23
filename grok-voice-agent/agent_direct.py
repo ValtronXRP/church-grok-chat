@@ -10,8 +10,29 @@ logger = logging.getLogger("apb")
 
 from livekit import rtc
 from livekit.agents import Agent, AgentSession
-from livekit.plugins import xai
+from livekit.plugins import xai, openai
 from livekit.api import AccessToken, VideoGrants
+
+class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
+    """xAI Realtime Model with fixed model name that works"""
+    def __init__(self, voice="Ara", api_key=None, **kwargs):
+        api_key = api_key or os.environ.get("XAI_API_KEY")
+        super().__init__(
+            base_url="wss://api.x.ai/v1/realtime",
+            model="grok-1118",
+            voice=voice,
+            api_key=api_key,
+            modalities=["audio"],
+            turn_detection={
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 200,
+                "create_response": True,
+                "interrupt_response": True,
+            },
+            **kwargs
+        )
 
 LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
@@ -115,9 +136,9 @@ async def run_session():
 
         try:
             logger.info("Creating xAI realtime model...")
-            # Try the default without any parameters first
+            # Use our fixed model class with working model name
             session = AgentSession(
-                llm=xai.realtime.RealtimeModel()
+                llm=FixedXAIRealtimeModel(voice="Ara")
             )
             logger.info("✅ xAI session created")
 
