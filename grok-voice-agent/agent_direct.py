@@ -167,9 +167,10 @@ async def run_session():
         logger.info(f"Track: {track.kind} from {p.identity}")
 
     @room.on("data_received")
-    def on_data(data, participant):
+    def on_data(data_packet):
         try:
-            message = json.loads(data.decode('utf-8'))
+            raw_data = data_packet.data if hasattr(data_packet, 'data') else data_packet
+            message = json.loads(raw_data.decode('utf-8') if isinstance(raw_data, bytes) else raw_data)
             msg_type = message.get('type')
             logger.info(f"Data received: {msg_type}")
             
