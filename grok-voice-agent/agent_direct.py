@@ -228,24 +228,32 @@ async def run_session():
         
         @session.on("conversation_item_added")
         def on_conversation_item(event):
-            if hasattr(event, 'item') and event.item:
+            logger.info(f"CONVERSATION ITEM: {type(event)}")
+            logger.info(f"  Event attrs: {dir(event)}")
+            if hasattr(event, 'item'):
                 item = event.item
+                logger.info(f"  Item: {type(item)}, attrs: {dir(item)}")
+                if hasattr(item, 'role'):
+                    logger.info(f"  Role: {item.role}")
+                if hasattr(item, 'content'):
+                    logger.info(f"  Content: {item.content}")
+                    
                 if hasattr(item, 'role') and item.role == 'assistant':
+                    text = ""
                     if hasattr(item, 'content') and item.content:
-                        text = ""
                         for content in item.content:
                             if hasattr(content, 'text'):
                                 text += content.text
                             elif hasattr(content, 'transcript'):
                                 text += content.transcript
-                        if text:
-                            logger.info(f"AGENT SAID: {text[:100]}...")
-                            response_with_links = text
-                            if current_sermon_results:
-                                response_with_links += "\n\nRelated sermon videos:\n"
-                                for r in current_sermon_results:
-                                    response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
-                            asyncio.create_task(send_data_message(room, "agent_transcript", {"text": response_with_links}))
+                    if text:
+                        logger.info(f"AGENT SAID: {text[:100]}...")
+                        response_with_links = text
+                        if current_sermon_results:
+                            response_with_links += "\n\nRelated sermon videos:\n"
+                            for r in current_sermon_results:
+                                response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
+                        asyncio.create_task(send_data_message(room, "agent_transcript", {"text": response_with_links}))
 
         await session.start(room=room, agent=APBAssistant())
         logger.info("Session started")
