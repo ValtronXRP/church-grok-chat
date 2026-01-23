@@ -167,54 +167,70 @@ function formatSermonContext(sermonResults, isMoreRequest = false) {
   const first3 = sermonResults.slice(0, 3);
   const hasMore = sermonResults.length > 3;
   
+  // Collect illustrations
+  const illustrations = [];
+  first3.forEach(result => {
+    const text_lower = result.text.toLowerCase();
+    if (text_lower.includes('remember when') || text_lower.includes('story') || 
+        text_lower.includes('once ') || text_lower.includes('example') ||
+        text_lower.includes('illustration') || text_lower.includes('let me tell you') ||
+        text_lower.includes('imagine') || text_lower.includes('picture this')) {
+      illustrations.push(result.text.substring(0, 400));
+    }
+  });
+  
   if (isMoreRequest) {
     const additional = sermonResults.slice(3);
     if (additional.length === 0) {
       return '\n\nNo additional sermon segments available on this topic.\n';
     }
     
-    let context = '\n\nHere are more sermon segments on this topic:\n\n';
+    let context = '\n\nJust list these additional video links (no summary needed):\n\n';
+    context += 'Say: "Here are more related videos:"\n';
     additional.forEach((result, i) => {
-      context += `📹 "${result.title}": ${result.timestamped_url}\n`;
+      context += `${result.timestamped_url}\n`;
     });
     return context;
   }
   
-  let context = '\n\n🔴 RESPONSE FORMAT INSTRUCTIONS:\n\n';
-  context += 'STRUCTURE YOUR RESPONSE AS:\n';
-  context += '1. SUMMARY: What Pastor Bob teaches on this topic (2-3 sentences)\n';
-  context += '2. REFERENCES: Any illustrations or stories he uses\n';
-  context += '3. LINKS: Include exactly 3 YouTube links to sermon segments\n';
-  if (hasMore) {
-    context += '4. END WITH: "If you\'d like more sermon links on this topic, just say \'more\'"\n';
+  let context = '\n\n🔴 RESPONSE STRUCTURE (follow exactly):\n\n';
+  context += '1. SUMMARY (2-3 sentences): What Pastor Bob teaches on this topic\n';
+  if (illustrations.length > 0) {
+    context += '2. ILLUSTRATION/STORY: Share the story naturally (see below)\n';
+    context += '3. BIBLE REFERENCES: Any scripture mentioned\n';
+    context += '4. VIDEOS: Say "Here are some related videos on [topic]:" then list the 3 links below\n';
+  } else {
+    context += '2. BIBLE REFERENCES: Any scripture mentioned\n';
+    context += '3. VIDEOS: Say "Here are some related videos on [topic]:" then list the 3 links below\n';
   }
-  context += '\nDO NOT read timestamps aloud - just reference sermon titles\n\n';
+  if (hasMore) {
+    context += '5. END WITH: "If you\'d like more videos, just say more."\n';
+  }
+  context += '\n⚠️ IMPORTANT FOR VOICE: Do NOT read sermon titles or timestamps aloud.\n';
+  context += 'Just say "Here are some related videos on [topic]" and include the links.\n';
+  context += 'The links will automatically become embedded videos in the chat.\n\n';
   
   context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  context += 'SERMON SEGMENTS (use only these 3):\n';
-  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
   
+  if (illustrations.length > 0) {
+    context += 'ILLUSTRATION TO SHARE:\n';
+    context += `"${illustrations[0]}"\n`;
+    context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  }
+  
+  context += 'VIDEO LINKS (include all 3 in your response):\n';
   first3.forEach((result, i) => {
-    const text_lower = result.text.toLowerCase();
-    let hasIllustration = text_lower.includes('remember when') || text_lower.includes('story') || 
-        text_lower.includes('once ') || text_lower.includes('example') ||
-        text_lower.includes('illustration') || text_lower.includes('let me tell you') ||
-        text_lower.includes('imagine') || text_lower.includes('picture this');
-    
-    context += `\n📹 SEGMENT ${i + 1}:\n`;
-    context += `Sermon: "${result.title}"\n`;
-    context += `Link: ${result.timestamped_url}\n`;
-    
-    if (hasIllustration) {
-      context += `ILLUSTRATION: "${result.text.substring(0, 300)}..."\n`;
-    } else {
-      context += `TEACHING: ${result.text.substring(0, 300)}...\n`;
-    }
-    context += '────────────────────────────────────\n';
+    context += `${result.timestamped_url}\n`;
+  });
+  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  
+  context += '\nTEACHING CONTENT FOR REFERENCE:\n';
+  first3.forEach((result, i) => {
+    context += `- ${result.text.substring(0, 200)}...\n`;
   });
   
   if (hasMore) {
-    context += `\n📌 ${sermonResults.length - 3} MORE SEGMENTS AVAILABLE - remind user to say "more" for additional links\n`;
+    context += `\n📌 ${sermonResults.length - 3} more videos available if user says "more"\n`;
   }
   
   return context;
