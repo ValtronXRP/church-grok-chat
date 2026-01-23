@@ -51,9 +51,12 @@ const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://')
 // ============================================
 async function searchSermons(query) {
   try {
+    // Add timeout to prevent hanging
     const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
       query: query,
       n_results: 5  // Get more initially
+    }, {
+      timeout: 2000  // 2 second timeout
     });
     
     if (response.data && response.data.results) {
@@ -101,7 +104,8 @@ async function searchSermons(query) {
       return filteredResults.slice(0, 3);
     }
   } catch (error) {
-    console.log('Sermon search error:', error.message);
+    console.log('Sermon search skipped:', error.message);
+    // Don't let sermon search failure break the chat
   }
   return [];
 }
@@ -190,8 +194,14 @@ app.post('/api/chat', async (req, res) => {
     const lastUserMessage = messages[messages.length - 1];
     
     if (lastUserMessage && lastUserMessage.role === 'user') {
-      // Search for relevant sermons
-      const sermonResults = await searchSermons(lastUserMessage.content);
+      // Search for relevant sermons (don't let this break the chat)
+      let sermonResults = [];
+      try {
+        sermonResults = await searchSermons(lastUserMessage.content);
+      } catch (searchError) {
+        console.log('Sermon search skipped due to error:', searchError.message);
+        // Continue without sermon results
+      }
       
       if (sermonResults.length > 0) {
         console.log(`Found ${sermonResults.length} relevant sermon segments`);
