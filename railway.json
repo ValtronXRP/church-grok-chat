@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm install && pip install -r grok-voice-agent/requirements.txt"
+    "buildCommand": "npm install && python3.11 -m pip install -r grok-voice-agent/requirements.txt"
   },
   "deploy": {
     "startCommand": "bash start.sh",

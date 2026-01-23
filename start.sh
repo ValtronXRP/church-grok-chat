@@ -4,16 +4,10 @@
 
 echo "Starting Church Grok Chat Services..."
 
-# Install Python dependencies if needed
-if [ -f "grok-voice-agent/requirements.txt" ]; then
-    echo "Installing Python dependencies..."
-    pip install -r grok-voice-agent/requirements.txt
-fi
-
 # Start the voice agent in the background
 echo "Starting voice agent..."
 cd grok-voice-agent
-python agent_direct.py &
+python3.11 agent_direct.py &
 AGENT_PID=$!
 cd ..
 
