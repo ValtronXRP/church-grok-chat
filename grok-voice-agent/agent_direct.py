@@ -74,11 +74,6 @@ def search_sermons(query, n_results=3):
     
     return results
 
-def has_illustration(text):
-    markers = ['remember when', 'story', 'once ', 'example', 'illustration', 
-               'let me tell you', 'imagine', 'picture this', 'there was a']
-    return any(m in text.lower() for m in markers)
-
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
     def __init__(self, voice="Ara", api_key=None, **kwargs):
         api_key = api_key or os.environ.get("XAI_API_KEY")
@@ -112,13 +107,13 @@ PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assi
 KEY RULES:
 - APB stands for "Ask Pastor Bob"
 - Pastor Bob Kopeny is the pastor whose teachings you represent
-- When sermon segments are provided, reference the YouTube links
+- When given sermon segments, reference the YouTube links naturally
 - Quote illustrations directly when available
 - Keep responses conversational for voice
 
 STYLE:
 - Warm and welcoming
-- Reference videos: "Pastor Bob teaches about this, you can watch at..."
+- Reference videos: "Pastor Bob teaches about this in his sermon..."
 - Quote stories: "Pastor Bob shares this illustration..."
 """
 
@@ -152,6 +147,7 @@ async def run_session():
     silent_connection = asyncio.Event()
     pending_text = {"text": None}
     data_received = asyncio.Event()
+    current_sermon_results = []
 
     @room.on("participant_connected")
     def on_connect(p):
@@ -209,6 +205,48 @@ async def run_session():
 
         logger.info("Creating xAI session...")
         session = AgentSession(llm=FixedXAIRealtimeModel(voice="Ara"))
+        
+        @session.on("user_input_transcribed")
+        def on_user_transcript(event):
+            nonlocal current_sermon_results
+            if event.is_final and event.transcript:
+                user_text = event.transcript
+                logger.info(f"USER SAID: {user_text}")
+                asyncio.create_task(send_data_message(room, "user_transcript", {"text": user_text}))
+                
+                results = search_sermons(user_text, 3)
+                current_sermon_results = results
+                if results:
+                    logger.info(f"Found {len(results)} sermon segments")
+                    for r in results:
+                        asyncio.create_task(send_data_message(room, "sermon_reference", {
+                            "title": r['title'],
+                            "url": r['timestamped_url'],
+                            "timestamp": r['start_time'],
+                            "text": r['text'][:200]
+                        }))
+        
+        @session.on("conversation_item_added")
+        def on_conversation_item(event):
+            if hasattr(event, 'item') and event.item:
+                item = event.item
+                if hasattr(item, 'role') and item.role == 'assistant':
+                    if hasattr(item, 'content') and item.content:
+                        text = ""
+                        for content in item.content:
+                            if hasattr(content, 'text'):
+                                text += content.text
+                            elif hasattr(content, 'transcript'):
+                                text += content.transcript
+                        if text:
+                            logger.info(f"AGENT SAID: {text[:100]}...")
+                            response_with_links = text
+                            if current_sermon_results:
+                                response_with_links += "\n\nRelated sermon videos:\n"
+                                for r in current_sermon_results:
+                                    response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
+                            asyncio.create_task(send_data_message(room, "agent_transcript", {"text": response_with_links}))
+
         await session.start(room=room, agent=APBAssistant())
         logger.info("Session started")
         
@@ -223,7 +261,7 @@ async def run_session():
             logger.info(f"Speaking text response ({len(text)} chars)...")
             
             await session.generate_reply(
-                instructions=f"Read this naturally, don't add anything: {text}"
+                instructions=f"Read this naturally, don't add anything extra: {text}"
             )
             await send_data_message(room, "agent_transcript", {"text": text})
             
@@ -241,6 +279,8 @@ async def run_session():
 
     except Exception as e:
         logger.error(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         await room.disconnect()
         logger.info("Disconnected")
