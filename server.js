@@ -21,13 +21,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add CSP headers to allow YouTube embedding
+// Add CSP headers to allow YouTube embedding and LiveKit
 app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com; " +
-    "style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://cdn.jsdelivr.net https://unpkg.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; " +
     "img-src 'self' data: https:; " +
     "connect-src 'self' ws: wss: https:;"
