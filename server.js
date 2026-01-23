@@ -1,6 +1,7 @@
 const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 const axios = require('axios');
+const SermonSearch = require('./sermonSearch');
 require('dotenv').config();
 
 const app = express();
@@ -46,23 +47,50 @@ const PORT = process.env.PORT || 3001;
 const SERMON_API_URL = process.env.SERMON_API_URL || 'http://localhost:5001';
 const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://') : '';
 
+// Initialize local sermon search
+const sermonSearcher = new SermonSearch();
+
 // ============================================
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
 async function searchSermons(query) {
-  // Skip if sermon API is localhost and we're in production
-  if (SERMON_API_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
-    console.log('Sermon API not available in production (localhost URL)');
-    return [];
+  // Use local sermon search instead of external API
+  try {
+    console.log(`Searching sermons locally for: "${query}"`);
+    const results = sermonSearcher.search(query, 5);
+    console.log(`Found ${results.length} local sermon results`);
+    return results;
+  } catch (error) {
+    console.error('Local sermon search error:', error);
+    
+    // Fallback to API if configured and not localhost in production
+    if (SERMON_API_URL && !(SERMON_API_URL.includes('localhost') && process.env.NODE_ENV === 'production')) {
+      try {
+        const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
+          query: query,
+          n_results: 5
+        }, {
+          timeout: 2000
+        });
+        
+        if (response.data && response.data.results) {
+          return response.data.results;
+        }
+      } catch (apiError) {
+        console.log('API sermon search error:', apiError.message);
+      }
+    }
   }
   
+  return [];
+}
+
+// Keep the old filtering function for API results
+async function searchSermonsOld(query) {
   try {
-    // Add timeout to prevent hanging
     const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
       query: query,
-      n_results: 5  // Get more initially
-    }, {
-      timeout: 2000  // 2 second timeout
+      n_results: 5
     });
     
     if (response.data && response.data.results) {
