@@ -264,9 +264,9 @@ async def run_session():
         await session.start(room=room, agent=APBAssistant())
         logger.info("Session started")
         
-        logger.info("Waiting 1.5s for data message...")
+        logger.info("Waiting 0.5s for data message...")
         try:
-            await asyncio.wait_for(data_received.wait(), timeout=1.5)
+            await asyncio.wait_for(data_received.wait(), timeout=0.5)
         except asyncio.TimeoutError:
             logger.info("No data message - normal voice connection")
         
@@ -275,11 +275,11 @@ async def run_session():
             logger.info(f"Speaking text response ({len(text)} chars)...")
             
             await session.generate_reply(
-                instructions=f"Read this naturally, don't add anything extra: {text}"
+                instructions=f"You are APB answering a user's question. Read this response out loud exactly as written, as if YOU are giving this answer to the user. Do not comment on it or add anything - just speak it naturally as your response: {text}"
             )
             await send_data_message(room, "agent_transcript", {"text": text})
             
-            await asyncio.sleep(3)
+            await asyncio.sleep(2)
             await send_data_message(room, "speech_complete", {})
             logger.info("Text-to-speech done")
         else:
