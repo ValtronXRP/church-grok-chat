@@ -159,56 +159,63 @@ async function searchSermonsOld(query) {
   return [];
 }
 
-function formatSermonContext(sermonResults) {
+function formatSermonContext(sermonResults, isMoreRequest = false) {
   if (!sermonResults || sermonResults.length === 0) {
     return '\n\n⚠️ NO SERMON SEGMENTS FOUND: Please still answer based on general biblical principles, but mention that no specific sermons from Pastor Bob Kopeny were found on this topic.\n';
   }
   
-  let context = '\n\n🔴 IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE:\n\n';
-  context += '📺 VIDEO SEGMENTS FOUND: ' + sermonResults.length + ' relevant clips\n\n';
-  context += 'RESPONSE STRUCTURE:\n';
-  context += '1. Summarize what Pastor Bob teaches on this topic\n';
-  context += '2. Include YouTube links naturally (the links already have timestamps embedded)\n';
-  context += '3. IF there\'s a story/illustration, share it naturally\n';
-  context += '4. DO NOT read out timestamps like "15:32" - just say "In his sermon [title]" and include the link\n\n';
+  const first3 = sermonResults.slice(0, 3);
+  const hasMore = sermonResults.length > 3;
   
-  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  context += 'SERMON SEGMENTS:\n';
-  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  
-  sermonResults.forEach((result, i) => {
-    const text_lower = result.text.toLowerCase();
-    let hasIllustration = false;
+  if (isMoreRequest) {
+    const additional = sermonResults.slice(3);
+    if (additional.length === 0) {
+      return '\n\nNo additional sermon segments available on this topic.\n';
+    }
     
-    if (text_lower.includes('remember when') || text_lower.includes('story') || 
+    let context = '\n\nHere are more sermon segments on this topic:\n\n';
+    additional.forEach((result, i) => {
+      context += `📹 "${result.title}": ${result.timestamped_url}\n`;
+    });
+    return context;
+  }
+  
+  let context = '\n\n🔴 RESPONSE FORMAT INSTRUCTIONS:\n\n';
+  context += 'STRUCTURE YOUR RESPONSE AS:\n';
+  context += '1. SUMMARY: What Pastor Bob teaches on this topic (2-3 sentences)\n';
+  context += '2. REFERENCES: Any illustrations or stories he uses\n';
+  context += '3. LINKS: Include exactly 3 YouTube links to sermon segments\n';
+  if (hasMore) {
+    context += '4. END WITH: "If you\'d like more sermon links on this topic, just say \'more\'"\n';
+  }
+  context += '\nDO NOT read timestamps aloud - just reference sermon titles\n\n';
+  
+  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  context += 'SERMON SEGMENTS (use only these 3):\n';
+  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+  
+  first3.forEach((result, i) => {
+    const text_lower = result.text.toLowerCase();
+    let hasIllustration = text_lower.includes('remember when') || text_lower.includes('story') || 
         text_lower.includes('once ') || text_lower.includes('example') ||
         text_lower.includes('illustration') || text_lower.includes('let me tell you') ||
-        text_lower.includes('imagine') || text_lower.includes('picture this')) {
-      hasIllustration = true;
-    }
+        text_lower.includes('imagine') || text_lower.includes('picture this');
     
     context += `\n📹 SEGMENT ${i + 1}:\n`;
-    context += `Sermon Title: "${result.title}"\n`;
-    context += `YouTube Link (with timestamp): ${result.timestamped_url}\n`;
+    context += `Sermon: "${result.title}"\n`;
+    context += `Link: ${result.timestamped_url}\n`;
     
     if (hasIllustration) {
-      context += `\n🎯 ILLUSTRATION:\n`;
-      context += `"${result.text.substring(0, 400)}..."\n`;
+      context += `ILLUSTRATION: "${result.text.substring(0, 300)}..."\n`;
     } else {
-      context += `\n📝 TEACHING:\n`;
-      context += `${result.text.substring(0, 400)}...\n`;
+      context += `TEACHING: ${result.text.substring(0, 300)}...\n`;
     }
-    
     context += '────────────────────────────────────\n';
   });
   
-  context += '\n🔴 VOICE-FRIENDLY FORMAT:\n';
-  context += '- Say "In his sermon [title]" NOT "at timestamp 15:32"\n';
-  context += '- Include YouTube links so they appear in chat\n';
-  context += '- Keep explanations conversational\n';
-  context += '- Share illustrations naturally as stories\n\n';
-  
-  context += 'EXAMPLE: "Pastor Bob teaches about this in his sermon \'[title]\'. He explains that... You can watch the full teaching here: [link]"\n';
+  if (hasMore) {
+    context += `\n📌 ${sermonResults.length - 3} MORE SEGMENTS AVAILABLE - remind user to say "more" for additional links\n`;
+  }
   
   return context;
 }
@@ -236,22 +243,39 @@ app.post('/api/chat', async (req, res) => {
     const lastUserMessage = messages[messages.length - 1];
     
     if (lastUserMessage && lastUserMessage.role === 'user') {
+      const userText = lastUserMessage.content.toLowerCase().trim();
+      const isMoreRequest = userText === 'more' || userText === 'more links' || userText === 'show more';
+      
+      // For "more" requests, find the previous topic from conversation
+      let searchQuery = lastUserMessage.content;
+      if (isMoreRequest) {
+        // Look back for the last substantive user question
+        for (let i = messages.length - 2; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            const prevText = messages[i].content.toLowerCase().trim();
+            if (prevText !== 'more' && prevText !== 'more links' && prevText !== 'show more') {
+              searchQuery = messages[i].content;
+              console.log(`"More" request - using previous query: "${searchQuery}"`);
+              break;
+            }
+          }
+        }
+      }
+      
       // Search for relevant sermons (don't let this break the chat)
       let sermonResults = [];
       try {
-        sermonResults = await searchSermons(lastUserMessage.content);
+        sermonResults = await searchSermons(searchQuery);
       } catch (searchError) {
         console.log('Sermon search skipped due to error:', searchError.message);
-        // Continue without sermon results
       }
       
       if (sermonResults.length > 0) {
         console.log(`Found ${sermonResults.length} relevant sermon segments`);
-        console.log(`First result: ${sermonResults[0].title} at ${sermonResults[0].start_time}`);
         
         // Add sermon context to the system message
-        const sermonContext = formatSermonContext(sermonResults);
-        console.log(`Added sermon context (${sermonContext.length} chars) to system message`);
+        const sermonContext = formatSermonContext(sermonResults, isMoreRequest);
+        console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
         
         // Find and update the system message
         const systemMsgIndex = enhancedMessages.findIndex(m => m.role === 'system');
@@ -260,9 +284,6 @@ app.post('/api/chat', async (req, res) => {
             ...enhancedMessages[systemMsgIndex],
             content: enhancedMessages[systemMsgIndex].content + sermonContext
           };
-          console.log('System message updated with sermon context');
-        } else {
-          console.log('WARNING: No system message found to add sermon context!');
         }
       } else {
         console.log('No relevant sermon segments found');

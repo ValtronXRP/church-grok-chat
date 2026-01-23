@@ -38,7 +38,7 @@ def time_to_seconds(time_str):
         return parts[0] * 60 + parts[1]
     return 0
 
-def search_sermons(query, n_results=3):
+def search_sermons(query, n_results=5):
     if not query or not sermons_data:
         return []
     
@@ -148,6 +148,8 @@ async def run_session():
     pending_text = {"text": None}
     data_received = asyncio.Event()
     current_sermon_results = []
+    last_query = {"text": None}
+    all_sermon_results = []
 
     @room.on("participant_connected")
     def on_connect(p):
@@ -209,23 +211,40 @@ async def run_session():
         
         @session.on("user_input_transcribed")
         def on_user_transcript(event):
-            nonlocal current_sermon_results
+            nonlocal current_sermon_results, last_query, all_sermon_results
             if event.is_final and event.transcript:
                 user_text = event.transcript
                 logger.info(f"USER SAID: {user_text}")
                 asyncio.create_task(send_data_message(room, "user_transcript", {"text": user_text}))
                 
-                results = search_sermons(user_text, 3)
-                current_sermon_results = results
-                if results:
-                    logger.info(f"Found {len(results)} sermon segments")
-                    for r in results:
+                user_lower = user_text.lower().strip()
+                is_more_request = user_lower in ['more', 'more links', 'show more']
+                
+                if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
+                    additional = all_sermon_results[3:]
+                    current_sermon_results = additional
+                    logger.info(f"Showing {len(additional)} additional sermon segments")
+                    for r in additional[:3]:
                         asyncio.create_task(send_data_message(room, "sermon_reference", {
                             "title": r['title'],
                             "url": r['timestamped_url'],
                             "timestamp": r['start_time'],
                             "text": r['text'][:200]
                         }))
+                else:
+                    results = search_sermons(user_text, 6)
+                    all_sermon_results = results
+                    current_sermon_results = results[:3]
+                    last_query["text"] = user_text
+                    if results:
+                        logger.info(f"Found {len(results)} sermon segments, showing first 3")
+                        for r in results[:3]:
+                            asyncio.create_task(send_data_message(room, "sermon_reference", {
+                                "title": r['title'],
+                                "url": r['timestamped_url'],
+                                "timestamp": r['start_time'],
+                                "text": r['text'][:200]
+                            }))
         
         @session.on("conversation_item_added")
         def on_conversation_item(event):
