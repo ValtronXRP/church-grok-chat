@@ -14,8 +14,88 @@ from livekit.agents import Agent, AgentSession
 from livekit.plugins import xai, openai
 from livekit.api import AccessToken, VideoGrants
 
+SERMONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sermons_static.json')
+sermons_data = []
+
+def load_sermons():
+    global sermons_data
+    try:
+        with open(SERMONS_FILE, 'r') as f:
+            sermons_data = json.load(f)
+        logger.info(f"Loaded {len(sermons_data)} sermon segments")
+    except Exception as e:
+        logger.error(f"Failed to load sermons: {e}")
+        sermons_data = []
+
+def time_to_seconds(time_str):
+    if not time_str:
+        return 0
+    parts = time_str.split(':')
+    parts = [int(p) for p in parts]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    elif len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return 0
+
+def search_sermons(query, n_results=3):
+    if not query or not sermons_data:
+        return []
+    
+    query_lower = query.lower()
+    query_words = query_lower.split()
+    
+    scored = []
+    for sermon in sermons_data:
+        text_lower = sermon.get('text', '').lower()
+        word_matches = sum(1 for word in query_words if len(word) > 3 and word in text_lower)
+        topics = sermon.get('topics', [])
+        topic_score = 0.3 if any(t.lower() in query_lower for t in topics) else 0
+        score = (word_matches / len(query_words) if query_words else 0) + topic_score
+        
+        if score > 0.2:
+            scored.append((score, sermon))
+    
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    results = []
+    for score, sermon in scored[:n_results]:
+        start_seconds = time_to_seconds(sermon.get('start_time', '0'))
+        timestamped_url = f"{sermon.get('url', '')}&t={start_seconds}s"
+        results.append({
+            'text': sermon.get('text', ''),
+            'title': sermon.get('title', 'Unknown Sermon'),
+            'video_id': sermon.get('video_id', ''),
+            'start_time': sermon.get('start_time', ''),
+            'url': sermon.get('url', ''),
+            'timestamped_url': timestamped_url,
+            'relevance_score': score
+        })
+    
+    return results
+
+def has_illustration(text):
+    markers = ['remember when', 'story', 'once ', 'example', 'illustration', 
+               'let me tell you', 'imagine', 'picture this', 'there was a']
+    return any(m in text.lower() for m in markers)
+
+def format_sermon_context(results):
+    if not results:
+        return ""
+    
+    context = "\n\nRELEVANT SERMON SEGMENTS FROM PASTOR BOB:\n"
+    for i, r in enumerate(results, 1):
+        context += f"\n[Segment {i}] From '{r['title']}' at {r['start_time']}:\n"
+        context += f"Watch: {r['timestamped_url']}\n"
+        if has_illustration(r['text']):
+            context += f"ILLUSTRATION: \"{r['text'][:500]}...\"\n"
+        else:
+            context += f"Teaching: {r['text'][:300]}...\n"
+    
+    context += "\nINSTRUCTIONS: Include relevant YouTube links and quote any illustrations directly in your response.\n"
+    return context
+
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
-    """xAI Realtime Model"""
     def __init__(self, voice="Ara", api_key=None, **kwargs):
         api_key = api_key or os.environ.get("XAI_API_KEY")
         super().__init__(
@@ -48,37 +128,31 @@ PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assi
 IMPORTANT CONTEXT:
 - APB stands for "Ask Pastor Bob"
 - Pastor Bob Kopeny is the specific pastor whose teachings you represent
-- You should ONLY reference Pastor Bob Kopeny's perspectives and teachings
-- Do NOT reference or discuss other pastors named Bob unless the user specifically asks about a different pastor
-- If you don't know what Pastor Bob would say about something, be honest and say "I'm not sure what Pastor Bob's specific teaching on that is, but I can share what the Bible says..."
+- When given sermon segments, ALWAYS mention the YouTube links so users can watch
+- If there's an illustration or story in the segments, quote it directly
+- Keep voice responses conversational but include the video references
 
 YOUR ROLE:
 - Answer questions about the Bible, faith, and Christian living
-- Share relevant illustrations and stories in a warm, pastoral way
+- Share relevant illustrations and stories from Pastor Bob's sermons
+- Always reference the YouTube videos when available
 - Be encouraging, compassionate, and helpful
-- Keep responses conversational and brief since this is voice chat
-- If asked about topics outside faith/Bible, gently redirect or answer briefly
 
 SPEAKING STYLE:
 - Warm and welcoming, like a friendly pastor
-- Use simple, clear language
-- Be encouraging and supportive
-- Keep answers focused and not too long
-- It's okay to ask clarifying questions
-
-BOUNDARIES:
-- Only share teachings that align with Biblical Christianity
-- Don't make up quotes or stories - if you're not sure, say so
-- Don't pretend to be Pastor Bob himself - you are an assistant that helps share his teachings
-- Be respectful of all questions, even difficult ones
+- When you have video segments, say things like "Pastor Bob teaches about this in his sermon, you can watch it at..." 
+- Quote illustrations directly: "Pastor Bob shares this story..."
+- Keep answers focused but include the resources
 """
 
 class APBAssistant(Agent):
-    def __init__(self):
-        super().__init__(instructions=PASTOR_BOB_INSTRUCTIONS)
+    def __init__(self, extra_context=""):
+        full_instructions = PASTOR_BOB_INSTRUCTIONS
+        if extra_context:
+            full_instructions += extra_context
+        super().__init__(instructions=full_instructions)
 
 async def send_data_message(room, message_type, data):
-    """Send a data message to all participants in the room"""
     try:
         message = json.dumps({"type": message_type, **data})
         await room.local_participant.publish_data(message.encode('utf-8'), reliable=True)
@@ -87,8 +161,6 @@ async def send_data_message(room, message_type, data):
         logger.error(f"Failed to send data message: {e}")
 
 async def run_session():
-    """Run one complete session, return when user disconnects"""
-    
     token = AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
         .with_identity("apb-agent") \
         .with_grants(VideoGrants(
@@ -104,6 +176,7 @@ async def run_session():
     silent_connection = False
     pending_text_to_speak = None
     session = None
+    current_sermon_results = []
 
     @room.on("participant_connected")
     def on_connect(p):
@@ -189,6 +262,37 @@ async def run_session():
                 logger.info("Greeting sent")
             
             logger.info("LISTENING - speak now!")
+            
+            @session.on("user_input_transcribed")
+            async def on_user_speech(text):
+                nonlocal current_sermon_results
+                if text and len(text) > 5:
+                    logger.info(f"User said: {text}")
+                    await send_data_message(room, "user_transcript", {"text": text})
+                    
+                    results = search_sermons(text, 3)
+                    current_sermon_results = results
+                    if results:
+                        logger.info(f"Found {len(results)} sermon segments for: {text}")
+                        for r in results:
+                            await send_data_message(room, "sermon_reference", {
+                                "title": r['title'],
+                                "url": r['timestamped_url'],
+                                "timestamp": r['start_time'],
+                                "text": r['text'][:200]
+                            })
+            
+            @session.on("agent_response")
+            async def on_agent_response(text):
+                if text:
+                    logger.info(f"Agent response: {text[:100]}...")
+                    response_with_links = text
+                    if current_sermon_results:
+                        response_with_links += "\n\nRelated sermon videos:\n"
+                        for r in current_sermon_results:
+                            response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
+                    await send_data_message(room, "agent_transcript", {"text": response_with_links})
+            
         except Exception as e:
             logger.error(f"Session error: {e}")
             raise
@@ -205,6 +309,8 @@ async def main():
     logger.info("=" * 50)
     logger.info("APB - Ask Pastor Bob Voice Agent")
     logger.info("=" * 50)
+    
+    load_sermons()
 
     while True:
         await run_session()
