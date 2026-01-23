@@ -226,34 +226,41 @@ async def run_session():
                             "text": r['text'][:200]
                         }))
         
-        @session.on("conversation_item_added")
-        def on_conversation_item(event):
-            logger.info(f"CONVERSATION ITEM: {type(event)}")
-            logger.info(f"  Event attrs: {dir(event)}")
-            if hasattr(event, 'item'):
-                item = event.item
-                logger.info(f"  Item: {type(item)}, attrs: {dir(item)}")
-                if hasattr(item, 'role'):
-                    logger.info(f"  Role: {item.role}")
-                if hasattr(item, 'content'):
-                    logger.info(f"  Content: {item.content}")
+        @session.on("speech_created")
+        def on_speech_created(event):
+            logger.info(f"SPEECH CREATED: source={event.source}, user_initiated={event.user_initiated}")
+            speech_handle = event.speech_handle
+            
+            async def wait_for_speech_content():
+                nonlocal current_sermon_results
+                try:
+                    await speech_handle.wait_for_playout()
+                    items = speech_handle.chat_items
+                    logger.info(f"Speech done, chat_items: {items}")
                     
-                if hasattr(item, 'role') and item.role == 'assistant':
                     text = ""
-                    if hasattr(item, 'content') and item.content:
-                        for content in item.content:
-                            if hasattr(content, 'text'):
-                                text += content.text
-                            elif hasattr(content, 'transcript'):
-                                text += content.transcript
-                    if text:
+                    for item in items:
+                        if hasattr(item, 'text_content'):
+                            text += item.text_content
+                        elif hasattr(item, 'content'):
+                            for c in item.content:
+                                if hasattr(c, 'text'):
+                                    text += c.text
+                                elif hasattr(c, 'transcript'):
+                                    text += c.transcript
+                    
+                    if text and not event.user_initiated:
                         logger.info(f"AGENT SAID: {text[:100]}...")
                         response_with_links = text
                         if current_sermon_results:
                             response_with_links += "\n\nRelated sermon videos:\n"
                             for r in current_sermon_results:
                                 response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
-                        asyncio.create_task(send_data_message(room, "agent_transcript", {"text": response_with_links}))
+                        await send_data_message(room, "agent_transcript", {"text": response_with_links})
+                except Exception as e:
+                    logger.error(f"Error getting speech content: {e}")
+            
+            asyncio.create_task(wait_for_speech_content())
 
         await session.start(room=room, agent=APBAssistant())
         logger.info("Session started")
