@@ -276,40 +276,47 @@
         /* Embedded Video Styles */
         .sermon-video-container {
             margin: 15px 0;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            border-radius: 12px;
             overflow: hidden;
-            background: #f9f9f9;
-            max-width: 560px;
+            background: rgba(0, 0, 0, 0.6);
+            max-width: 100%;
         }
         
         .video-header {
-            padding: 10px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 12px 15px;
+            background: linear-gradient(135deg, rgba(0, 255, 65, 0.2) 0%, rgba(0, 200, 50, 0.2) 100%);
             color: white;
             font-weight: 500;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.2);
         }
         
         .external-link {
-            color: white;
+            color: rgb(0, 255, 65);
             text-decoration: none;
-            font-size: 0.9em;
-            padding: 4px 8px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 4px;
-            transition: background 0.3s;
+            font-size: 0.85em;
+            padding: 4px 10px;
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            border-radius: 20px;
+            transition: all 0.3s;
         }
         
         .external-link:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(0, 255, 65, 0.2);
+            border-color: rgb(0, 255, 65);
         }
         
         .sermon-video-container iframe {
             display: block;
             border: none;
+            width: 100%;
+            aspect-ratio: 16/9;
+            height: auto;
         }
 
         .message.system {
@@ -1013,27 +1020,21 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
         }
 
         function formatMessageWithLinks(text) {
-            // First, extract YouTube URLs and replace them with placeholders
             const videoPlaceholders = {};
             let placeholderIndex = 0;
             
-            // Find and replace YouTube URLs with placeholders
             let processedText = text.replace(
-                /\(?(https:\/\/(www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(&t=\d+s)?)\)?/g,
-                function(match, url, www, videoId, timestamp) {
+                /\(?(https:\/\/(www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(?:&t=(\d+)s)?)\)?/g,
+                function(match, url, www, videoId, secondsStr) {
                     const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
-                    const timeMatch = timestamp ? timestamp.match(/t=(\d+)s/) : null;
-                    const seconds = timeMatch ? parseInt(timeMatch[1]) : 0;
-                    const timeLabel = timeMatch ? formatSecondsToTime(seconds) : '';
+                    const seconds = secondsStr ? parseInt(secondsStr) : 0;
+                    const timeLabel = seconds > 0 ? formatSecondsToTime(seconds) : '';
+                    const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1`;
                     
-                    // YouTube embed URL with autoplay disabled and starting at specific time
-                    const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1`;
-                    
-                    // Store the embed HTML with fixed iframe attributes
                     videoPlaceholders[placeholder] = `
                         <div class="sermon-video-container">
                             <div class="video-header">
-                                📹 Sermon Segment${timeLabel ? ' (starts at ' + timeLabel + ')' : ''}
+                                <span>📹 Sermon Segment${timeLabel ? ' (starts at ' + timeLabel + ')' : ''}</span>
                                 <a href="${url}" target="_blank" class="external-link">Open in YouTube →</a>
                             </div>
                             <iframe 
