@@ -1025,36 +1025,44 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
             const videoPlaceholders = {};
             let placeholderIndex = 0;
             
-            let processedText = text.replace(
-                /\(?(https:\/\/(www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(?:&t=(\d+)s)?)\)?/g,
-                function(match, url, www, videoId, secondsStr) {
-                    const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
-                    const seconds = secondsStr ? parseInt(secondsStr) : 0;
-                    const timeLabel = seconds > 0 ? formatSecondsToTime(seconds) : '';
-                    const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1&enablejsapi=1`;
-                    
-                    videoPlaceholders[placeholder] = `
-                        <div class="sermon-video-container">
-                            <div class="video-header">
-                                <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
-                                <a href="${url}" target="_blank" class="external-link">YouTube ↗</a>
-                            </div>
-                            <iframe 
-                                width="560" 
-                                height="315" 
-                                src="${embedUrl}"
-                                title="Pastor Bob Sermon"
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen
-                                style="width:100%; max-width:560px;">
-                            </iframe>
-                        </div>`;
-                    
-                    placeholderIndex++;
-                    return placeholder;
-                }
-            );
+            // More robust regex that handles various YouTube URL formats
+            // Matches: youtube.com/watch?v=ID, youtube.com/watch?v=ID&t=123s, with or without www
+            const youtubeRegex = /\(?(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(?:[&?]t=(\d+)s?)?[^\s\)]*)\)?/g;
+            
+            console.log('Processing text for YouTube links:', text.substring(0, 200));
+            
+            let processedText = text.replace(youtubeRegex, function(match, url, videoId, secondsStr) {
+                console.log('Found YouTube URL:', url, 'VideoID:', videoId, 'Seconds:', secondsStr);
+                const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
+                const seconds = secondsStr ? parseInt(secondsStr) : 0;
+                const timeLabel = seconds > 0 ? formatSecondsToTime(seconds) : '';
+                const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1&enablejsapi=1`;
+                
+                videoPlaceholders[placeholder] = `
+                    <div class="sermon-video-container">
+                        <div class="video-header">
+                            <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
+                            <a href="${url}" target="_blank" class="external-link">Open in YouTube ↗</a>
+                        </div>
+                        <iframe 
+                            width="560" 
+                            height="315" 
+                            src="${embedUrl}"
+                            title="Pastor Bob Sermon"
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            allowfullscreen
+                            loading="lazy"
+                            style="width:100%; max-width:560px;">
+                        </iframe>
+                    </div>`;
+                
+                placeholderIndex++;
+                return placeholder;
+            });
+            
+            console.log('Found', placeholderIndex, 'YouTube videos to embed');
             
             // Now escape HTML in the remaining text
             let formatted = processedText.replace(/&/g, '&amp;')
