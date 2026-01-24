@@ -1023,22 +1023,32 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 
         function formatMessageWithLinks(text) {
             // First, find all YouTube URLs and extract video info
-            // This simple regex just finds youtube.com/watch?v= URLs
             const videos = [];
             
-            // Match YouTube URLs - very permissive pattern
-            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})(?:&t=(\d+)s?)?/gi;
+            // Very permissive pattern - matches youtube.com/watch?v=VIDEOID with optional timestamp
+            // Handles: ?v=ID, ?v=ID&t=123s, ?v=ID&t=123, and URLs with other params
+            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]+)(?:[^\s]*&t=(\d+)s?)?/gi;
             
             let match;
+            let debugInfo = [];
             while ((match = urlPattern.exec(text)) !== null) {
                 const videoId = match[1];
-                const seconds = match[2] ? parseInt(match[2]) : 0;
+                // Also try to find timestamp if it appears anywhere in the URL
+                let seconds = match[2] ? parseInt(match[2]) : 0;
+                if (seconds === 0) {
+                    const tMatch = match[0].match(/[&?]t=(\d+)/);
+                    if (tMatch) seconds = parseInt(tMatch[1]);
+                }
                 const fullUrl = match[0];
                 videos.push({ videoId, seconds, fullUrl, index: match.index });
-                console.log('Found YouTube video:', videoId, 'at', seconds, 'seconds');
+                debugInfo.push(`Video: ${videoId} @ ${seconds}s`);
+                console.log('🎬 Found YouTube video:', videoId, 'at', seconds, 'seconds, URL:', fullUrl);
             }
             
-            console.log('Total YouTube videos found:', videos.length);
+            console.log('📺 Total YouTube videos found:', videos.length);
+            if (videos.length > 0) {
+                console.log('Videos to embed:', debugInfo.join(', '));
+            }
             
             // If no videos found, just escape and return
             if (videos.length === 0) {
@@ -1882,6 +1892,33 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
         // Startup
         log('APB Voice & Chat ready', 'success');
         log('Type a message or click the microphone', 'info');
+        // Test function - call testVideoEmbed() from browser console to verify embedding works
+        window.testVideoEmbed = function() {
+            const testMsg = `Here's a test video from Pastor Bob:
+
+https://www.youtube.com/watch?v=L2KBxtxYBiw&t=5307s
+
+This should show an embedded video above.`;
+            console.log('Testing video embed with message:', testMsg);
+            addMessage(testMsg, 'agent');
+        };
+
+        // Debug function to test the regex
+        window.testRegex = function(url) {
+            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]+)(?:[^\s]*&t=(\d+)s?)?/gi;
+            const match = urlPattern.exec(url || 'https://www.youtube.com/watch?v=L2KBxtxYBiw&t=5307s');
+            if (match) {
+                console.log('✅ Match found!');
+                console.log('  Full match:', match[0]);
+                console.log('  Video ID:', match[1]);
+                console.log('  Seconds:', match[2]);
+            } else {
+                console.log('❌ No match for URL:', url);
+            }
+        };
+
+        console.log('💡 Debug: Run testVideoEmbed() in console to test video embedding');
+        console.log('💡 Debug: Run testRegex("your-url") to test if a URL matches the pattern');
     </script>
 </body>
 </html>
