@@ -1022,74 +1022,84 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
         }
 
         function formatMessageWithLinks(text) {
-            const videoPlaceholders = {};
-            let placeholderIndex = 0;
+            // First, find all YouTube URLs and extract video info
+            // This simple regex just finds youtube.com/watch?v= URLs
+            const videos = [];
             
-            // More robust regex that handles various YouTube URL formats
-            // Matches: youtube.com/watch?v=ID, youtube.com/watch?v=ID&t=123s, with or without www
-            const youtubeRegex = /\(?(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)(?:[&?]t=(\d+)s?)?[^\s\)]*)\)?/g;
+            // Match YouTube URLs - very permissive pattern
+            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})(?:&t=(\d+)s?)?/gi;
             
-            console.log('Processing text for YouTube links:', text.substring(0, 200));
-            
-            let processedText = text.replace(youtubeRegex, function(match, url, videoId, secondsStr) {
-                console.log('Found YouTube URL:', url, 'VideoID:', videoId, 'Seconds:', secondsStr);
-                const placeholder = `__VIDEO_EMBED_${placeholderIndex}__`;
-                const seconds = secondsStr ? parseInt(secondsStr) : 0;
-                const timeLabel = seconds > 0 ? formatSecondsToTime(seconds) : '';
-                const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${seconds}&rel=0&modestbranding=1&enablejsapi=1`;
-                
-                videoPlaceholders[placeholder] = `
-                    <div class="sermon-video-container">
-                        <div class="video-header">
-                            <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
-                            <a href="${url}" target="_blank" class="external-link">Open in YouTube ↗</a>
-                        </div>
-                        <iframe 
-                            width="560" 
-                            height="315" 
-                            src="${embedUrl}"
-                            title="Pastor Bob Sermon"
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                            referrerpolicy="strict-origin-when-cross-origin"
-                            allowfullscreen
-                            loading="lazy"
-                            style="width:100%; max-width:560px;">
-                        </iframe>
-                    </div>`;
-                
-                placeholderIndex++;
-                return placeholder;
-            });
-            
-            console.log('Found', placeholderIndex, 'YouTube videos to embed');
-            
-            // Now escape HTML in the remaining text
-            let formatted = processedText.replace(/&/g, '&amp;')
-                                         .replace(/</g, '&lt;')
-                                         .replace(/>/g, '&gt;');
-            
-            // Replace placeholders with actual video embeds
-            for (const [placeholder, embedHtml] of Object.entries(videoPlaceholders)) {
-                formatted = formatted.replace(placeholder, embedHtml);
+            let match;
+            while ((match = urlPattern.exec(text)) !== null) {
+                const videoId = match[1];
+                const seconds = match[2] ? parseInt(match[2]) : 0;
+                const fullUrl = match[0];
+                videos.push({ videoId, seconds, fullUrl, index: match.index });
+                console.log('Found YouTube video:', videoId, 'at', seconds, 'seconds');
             }
             
-            // Format sermon references (e.g., "From 'sermon title' (15:32):")
-            formatted = formatted.replace(
-                /From ["']([^"']+)["'] \((\d+:\d+)\):/g,
-                '<strong class="sermon-ref">From "$1" ($2):</strong>'
-            );
+            console.log('Total YouTube videos found:', videos.length);
+            
+            // If no videos found, just escape and return
+            if (videos.length === 0) {
+                let formatted = text.replace(/&/g, '&amp;')
+                                   .replace(/</g, '&lt;')
+                                   .replace(/>/g, '&gt;')
+                                   .replace(/\n/g, '<br>');
+                return formatted;
+            }
+            
+            // Replace URLs with placeholders, then build final HTML
+            let result = text;
+            const placeholders = {};
+            
+            // Replace in reverse order to preserve indices
+            for (let i = videos.length - 1; i >= 0; i--) {
+                const v = videos[i];
+                const placeholder = `___YTVIDEO_${i}___`;
+                placeholders[placeholder] = v;
+                result = result.substring(0, v.index) + placeholder + result.substring(v.index + v.fullUrl.length);
+            }
+            
+            // Escape HTML
+            result = result.replace(/&/g, '&amp;')
+                          .replace(/</g, '&lt;')
+                          .replace(/>/g, '&gt;');
+            
+            // Replace placeholders with embedded videos
+            for (const [placeholder, v] of Object.entries(placeholders)) {
+                const timeLabel = v.seconds > 0 ? formatSecondsToTime(v.seconds) : '';
+                const embedUrl = `https://www.youtube.com/embed/${v.videoId}?start=${v.seconds}&rel=0&modestbranding=1`;
+                
+                const embedHtml = `
+<div class="sermon-video-container">
+    <div class="video-header">
+        <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
+        <a href="${v.fullUrl}" target="_blank" class="external-link">Open in YouTube ↗</a>
+    </div>
+    <iframe 
+        width="100%" 
+        height="315" 
+        src="${embedUrl}"
+        title="Pastor Bob Sermon"
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowfullscreen>
+    </iframe>
+</div>`;
+                result = result.replace(placeholder, embedHtml);
+            }
             
             // Format scripture references
-            formatted = formatted.replace(
+            result = result.replace(
                 /([1-3]?\s?[A-Z][a-z]+)\s+(\d+):(\d+(?:-\d+)?)/g,
                 '<span class="scripture-ref">$1 $2:$3</span>'
             );
             
             // Convert line breaks
-            formatted = formatted.replace(/\n/g, '<br>');
+            result = result.replace(/\n/g, '<br>');
             
-            return formatted;
+            return result;
         }
         
         function formatSecondsToTime(seconds) {
