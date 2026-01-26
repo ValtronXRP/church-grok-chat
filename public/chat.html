@@ -1672,77 +1672,58 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
                 log(`Your ${pub.kind} track published`, 'success');
             });
 
-            // Transcription events
+            // Transcription events - only log, don't display (use DataReceived instead to avoid duplicates)
             room.on(LivekitClient.RoomEvent.TranscriptionReceived, (segments, participant) => {
-                log(`Transcription received from ${participant.identity}`, 'info');
                 const text = segments.map(s => s.text).join(' ').trim();
                 if (!text) return;
-                
-                log(`Transcription text: "${text}"`, 'info');
-                
-                if (participant.identity === 'apb-agent' || participant.identity.startsWith('apb')) {
-                    hideTyping();
-                    addMessage(text, 'agent');
-                    // Add agent response to conversation history
-                    conversationHistory.push({ role: 'assistant', content: text });
-                } else if (participant.isLocal) {
-                    addMessage(text, 'user');
-                    // Add user voice input to conversation history
-                    conversationHistory.push({ role: 'user', content: text });
-                    // Show typing when user speaks
-                    setTimeout(showTyping, 500);
-                } else {
-                    log(`Transcription from unknown participant: ${participant.identity}`, 'warning');
-                }
+                // Just log for debugging - actual display handled by DataReceived events
+                log(`Transcription (${participant.identity}): "${text.substring(0, 50)}..."`, 'info');
             });
 
+            // Track last messages to avoid duplicates
+            let lastAgentMessage = '';
+            let lastUserMessage = '';
+            
             // Data received event for context sync
             room.on(LivekitClient.RoomEvent.DataReceived, (data, participant) => {
-                console.log('RAW DATA RECEIVED:', data);
                 try {
                     const decoder = new TextDecoder();
                     const decoded = decoder.decode(data);
-                    console.log('DECODED DATA:', decoded);
                     const message = JSON.parse(decoded);
-                    console.log('PARSED MESSAGE:', message);
-                    log(`Data message received: ${message.type}`, 'info');
+                    log(`Data message: ${message.type}`, 'info');
                     
                     if (message.type === 'context_update') {
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
-                        // Display user's spoken text in chat
-                        log('Received user transcript', 'info');
-                        if (message.text) {
+                        // Display user's spoken text in chat (with deduplication)
+                        if (message.text && message.text !== lastUserMessage) {
+                            lastUserMessage = message.text;
                             addMessage(message.text, 'user');
                             conversationHistory.push({ role: 'user', content: message.text });
-                            // Show typing indicator after user speaks
                             setTimeout(showTyping, 500);
-                            // Cancel auto-disconnect timer when user speaks
                             if (autoDisconnectTimer) {
                                 clearTimeout(autoDisconnectTimer);
                                 autoDisconnectTimer = null;
-                                log('Auto-disconnect cancelled - user is speaking', 'info');
+                                log('Auto-disconnect cancelled - user speaking', 'info');
                             }
                         }
                     } else if (message.type === 'agent_transcript') {
-                        // Display agent's spoken text in chat
-                        log('Received agent transcript', 'info');
-                        if (message.text) {
+                        // Display agent's spoken text in chat (with deduplication)
+                        if (message.text && message.text !== lastAgentMessage) {
+                            lastAgentMessage = message.text;
                             hideTyping();
                             addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
-                            // Start auto-disconnect timer after agent responds
                             if (autoDisconnectTimer) {
                                 clearTimeout(autoDisconnectTimer);
                             }
                             autoDisconnectTimer = setTimeout(() => {
                                 if (isConnected) {
-                                    log('Auto-disconnecting after 20 seconds of inactivity', 'info');
+                                    log('Auto-disconnecting after inactivity', 'info');
                                     addMessage('Voice session ended due to inactivity', 'system');
                                     disconnect();
                                 }
                             }, AUTO_DISCONNECT_DELAY);
-                            log(`Auto-disconnect timer set for ${AUTO_DISCONNECT_DELAY/1000} seconds`, 'info');
                         }
                     } else if (message.type === 'sermon_reference') {
                         // Display sermon reference in chat

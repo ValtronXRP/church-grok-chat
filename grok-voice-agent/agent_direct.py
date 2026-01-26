@@ -139,6 +139,7 @@ async def entrypoint(ctx: JobContext):
     all_sermon_results = []
     current_sermon_results = []
     last_query = {"text": None}
+    last_sent_message = {"text": None}
     
     def on_data_received(data_packet):
         try:
@@ -195,7 +196,7 @@ async def entrypoint(ctx: JobContext):
     
     @session.on("conversation_item_added")
     def on_conversation_item(event):
-        nonlocal current_sermon_results
+        nonlocal current_sermon_results, last_sent_message
         try:
             item = event.item
             role = getattr(item, 'role', None)
@@ -215,7 +216,8 @@ async def entrypoint(ctx: JobContext):
                     elif isinstance(content, str):
                         text = content
                 
-                if text:
+                if text and text != last_sent_message["text"]:
+                    last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
                     response_with_links = text
                     if current_sermon_results:
@@ -231,7 +233,6 @@ async def entrypoint(ctx: JobContext):
     
     greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
     await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
-    await send_data_message(ctx.room, "agent_transcript", {"text": greeting})
     logger.info("Greeting sent - LISTENING")
     
     await ctx.wait_for_participant_disconnect()
