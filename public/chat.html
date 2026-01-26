@@ -276,24 +276,24 @@
         
         /* Embedded Video Styles */
         .sermon-video-container {
-            margin: 15px 0;
+            margin: 10px 0;
             border: 1px solid rgba(0, 255, 65, 0.3);
-            border-radius: 12px;
+            border-radius: 8px;
             overflow: hidden;
             background: rgba(0, 0, 0, 0.6);
-            max-width: 100%;
-            width: 100%;
+            max-width: 280px;
+            width: 280px;
         }
         
         .video-header {
-            padding: 12px 15px;
+            padding: 8px 10px;
             background: linear-gradient(135deg, rgba(0, 255, 65, 0.2) 0%, rgba(0, 200, 50, 0.2) 100%);
             color: white;
             font-weight: 500;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 13px;
+            font-size: 11px;
             border-bottom: 1px solid rgba(0, 255, 65, 0.2);
         }
         
@@ -317,8 +317,7 @@
             display: block;
             border: none;
             width: 100%;
-            aspect-ratio: 16/9;
-            height: auto;
+            height: 158px;
         }
 
         .message.system {
@@ -1105,12 +1104,10 @@ This format allows the videos to be embedded in the chat.`
                 embedHtmlMap[v.fullUrl] = `
 <div class="sermon-video-container">
     <div class="video-header">
-        <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
-        <a href="${v.fullUrl}" target="_blank" class="external-link">Open in YouTube ↗</a>
+        <span>📹${timeLabel ? ' @ ' + timeLabel : ''}</span>
+        <a href="${v.fullUrl}" target="_blank" class="external-link">YouTube ↗</a>
     </div>
     <iframe 
-        width="100%" 
-        height="315" 
         src="${embedUrl}"
         title="Pastor Bob Sermon"
         frameborder="0" 
