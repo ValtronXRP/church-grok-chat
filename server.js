@@ -70,32 +70,32 @@ const sermonSearcher = new SermonSearch();
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
 async function searchSermons(query) {
-  // Use local sermon search instead of external API
+  // PRIMARY: Use ChromaDB vector search API (109K+ segments)
   try {
-    console.log(`Searching sermons locally for: "${query}"`);
+    console.log(`Searching ChromaDB for: "${query}"`);
+    const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
+      query: query,
+      n_results: 6
+    }, {
+      timeout: 5000
+    });
+    
+    if (response.data && response.data.results && response.data.results.length > 0) {
+      console.log(`ChromaDB found ${response.data.results.length} sermon results`);
+      return response.data.results;
+    }
+  } catch (apiError) {
+    console.log('ChromaDB API error, falling back to local:', apiError.message);
+  }
+  
+  // FALLBACK: Use local static JSON search (583 segments)
+  try {
+    console.log(`Falling back to local search for: "${query}"`);
     const results = sermonSearcher.search(query, 5);
     console.log(`Found ${results.length} local sermon results`);
     return results;
   } catch (error) {
     console.error('Local sermon search error:', error);
-    
-    // Fallback to API if configured and not localhost in production
-    if (SERMON_API_URL && !(SERMON_API_URL.includes('localhost') && process.env.NODE_ENV === 'production')) {
-      try {
-        const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
-          query: query,
-          n_results: 5
-        }, {
-          timeout: 2000
-        });
-        
-        if (response.data && response.data.results) {
-          return response.data.results;
-        }
-      } catch (apiError) {
-        console.log('API sermon search error:', apiError.message);
-      }
-    }
   }
   
   return [];

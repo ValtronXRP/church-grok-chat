@@ -918,7 +918,21 @@
                 </div>
             </div>
 
-            <!-- Text Input Container (moved above chat) -->
+            <!-- Chat Transcript Window -->
+            <div class="chat-window" id="chatWindow">
+                <!-- Voice Response Toggle -->
+                <div class="voice-response-toggle" id="voiceResponseToggle">
+                    <div class="toggle-response-label">Response</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voiceResponseCheckbox" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">VOICE</span>
+                    </label>
+                </div>
+                <div class="message system">Type a message below or click the microphone for voice chat</div>
+            </div>
+
+            <!-- Text Input Container (below chat) -->
             <div class="text-input-container">
                 <div class="text-input-wrapper">
                     <input 
@@ -934,20 +948,6 @@
                     >
                     <button id="sendBtn" onclick="sendTextMessage()">Send</button>
                 </div>
-            </div>
-
-            <!-- Chat Transcript Window -->
-            <div class="chat-window" id="chatWindow">
-                <!-- Voice Response Toggle -->
-                <div class="voice-response-toggle" id="voiceResponseToggle">
-                    <div class="toggle-response-label">Response</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="voiceResponseCheckbox" checked>
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">VOICE</span>
-                    </label>
-                </div>
-                <div class="message system">You can type a message below or click the microphone for voice chat</div>
             </div>
             
             <!-- Debug Panel -->
@@ -977,10 +977,18 @@
         let voiceResponseEnabled = true; // Track voice response preference
         let silentConnection = false; // Track if connection was from text input
         let typingTimeout = null;
+        let autoDisconnectTimer = null; // Timer for auto-disconnect after response
+        const AUTO_DISCONNECT_DELAY = 20000; // 20 seconds after agent finishes speaking
         let conversationHistory = [
             {
                 role: 'system',
                 content: `You are APB (Ask Pastor Bob), a helpful AI assistant based on Pastor Bob Kopeny's teachings.
+
+CRITICAL - NO HALLUCINATIONS:
+- ONLY share stories, illustrations, or examples that are DIRECTLY quoted in the sermon segments provided to you
+- NEVER make up, invent, or embellish stories that are not in the actual sermon text
+- If no specific illustration is found in the provided data, simply summarize what Pastor Bob teaches without inventing details
+- Do NOT assume what a video is about - only describe what is ACTUALLY in the transcript provided to you
 
 CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 1. When anyone mentions "Bob" or "Pastor Bob" they are ALWAYS referring to Pastor Bob Kopeny - never any other Bob.
@@ -991,6 +999,7 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 6. For general questions, relate them back to Pastor Bob Kopeny's perspective when possible.
 7. Maintain context across both voice and text interactions.
 8. Be warm, helpful, and concise.
+9. ONLY quote or reference stories/illustrations that appear WORD-FOR-WORD in the sermon data provided.
 
 IMPORTANT - VIDEO LINK FORMATTING:
 When including YouTube video links, you MUST:
@@ -998,16 +1007,16 @@ When including YouTube video links, you MUST:
 - Use the EXACT URL format: https://www.youtube.com/watch?v=VIDEOID&t=SECONDSs
 - Do NOT use markdown link format like [text](url)
 - Do NOT wrap URLs in parentheses or brackets
-- Put a brief description on the line AFTER the URL
+- Put a brief description on the line AFTER the URL (based ONLY on the actual transcript provided)
 
 Example format:
 "Here are some sermon clips on this topic:
 
 https://www.youtube.com/watch?v=abc123&t=300s
-Pastor Bob explains the importance of forgiveness.
+Pastor Bob discusses the topic of forgiveness.
 
 https://www.youtube.com/watch?v=xyz789&t=120s
-A powerful illustration about grace."
+A teaching on grace from the sermon series."
 
 This format allows the videos to be embedded in the chat.`
             }
@@ -1041,24 +1050,28 @@ This format allows the videos to be embedded in the chat.`
         }
 
         function formatMessageWithLinks(text) {
+            // Pre-process: Extract URLs from markdown links [text](url) format
+            text = text.replace(/\[([^\]]*)\]\((https?:\/\/(?:www\.)?youtube\.com\/watch\?[^)]+)\)/gi, '$2');
+            
+            // Pre-process: Remove parentheses around URLs
+            text = text.replace(/\((https?:\/\/(?:www\.)?youtube\.com\/watch\?[^)]+)\)/gi, '$1');
+            
             // First, find all YouTube URLs and extract video info
             const videos = [];
             
             // Very permissive pattern - matches youtube.com/watch?v=VIDEOID with optional timestamp
-            // Handles: ?v=ID, ?v=ID&t=123s, ?v=ID&t=123, and URLs with other params
-            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s]*v=([a-zA-Z0-9_-]+)(?:[^\s]*&t=(\d+)s?)?/gi;
+            // Now also handles URLs that might end with punctuation
+            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\])<>]*v=([a-zA-Z0-9_-]+)[^\s\])<>]*/gi;
             
             let match;
             let debugInfo = [];
             while ((match = urlPattern.exec(text)) !== null) {
                 const videoId = match[1];
-                // Also try to find timestamp if it appears anywhere in the URL
-                let seconds = match[2] ? parseInt(match[2]) : 0;
-                if (seconds === 0) {
-                    const tMatch = match[0].match(/[&?]t=(\d+)/);
-                    if (tMatch) seconds = parseInt(tMatch[1]);
-                }
-                const fullUrl = match[0];
+                // Find timestamp anywhere in the URL
+                let seconds = 0;
+                const tMatch = match[0].match(/[&?]t=(\d+)/);
+                if (tMatch) seconds = parseInt(tMatch[1]);
+                const fullUrl = match[0].replace(/[.,;:!?]+$/, ''); // Remove trailing punctuation
                 videos.push({ videoId, seconds, fullUrl, index: match.index });
                 debugInfo.push(`Video: ${videoId} @ ${seconds}s`);
                 console.log('🎬 Found YouTube video:', videoId, 'at', seconds, 'seconds, URL:', fullUrl);
@@ -1078,29 +1091,12 @@ This format allows the videos to be embedded in the chat.`
                 return formatted;
             }
             
-            // Replace URLs with placeholders, then build final HTML
-            let result = text;
-            const placeholders = {};
-            
-            // Replace in reverse order to preserve indices
-            for (let i = videos.length - 1; i >= 0; i--) {
-                const v = videos[i];
-                const placeholder = `___YTVIDEO_${i}___`;
-                placeholders[placeholder] = v;
-                result = result.substring(0, v.index) + placeholder + result.substring(v.index + v.fullUrl.length);
-            }
-            
-            // Escape HTML
-            result = result.replace(/&/g, '&amp;')
-                          .replace(/</g, '&lt;')
-                          .replace(/>/g, '&gt;');
-            
-            // Replace placeholders with embedded videos
-            for (const [placeholder, v] of Object.entries(placeholders)) {
+            // Create embed HTML for each video
+            const embedHtmlMap = {};
+            videos.forEach((v, i) => {
                 const timeLabel = v.seconds > 0 ? formatSecondsToTime(v.seconds) : '';
                 const embedUrl = `https://www.youtube.com/embed/${v.videoId}?start=${v.seconds}&rel=0&modestbranding=1`;
-                
-                const embedHtml = `
+                embedHtmlMap[v.fullUrl] = `
 <div class="sermon-video-container">
     <div class="video-header">
         <span>📹 Sermon Clip${timeLabel ? ' @ ' + timeLabel : ''}</span>
@@ -1116,8 +1112,25 @@ This format allows the videos to be embedded in the chat.`
         allowfullscreen>
     </iframe>
 </div>`;
-                result = result.replace(placeholder, embedHtml);
-            }
+            });
+            
+            // Escape HTML first (but protect URLs temporarily)
+            let result = text;
+            
+            // Replace each URL with its embed
+            videos.forEach(v => {
+                result = result.replace(v.fullUrl, `___EMBED_${v.videoId}_${v.seconds}___`);
+            });
+            
+            // Escape HTML
+            result = result.replace(/&/g, '&amp;')
+                          .replace(/</g, '&lt;')
+                          .replace(/>/g, '&gt;');
+            
+            // Put embeds back
+            videos.forEach(v => {
+                result = result.replace(`___EMBED_${v.videoId}_${v.seconds}___`, embedHtmlMap[v.fullUrl]);
+            });
             
             // Format scripture references
             result = result.replace(
@@ -1353,6 +1366,11 @@ This format allows the videos to be embedded in the chat.`
                     role: 'system',
                     content: `You are APB (Ask Pastor Bob), a helpful AI assistant based on Pastor Bob Kopeny's teachings.
 
+CRITICAL - NO HALLUCINATIONS:
+- ONLY share stories, illustrations, or examples that are DIRECTLY quoted in the sermon segments provided to you
+- NEVER make up, invent, or embellish stories that are not in the actual sermon text
+- If no specific illustration is found in the provided data, simply summarize what Pastor Bob teaches without inventing details
+
 CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 1. When anyone mentions "Bob" or "Pastor Bob" they are ALWAYS referring to Pastor Bob Kopeny - never any other Bob.
 2. ALWAYS spell his last name correctly as "Kopeny" (K-O-P-E-N-Y), never "Copeny" or any other variation.
@@ -1361,7 +1379,8 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 5. Begin responses about biblical topics with phrases like "Pastor Bob Kopeny teaches..." or "According to Pastor Bob Kopeny..."
 6. For general questions, relate them back to Pastor Bob Kopeny's perspective when possible.
 7. Maintain context across both voice and text interactions.
-8. Be warm, helpful, and concise.`
+8. Be warm, helpful, and concise.
+9. ONLY quote or reference stories/illustrations that appear WORD-FOR-WORD in the sermon data provided.`
                 }
             ];
             const chatWindow = document.getElementById('chatWindow');
@@ -1686,6 +1705,12 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
                             conversationHistory.push({ role: 'user', content: message.text });
                             // Show typing indicator after user speaks
                             setTimeout(showTyping, 500);
+                            // Cancel auto-disconnect timer when user speaks
+                            if (autoDisconnectTimer) {
+                                clearTimeout(autoDisconnectTimer);
+                                autoDisconnectTimer = null;
+                                log('Auto-disconnect cancelled - user is speaking', 'info');
+                            }
                         }
                     } else if (message.type === 'agent_transcript') {
                         // Display agent's spoken text in chat
@@ -1694,6 +1719,18 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
                             hideTyping();
                             addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
+                            // Start auto-disconnect timer after agent responds
+                            if (autoDisconnectTimer) {
+                                clearTimeout(autoDisconnectTimer);
+                            }
+                            autoDisconnectTimer = setTimeout(() => {
+                                if (isConnected) {
+                                    log('Auto-disconnecting after 20 seconds of inactivity', 'info');
+                                    addMessage('Voice session ended due to inactivity', 'system');
+                                    disconnect();
+                                }
+                            }, AUTO_DISCONNECT_DELAY);
+                            log(`Auto-disconnect timer set for ${AUTO_DISCONNECT_DELAY/1000} seconds`, 'info');
                         }
                     } else if (message.type === 'sermon_reference') {
                         // Display sermon reference in chat
@@ -1809,6 +1846,12 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
         // ============================================
         function disconnect() {
             log('Disconnecting...', 'info');
+            
+            // Clear auto-disconnect timer
+            if (autoDisconnectTimer) {
+                clearTimeout(autoDisconnectTimer);
+                autoDisconnectTimer = null;
+            }
             
             // Add message to chat if this was a user-initiated stop
             if (isConnected) {
