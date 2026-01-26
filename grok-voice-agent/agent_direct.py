@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import json
+import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,6 +15,7 @@ from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import openai
 
 SERMONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sermons_static.json')
+SERMON_API_URL = os.environ.get('SERMON_API_URL', 'http://localhost:5001')
 sermons_data = []
 
 def load_sermons():
@@ -21,7 +23,7 @@ def load_sermons():
     try:
         with open(SERMONS_FILE, 'r') as f:
             sermons_data = json.load(f)
-        logger.info(f"Loaded {len(sermons_data)} sermon segments")
+        logger.info(f"Loaded {len(sermons_data)} static sermon segments (fallback)")
     except Exception as e:
         logger.error(f"Failed to load sermons: {e}")
         sermons_data = []
@@ -37,7 +39,26 @@ def time_to_seconds(time_str):
         return parts[0] * 60 + parts[1]
     return 0
 
-def search_sermons(query, n_results=5):
+async def search_sermons_api(query, n_results=6):
+    """Search ChromaDB API (132K+ segments)"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{SERMON_API_URL}/api/sermon/search",
+                json={"query": query, "n_results": n_results},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    results = data.get('results', [])
+                    logger.info(f"ChromaDB found {len(results)} segments for: {query}")
+                    return results
+    except Exception as e:
+        logger.warning(f"ChromaDB API error: {e}")
+    return None
+
+def search_sermons_local(query, n_results=5):
+    """Fallback: search static JSON (583 segments)"""
     if not query or not sermons_data:
         return []
     
@@ -72,6 +93,14 @@ def search_sermons(query, n_results=5):
         })
     
     return results
+
+async def search_sermons(query, n_results=6):
+    """Search sermons - try ChromaDB API first, fallback to static"""
+    results = await search_sermons_api(query, n_results)
+    if results:
+        return results
+    logger.info(f"Falling back to local search for: {query}")
+    return search_sermons_local(query, n_results)
 
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
     def __init__(self, voice="Aria", api_key=None, **kwargs):
@@ -157,42 +186,44 @@ async def entrypoint(ctx: JobContext):
     
     session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
     
+    async def handle_user_query(user_text):
+        nonlocal current_sermon_results, last_query, all_sermon_results
+        user_lower = user_text.lower().strip()
+        is_more_request = user_lower in ['more', 'more links', 'show more']
+        
+        if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
+            additional = all_sermon_results[3:]
+            current_sermon_results = additional
+            logger.info(f"Showing {len(additional)} additional sermon segments")
+            for r in additional[:3]:
+                await send_data_message(ctx.room, "sermon_reference", {
+                    "title": r.get('title', 'Sermon'),
+                    "url": r.get('timestamped_url', r.get('url', '')),
+                    "timestamp": r.get('start_time', ''),
+                    "text": r.get('text', '')[:200]
+                })
+        else:
+            results = await search_sermons(user_text, 6)
+            all_sermon_results = results
+            current_sermon_results = results[:3]
+            last_query["text"] = user_text
+            if results:
+                logger.info(f"Found {len(results)} sermon segments, showing first 3")
+                for r in results[:3]:
+                    await send_data_message(ctx.room, "sermon_reference", {
+                        "title": r.get('title', 'Sermon'),
+                        "url": r.get('timestamped_url', r.get('url', '')),
+                        "timestamp": r.get('start_time', ''),
+                        "text": r.get('text', '')[:200]
+                    })
+    
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
-        nonlocal current_sermon_results, last_query, all_sermon_results
         if event.is_final and event.transcript:
             user_text = event.transcript
             logger.info(f"USER SAID: {user_text}")
             asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
-            
-            user_lower = user_text.lower().strip()
-            is_more_request = user_lower in ['more', 'more links', 'show more']
-            
-            if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
-                additional = all_sermon_results[3:]
-                current_sermon_results = additional
-                logger.info(f"Showing {len(additional)} additional sermon segments")
-                for r in additional[:3]:
-                    asyncio.create_task(send_data_message(ctx.room, "sermon_reference", {
-                        "title": r['title'],
-                        "url": r['timestamped_url'],
-                        "timestamp": r['start_time'],
-                        "text": r['text'][:200]
-                    }))
-            else:
-                results = search_sermons(user_text, 6)
-                all_sermon_results = results
-                current_sermon_results = results[:3]
-                last_query["text"] = user_text
-                if results:
-                    logger.info(f"Found {len(results)} sermon segments, showing first 3")
-                    for r in results[:3]:
-                        asyncio.create_task(send_data_message(ctx.room, "sermon_reference", {
-                            "title": r['title'],
-                            "url": r['timestamped_url'],
-                            "timestamp": r['start_time'],
-                            "text": r['text'][:200]
-                        }))
+            asyncio.create_task(handle_user_query(user_text))
     
     @session.on("conversation_item_added")
     def on_conversation_item(event):
