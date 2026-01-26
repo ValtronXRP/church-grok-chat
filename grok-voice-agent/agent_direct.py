@@ -140,7 +140,7 @@ async def entrypoint(ctx: JobContext):
     current_sermon_results = []
     last_query = {"text": None}
     
-    async def on_data_received(data_packet):
+    def on_data_received(data_packet):
         try:
             raw_data = data_packet.data if hasattr(data_packet, 'data') else data_packet
             message = json.loads(raw_data.decode('utf-8') if isinstance(raw_data, bytes) else raw_data)
