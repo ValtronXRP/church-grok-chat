@@ -59,6 +59,7 @@
             flex-direction: column;
             height: fit-content;
             max-height: calc(100vh - 200px);
+            margin-top: 30px;
         }
         
         .video-sidebar-header {
@@ -1314,82 +1315,36 @@ This format allows the videos to be embedded in the chat.`
             // Pre-process: Remove parentheses around URLs
             text = text.replace(/\((https?:\/\/(?:www\.)?youtube\.com\/watch\?[^)]+)\)/gi, '$1');
             
-            // First, find all YouTube URLs and extract video info
-            const videos = [];
-            
-            // Very permissive pattern - matches youtube.com/watch?v=VIDEOID with optional timestamp
-            // Now also handles URLs that might end with punctuation
+            // Find all YouTube URLs and add them to sidebar
             const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\])<>]*v=([a-zA-Z0-9_-]+)[^\s\])<>]*/gi;
             
             let match;
-            let debugInfo = [];
+            const videosFound = [];
             while ((match = urlPattern.exec(text)) !== null) {
-                const videoId = match[1];
-                // Find timestamp anywhere in the URL
-                let seconds = 0;
-                const tMatch = match[0].match(/[&?]t=(\d+)/);
-                if (tMatch) seconds = parseInt(tMatch[1]);
-                const fullUrl = match[0].replace(/[.,;:!?]+$/, ''); // Remove trailing punctuation
-                videos.push({ videoId, seconds, fullUrl, index: match.index });
-                debugInfo.push(`Video: ${videoId} @ ${seconds}s`);
-                console.log('🎬 Found YouTube video:', videoId, 'at', seconds, 'seconds, URL:', fullUrl);
+                const fullUrl = match[0].replace(/[.,;:!?]+$/, '');
+                videosFound.push(fullUrl);
+                console.log('🎬 Found YouTube video in text chat:', fullUrl);
             }
             
-            console.log('📺 Total YouTube videos found:', videos.length);
-            if (videos.length > 0) {
-                console.log('Videos to embed:', debugInfo.join(', '));
+            // Add videos to sidebar (not to chat)
+            if (videosFound.length > 0) {
+                console.log('📺 Adding', videosFound.length, 'videos to sidebar from text chat');
+                videosFound.forEach(url => {
+                    addVideoToSidebar('Sermon Clip', url, null, null);
+                });
             }
             
-            // If no videos found, just escape and return
-            if (videos.length === 0) {
-                let formatted = text.replace(/&/g, '&amp;')
-                                   .replace(/</g, '&lt;')
-                                   .replace(/>/g, '&gt;')
-                                   .replace(/\n/g, '<br>');
-                return formatted;
-            }
+            // Remove YouTube URLs from the text (they're now in sidebar)
+            let result = text.replace(/https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\])<>]*/gi, '');
             
-            // Create embed HTML for each video
-            const embedHtmlMap = {};
-            videos.forEach((v, i) => {
-                const timeLabel = v.seconds > 0 ? formatSecondsToTime(v.seconds) : '';
-                const endSeconds = v.seconds + 120;
-                const embedUrl = `https://www.youtube-nocookie.com/embed/${v.videoId}?start=${v.seconds}&end=${endSeconds}&rel=0&modestbranding=1&playsinline=1`;
-                embedHtmlMap[v.fullUrl] = `
-<div class="sermon-video-container">
-    <div class="video-header">
-        <span>📹${timeLabel ? ' @ ' + timeLabel : ''}</span>
-        <a href="${v.fullUrl}" target="_blank" class="external-link">YouTube ↗</a>
-    </div>
-    <iframe 
-        src="${embedUrl}"
-        title="Pastor Bob Sermon"
-        frameborder="0" 
-        loading="lazy"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        referrerpolicy="strict-origin-when-cross-origin"
-        allowfullscreen>
-    </iframe>
-</div>`;
-            });
-            
-            // Escape HTML first (but protect URLs temporarily)
-            let result = text;
-            
-            // Replace each URL with its embed
-            videos.forEach(v => {
-                result = result.replace(v.fullUrl, `___EMBED_${v.videoId}_${v.seconds}___`);
-            });
+            // Clean up extra whitespace and line breaks left by removed URLs
+            result = result.replace(/\n\s*\n\s*\n/g, '\n\n');
+            result = result.replace(/^\s+|\s+$/g, '');
             
             // Escape HTML
             result = result.replace(/&/g, '&amp;')
                           .replace(/</g, '&lt;')
                           .replace(/>/g, '&gt;');
-            
-            // Put embeds back
-            videos.forEach(v => {
-                result = result.replace(`___EMBED_${v.videoId}_${v.seconds}___`, embedHtmlMap[v.fullUrl]);
-            });
             
             // Format scripture references
             result = result.replace(
