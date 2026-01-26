@@ -1100,7 +1100,8 @@ This format allows the videos to be embedded in the chat.`
             const embedHtmlMap = {};
             videos.forEach((v, i) => {
                 const timeLabel = v.seconds > 0 ? formatSecondsToTime(v.seconds) : '';
-                const embedUrl = `https://www.youtube.com/embed/${v.videoId}?start=${v.seconds}&rel=0&modestbranding=1`;
+                const endSeconds = v.seconds + 120;
+                const embedUrl = `https://www.youtube-nocookie.com/embed/${v.videoId}?start=${v.seconds}&end=${endSeconds}&rel=0&modestbranding=1&playsinline=1`;
                 embedHtmlMap[v.fullUrl] = `
 <div class="sermon-video-container">
     <div class="video-header">
@@ -1111,7 +1112,9 @@ This format allows the videos to be embedded in the chat.`
         src="${embedUrl}"
         title="Pastor Bob Sermon"
         frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+        referrerpolicy="strict-origin-when-cross-origin"
         allowfullscreen>
     </iframe>
 </div>`;
