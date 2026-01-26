@@ -376,7 +376,7 @@ app.post('/token', async (req, res) => {
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
       identity: participantName,
       metadata: JSON.stringify({
-        request_agent: 'grok-voice-assistant'
+        request_agent: 'apb-voice-assistant'
       })
     });
     at.addGrant({
@@ -389,6 +389,16 @@ app.post('/token', async (req, res) => {
     });
     const token = await at.toJwt();
 
+    // Create a separate token for agent dispatch API call
+    const dispatchAt = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity: 'server-dispatch'
+    });
+    dispatchAt.addGrant({
+      roomAdmin: true,
+      room: roomName
+    });
+    const dispatchToken = await dispatchAt.toJwt();
+
     // Try to dispatch agent to the room
     const httpUrl = LIVEKIT_URL.replace('wss://', 'https://');
     
@@ -398,11 +408,11 @@ app.post('/token', async (req, res) => {
           `${httpUrl}/twirp/livekit.AgentDispatchService/CreateDispatch`,
           {
             room: roomName,
-            agent_name: 'grok-voice-assistant'
+            agent_name: 'apb-voice-assistant'
           },
           {
             headers: {
-              'Authorization': `Bearer ${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`,
+              'Authorization': `Bearer ${dispatchToken}`,
               'Content-Type': 'application/json'
             }
           }
