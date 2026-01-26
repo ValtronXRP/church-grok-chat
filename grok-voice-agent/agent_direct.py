@@ -12,7 +12,6 @@ logger = logging.getLogger("apb")
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import openai
-from livekit.agents.voice import MetricCollectedEvent
 
 SERMONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sermons_static.json')
 sermons_data = []
