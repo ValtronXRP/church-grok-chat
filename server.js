@@ -363,13 +363,14 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // ============================================
-// ORIGINAL WORKING /TOKEN ENDPOINT - UNCHANGED
+// TOKEN ENDPOINT - Creates unique room per user session
 // ============================================
 app.post('/token', async (req, res) => {
   try {
-    // IMPORTANT: Use the FIXED room name that agent_direct.py connects to!
-    const roomName = "apb-voice-room";  // This is the room the agent monitors
-    const participantName = `user_${Date.now()}`;
+    // Generate unique room name for each user session (private conversations)
+    const sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const roomName = `apb-session-${sessionId}`;
+    const participantName = `user_${sessionId}`;
     const context = req.body.context || [];
 
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
