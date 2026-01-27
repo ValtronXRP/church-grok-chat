@@ -263,6 +263,7 @@ app.post('/api/chat', async (req, res) => {
     
     // Check if we should search for relevant sermons
     let enhancedMessages = [...messages];
+    let sermonResults = [];  // Declare at function scope so it's available for video sending
     const lastUserMessage = messages[messages.length - 1];
     
     if (lastUserMessage && lastUserMessage.role === 'user') {
@@ -286,11 +287,11 @@ app.post('/api/chat', async (req, res) => {
       }
       
       // Search for relevant sermons (don't let this break the chat)
-      let sermonResults = [];
       try {
         sermonResults = await searchSermons(searchQuery);
       } catch (searchError) {
         console.log('Sermon search skipped due to error:', searchError.message);
+        sermonResults = [];
       }
       
       if (sermonResults.length > 0) {
