@@ -69,13 +69,13 @@ const sermonSearcher = new SermonSearch();
 // ============================================
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
-async function searchSermons(query) {
+async function searchSermons(query, nResults = 6) {
   // PRIMARY: Use ChromaDB vector search API (109K+ segments)
   try {
-    console.log(`Searching ChromaDB for: "${query}"`);
+    console.log(`Searching ChromaDB for: "${query}" (n=${nResults})`);
     const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
       query: query,
-      n_results: 6
+      n_results: nResults
     }, {
       timeout: 5000
     });
@@ -91,7 +91,7 @@ async function searchSermons(query) {
   // FALLBACK: Use local static JSON search (583 segments)
   try {
     console.log(`Falling back to local search for: "${query}"`);
-    const results = sermonSearcher.search(query, 5);
+    const results = sermonSearcher.search(query, nResults);
     console.log(`Found ${results.length} local sermon results`);
     return results;
   } catch (error) {
@@ -264,11 +264,12 @@ app.post('/api/chat', async (req, res) => {
     // Check if we should search for relevant sermons
     let enhancedMessages = [...messages];
     let sermonResults = [];  // Declare at function scope so it's available for video sending
+    let isMoreRequest = false;  // Track if user wants more clips
     const lastUserMessage = messages[messages.length - 1];
     
     if (lastUserMessage && lastUserMessage.role === 'user') {
       const userText = lastUserMessage.content.toLowerCase().trim();
-      const isMoreRequest = userText === 'more' || userText === 'more links' || userText === 'show more';
+      isMoreRequest = userText === 'more' || userText === 'more links' || userText === 'show more' || userText === 'more clips';
       
       // For "more" requests, find the previous topic from conversation
       let searchQuery = lastUserMessage.content;
@@ -287,8 +288,10 @@ app.post('/api/chat', async (req, res) => {
       }
       
       // Search for relevant sermons (don't let this break the chat)
+      // For "more" requests, get additional results
       try {
-        sermonResults = await searchSermons(searchQuery);
+        const numResults = isMoreRequest ? 12 : 6;  // Get more for "more" requests
+        sermonResults = await searchSermons(searchQuery, numResults);
       } catch (searchError) {
         console.log('Sermon search skipped due to error:', searchError.message);
         sermonResults = [];
@@ -369,9 +372,11 @@ app.post('/api/chat', async (req, res) => {
         return true;
       });
       
-      console.log(`After filtering: ${filteredResults.length} videos to send`);
+      console.log(`After filtering: ${filteredResults.length} videos, isMoreRequest: ${isMoreRequest}`);
       
-      const videosToSend = filteredResults.slice(0, 5).map(r => ({
+      // For "more" requests, skip the first 5 (already shown) and show next batch
+      const startIndex = isMoreRequest ? 5 : 0;
+      const videosToSend = filteredResults.slice(startIndex, startIndex + 5).map(r => ({
         title: r.title || 'Sermon Clip',
         url: r.timestamped_url || r.url,
         timestamp: r.start_time || '',
@@ -379,8 +384,10 @@ app.post('/api/chat', async (req, res) => {
       }));
       
       if (videosToSend.length > 0) {
-        console.log(`Sending ${videosToSend.length} sermon videos to client`);
+        console.log(`Sending ${videosToSend.length} sermon videos to client (from index ${startIndex})`);
         res.write(`data: ${JSON.stringify({ sermon_videos: videosToSend })}\n\n`);
+      } else if (isMoreRequest) {
+        console.log('No more videos available');
       }
     }
     

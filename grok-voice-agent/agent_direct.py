@@ -229,21 +229,25 @@ async def entrypoint(ctx: JobContext):
     async def handle_user_query(user_text):
         nonlocal current_sermon_results, last_query, all_sermon_results
         user_lower = user_text.lower().strip()
-        is_more_request = user_lower in ['more', 'more links', 'show more']
+        is_more_request = user_lower in ['more', 'more links', 'show more', 'more clips']
         
         if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
-            additional = all_sermon_results[3:]
-            current_sermon_results = additional
-            logger.info(f"Showing {len(additional)} additional sermon segments")
-            for r in additional[:3]:
-                await send_data_message(ctx.room, "sermon_reference", {
-                    "title": r.get('title', 'Sermon'),
-                    "url": r.get('timestamped_url', r.get('url', '')),
-                    "timestamp": r.get('start_time', ''),
-                    "text": r.get('text', '')[:200]
-                })
+            # Show next batch (skip first 3 already shown)
+            additional = all_sermon_results[3:6]
+            if additional:
+                current_sermon_results = additional
+                logger.info(f"Showing {len(additional)} additional sermon segments")
+                for r in additional:
+                    await send_data_message(ctx.room, "sermon_reference", {
+                        "title": r.get('title', 'Sermon'),
+                        "url": r.get('timestamped_url', r.get('url', '')),
+                        "timestamp": r.get('start_time', ''),
+                        "text": r.get('text', '')[:200]
+                    })
+            else:
+                logger.info("No more sermon segments available")
         else:
-            results = await search_sermons(user_text, 8)  # Get more to allow for filtering
+            results = await search_sermons(user_text, 10)  # Get more to allow for filtering and "more" requests
             filtered_results = filter_sermon_results(results)
             all_sermon_results = filtered_results
             current_sermon_results = filtered_results[:3]
