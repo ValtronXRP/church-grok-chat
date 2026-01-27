@@ -287,7 +287,7 @@ function searchIllustrations(query, limit = 3) {
     const text = (ill.text || '').toLowerCase();
     const title = (ill.illustration || '').toLowerCase();
     
-    // Check topic matches - STRICT matching only
+    // Check topic matches - more flexible matching
     for (const topic of topics) {
       for (const word of queryWords) {
         // EXACT topic match (topic IS the word, not just contains it)
@@ -295,7 +295,7 @@ function searchIllustrations(query, limit = 3) {
           score += 20;
         }
         // Topic starts with the word (e.g., "faith" matches "faith in god")
-        else if (topic.startsWith(word + ' ') || topic.startsWith(word + '-')) {
+        else if (topic.startsWith(word + ' ') || topic.startsWith(word + '-') || topic.startsWith(word + "'")) {
           score += 15;
         }
         // Topic ends with the word (e.g., "trust" matches "learning to trust")
@@ -306,7 +306,13 @@ function searchIllustrations(query, limit = 3) {
         else if (topic.includes(' ' + word + ' ')) {
           score += 10;
         }
-        // Skip partial matches like "faith" in "faithful" or "humor in faith"
+        // Word appears with word boundary (regex-based, more flexible)
+        else {
+          const wordBoundaryRegex = new RegExp('\\b' + word + '\\b', 'i');
+          if (wordBoundaryRegex.test(topic)) {
+            score += 8;
+          }
+        }
       }
     }
     
