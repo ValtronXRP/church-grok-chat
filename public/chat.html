@@ -48,6 +48,132 @@
             flex: 1;
         }
         
+        /* Illustration Sidebar (right side) */
+        .illustration-sidebar {
+            width: 270px;
+            min-width: 270px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 200, 100, 0.15);
+            border-radius: 20px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            height: fit-content;
+            max-height: calc(100vh - 200px);
+            margin-top: 30px;
+        }
+        
+        .illustration-sidebar-header {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 200, 100, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .illustration-sidebar-header span {
+            color: rgb(255, 200, 100);
+        }
+        
+        .illustration-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            max-height: 600px;
+            padding-right: 5px;
+        }
+        
+        .illustration-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .illustration-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .illustration-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 200, 100, 0.3);
+            border-radius: 2px;
+        }
+        
+        .sidebar-illustration-item {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 200, 100, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-illustration-item iframe {
+            width: 100%;
+            height: 135px;
+            min-height: 135px;
+            border: none;
+            display: block;
+        }
+        
+        .sidebar-illustration-info {
+            padding: 10px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            border-top: 1px solid rgba(255, 200, 100, 0.1);
+        }
+        
+        .sidebar-illustration-info .illustration-title {
+            color: rgb(255, 200, 100);
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .sidebar-illustration-info .illustration-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 11px;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .sidebar-illustration-info .illustration-tone {
+            display: inline-block;
+            background: rgba(255, 200, 100, 0.15);
+            color: rgb(255, 200, 100);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .sidebar-illustration-info .illustration-timestamp {
+            color: rgb(255, 200, 100);
+            font-size: 10px;
+            margin-left: 8px;
+        }
+        
+        .illustration-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 13px;
+        }
+        
+        .illustration-empty-state svg {
+            width: 48px;
+            height: 48px;
+            fill: rgba(255, 200, 100, 0.2);
+            margin-bottom: 12px;
+        }
+        
         .video-sidebar {
             width: 270px;
             min-width: 270px;
@@ -789,16 +915,19 @@
             }
             
             .main-content-wrapper {
-                flex-direction: column-reverse;
+                flex-direction: column;
             }
             
-            .video-sidebar {
+            .video-sidebar,
+            .illustration-sidebar {
                 width: 100%;
                 min-width: unset;
                 max-height: 250px;
+                margin-top: 15px;
             }
             
-            .video-list {
+            .video-list,
+            .illustration-list {
                 flex-direction: row;
                 overflow-x: auto;
                 overflow-y: hidden;
@@ -807,7 +936,8 @@
                 padding-bottom: 5px;
             }
             
-            .sidebar-video-item {
+            .sidebar-video-item,
+            .sidebar-illustration-item {
                 min-width: 200px;
                 flex-shrink: 0;
             }
@@ -1163,6 +1293,21 @@
             <button class="clear-btn" onclick="clearConversation()">Clear Chat</button>
         </div>
             </div><!-- /.main-content -->
+            
+            <!-- Illustration Sidebar (right side) -->
+            <div class="illustration-sidebar" id="illustrationSidebar">
+                <div class="illustration-sidebar-header">
+                    Illustration Clips <span id="illustrationCount">0</span>
+                </div>
+                <div class="illustration-list" id="illustrationList">
+                    <div class="illustration-empty-state" id="illustrationEmptyState">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                        </svg>
+                        <div>Ask a question to see related illustration clips</div>
+                    </div>
+                </div>
+            </div>
         </div><!-- /.main-content-wrapper -->
     </div>
 
@@ -1370,6 +1515,91 @@ This format allows the videos to be embedded in the chat.`
             videoCount.textContent = '0';
         }
         
+        // ============================================
+        // ILLUSTRATION SIDEBAR FUNCTIONS
+        // ============================================
+        let illustrationCount = 0;
+        const addedIllustrationKeys = new Set();
+        const MAX_SIDEBAR_ILLUSTRATIONS = 10;
+        
+        function addIllustrationToSidebar(title, text, tone, url, timestamp) {
+            const illustrationList = document.getElementById('illustrationList');
+            const illustrationCountEl = document.getElementById('illustrationCount');
+            const emptyState = document.getElementById('illustrationEmptyState');
+            
+            // Create unique key from title + text start
+            const key = `${title}-${(text || '').substring(0, 50)}`;
+            if (addedIllustrationKeys.has(key)) {
+                console.log('Duplicate illustration skipped:', title);
+                return;
+            }
+            
+            if (illustrationCount >= MAX_SIDEBAR_ILLUSTRATIONS) {
+                console.log('Max illustrations reached');
+                return;
+            }
+            
+            addedIllustrationKeys.add(key);
+            
+            // Hide empty state
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+            
+            // Create illustration item
+            const item = document.createElement('div');
+            item.className = 'sidebar-illustration-item';
+            
+            // Check if we have a video URL
+            let videoHtml = '';
+            if (url && url.includes('youtube.com')) {
+                const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
+                if (videoIdMatch) {
+                    const videoId = videoIdMatch[1];
+                    let startSeconds = 0;
+                    const timeMatch = url.match(/[&?]t=(\d+)/);
+                    if (timeMatch) startSeconds = parseInt(timeMatch[1]);
+                    const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1`;
+                    videoHtml = `<iframe src="${embedUrl}" title="${title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+                }
+            }
+            
+            item.innerHTML = `
+                ${videoHtml}
+                <div class="sidebar-illustration-info">
+                    <div class="illustration-title">${title || 'Illustration'}</div>
+                    <div class="illustration-text">${text || ''}</div>
+                    <span class="illustration-tone">${tone || 'inspiring'}</span>
+                    ${timestamp ? `<span class="illustration-timestamp">${timestamp}</span>` : ''}
+                </div>
+            `;
+            
+            // Add to beginning of list
+            illustrationList.insertBefore(item, illustrationList.firstChild);
+            
+            illustrationCount++;
+            illustrationCountEl.textContent = illustrationCount;
+            
+            console.log('Added illustration:', title);
+        }
+        
+        function clearIllustrationSidebar() {
+            const illustrationList = document.getElementById('illustrationList');
+            const illustrationCountEl = document.getElementById('illustrationCount');
+            const emptyState = document.getElementById('illustrationEmptyState');
+            
+            const items = illustrationList.querySelectorAll('.sidebar-illustration-item');
+            items.forEach(item => item.remove());
+            
+            if (emptyState) {
+                emptyState.style.display = 'block';
+            }
+            
+            illustrationCount = 0;
+            addedIllustrationKeys.clear();
+            illustrationCountEl.textContent = '0';
+        }
+        
         function formatSecondsToTimestamp(totalSeconds) {
             const hours = Math.floor(totalSeconds / 3600);
             const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -1539,6 +1769,15 @@ This format allows the videos to be embedded in the chat.`
                                     continue;
                                 }
                                 
+                                // Handle illustrations event from server
+                                if (parsed.illustrations) {
+                                    console.log('💡 Received illustrations from server:', parsed.illustrations.length);
+                                    parsed.illustrations.forEach(ill => {
+                                        addIllustrationToSidebar(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
+                                    });
+                                    continue;
+                                }
+                                
                                 if (parsed.choices?.[0]?.delta?.content) {
                                     const content = parsed.choices[0].delta.content;
                                     fullResponse += content;
@@ -1672,8 +1911,9 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '<div class="message system">Conversation cleared. Start fresh with voice or text!</div>';
             
-            // Also clear the video sidebar
+            // Also clear the video sidebar and illustration sidebar
             clearVideoSidebar();
+            clearIllustrationSidebar();
         }
 
         // ============================================

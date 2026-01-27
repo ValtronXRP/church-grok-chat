@@ -66,6 +66,26 @@ const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://')
 // Initialize local sermon search
 const sermonSearcher = new SermonSearch();
 
+// Load illustrations database
+let illustrationsDB = [];
+try {
+  const fs = require('fs');
+  const illustrationsPath = './illustrations/illustrations.json';
+  if (fs.existsSync(illustrationsPath)) {
+    illustrationsDB = JSON.parse(fs.readFileSync(illustrationsPath, 'utf-8'));
+    console.log(`Loaded ${illustrationsDB.length} illustrations from database`);
+  } else {
+    // Try progress file
+    const progressPath = './illustrations/illustrations_progress.json';
+    if (fs.existsSync(progressPath)) {
+      illustrationsDB = JSON.parse(fs.readFileSync(progressPath, 'utf-8'));
+      console.log(`Loaded ${illustrationsDB.length} illustrations from progress file`);
+    }
+  }
+} catch (err) {
+  console.log('No illustrations database found:', err.message);
+}
+
 // ============================================
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
@@ -244,6 +264,50 @@ function formatSermonContext(sermonResults, isMoreRequest = false) {
 }
 
 // ============================================
+// ILLUSTRATION SEARCH FUNCTION
+// ============================================
+function searchIllustrations(query, limit = 3) {
+  if (!illustrationsDB || illustrationsDB.length === 0) {
+    return [];
+  }
+  
+  const queryLower = query.toLowerCase();
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 3);
+  
+  // Score each illustration by topic match
+  const scored = illustrationsDB.map(ill => {
+    let score = 0;
+    const topics = (ill.topics || []).map(t => t.toLowerCase());
+    const text = (ill.text || '').toLowerCase();
+    const title = (ill.illustration || '').toLowerCase();
+    
+    // Check topic matches
+    for (const topic of topics) {
+      if (queryLower.includes(topic) || topic.includes(queryLower)) {
+        score += 10;
+      }
+      for (const word of queryWords) {
+        if (topic.includes(word)) score += 5;
+      }
+    }
+    
+    // Check text/title matches
+    for (const word of queryWords) {
+      if (text.includes(word)) score += 2;
+      if (title.includes(word)) score += 3;
+    }
+    
+    return { ...ill, score };
+  });
+  
+  // Return top matches with score > 0
+  return scored
+    .filter(ill => ill.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+// ============================================
 // NEW: SECURE TEXT CHAT ENDPOINT WITH SERMON SEARCH
 // ============================================
 app.post('/api/chat', async (req, res) => {
@@ -345,6 +409,33 @@ app.post('/api/chat', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Search for relevant illustrations
+    let illustrationResults = [];
+    if (lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest) {
+      try {
+        illustrationResults = searchIllustrations(lastUserMessage.content, 3);
+        if (illustrationResults.length > 0) {
+          console.log(`Found ${illustrationResults.length} relevant illustrations`);
+        }
+      } catch (err) {
+        console.log('Illustration search error:', err.message);
+      }
+    }
+    
+    // Send illustrations as separate event
+    if (illustrationResults && illustrationResults.length > 0) {
+      const illustrationsToSend = illustrationResults.map(ill => ({
+        title: ill.illustration || 'Illustration',
+        text: ill.text || '',
+        topics: ill.topics || [],
+        tone: ill.tone || '',
+        url: ill.video_url || '',
+        timestamp: ill.timestamp || ''
+      }));
+      console.log(`Sending ${illustrationsToSend.length} illustrations to client`);
+      res.write(`data: ${JSON.stringify({ illustrations: illustrationsToSend })}\n\n`);
+    }
     
     // Send sermon videos as separate event BEFORE Grok's response
     if (sermonResults && sermonResults.length > 0) {
