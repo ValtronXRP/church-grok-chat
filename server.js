@@ -273,45 +273,65 @@ function searchIllustrations(query, limit = 3) {
   }
   
   const queryLower = query.toLowerCase();
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+  // Extract key topic words (filter out common words)
+  const stopWords = ['what', 'does', 'pastor', 'bob', 'teach', 'about', 'how', 'can', 'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'more', 'when', 'why', 'who', 'which', 'there', 'their', 'been', 'would', 'could', 'should'];
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
   
   console.log(`Searching ${illustrationsDB.length} illustrations for: "${query}"`);
-  console.log(`Query words: ${queryWords.join(', ')}`);
+  console.log(`Key topic words: ${queryWords.join(', ')}`);
   
-  // Score each illustration by topic match
+  // Score each illustration by topic match - require EXACT topic matches
   const scored = illustrationsDB.map(ill => {
     let score = 0;
     const topics = (ill.topics || []).map(t => t.toLowerCase());
     const text = (ill.text || '').toLowerCase();
     const title = (ill.illustration || '').toLowerCase();
     
-    // Check topic matches - more lenient matching
+    // Check topic matches - STRICT matching only
     for (const topic of topics) {
-      // Direct topic match in query
-      if (queryLower.includes(topic)) {
-        score += 15;
-      }
-      // Check each query word against topics
       for (const word of queryWords) {
-        if (topic.includes(word) || word.includes(topic)) {
-          score += 8;
+        // EXACT topic match (topic IS the word, not just contains it)
+        if (topic === word) {
+          score += 20;
         }
+        // Topic starts with the word (e.g., "faith" matches "faith in god")
+        else if (topic.startsWith(word + ' ') || topic.startsWith(word + '-')) {
+          score += 15;
+        }
+        // Topic ends with the word (e.g., "trust" matches "learning to trust")
+        else if (topic.endsWith(' ' + word)) {
+          score += 12;
+        }
+        // Word is standalone in topic (e.g., "faith" in "keeping faith strong")
+        else if (topic.includes(' ' + word + ' ')) {
+          score += 10;
+        }
+        // Skip partial matches like "faith" in "faithful" or "humor in faith"
       }
     }
     
-    // Check text/title matches
+    // Bonus for text containing key words (lower weight)
     for (const word of queryWords) {
-      if (text.includes(word)) score += 2;
-      if (title.includes(word)) score += 4;
+      const wordRegex = new RegExp('\\b' + word + '\\b', 'i');
+      if (wordRegex.test(text)) score += 3;
+      if (wordRegex.test(title)) score += 5;
     }
     
     return { ...ill, score };
   });
   
-  // Return top matches with score > 0
+  // Return top matches with score >= 10 (require at least one good topic match)
+  // Also deduplicate by title + timestamp
+  const seen = new Set();
   const results = scored
-    .filter(ill => ill.score > 0)
+    .filter(ill => ill.score >= 10)
     .sort((a, b) => b.score - a.score)
+    .filter(ill => {
+      const key = `${ill.illustration || ''}-${ill.timestamp || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, limit);
   
   console.log(`Found ${results.length} illustration matches (top scores: ${results.map(r => r.score).join(', ')})`);
