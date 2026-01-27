@@ -918,11 +918,24 @@
                 flex-direction: column;
             }
             
-            .video-sidebar,
-            .illustration-sidebar {
+            /* Order: main content first, then sermon clips, then illustration clips */
+            .main-content {
+                order: 1;
+            }
+            
+            .video-sidebar {
+                order: 2;
                 width: 100%;
                 min-width: unset;
-                max-height: 250px;
+                max-height: none;
+                margin-top: 15px;
+            }
+            
+            .illustration-sidebar {
+                order: 3;
+                width: 100%;
+                min-width: unset;
+                max-height: none;
                 margin-top: 15px;
             }
             
@@ -932,14 +945,22 @@
                 overflow-x: auto;
                 overflow-y: hidden;
                 max-height: unset;
-                gap: 10px;
-                padding-bottom: 5px;
+                gap: 12px;
+                padding-bottom: 10px;
             }
             
+            /* Ensure full thumbnails are visible */
             .sidebar-video-item,
             .sidebar-illustration-item {
-                min-width: 200px;
+                min-width: 240px;
                 flex-shrink: 0;
+                min-height: auto;
+            }
+            
+            .sidebar-video-item iframe,
+            .sidebar-illustration-item iframe {
+                height: 135px;
+                min-height: 135px;
             }
             
             .header {
