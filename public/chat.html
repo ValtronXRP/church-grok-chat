@@ -106,11 +106,14 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             overflow: hidden;
+            flex-shrink: 0;
+            min-height: 180px;
         }
         
         .sidebar-video-item iframe {
             width: 100%;
             height: 135px;
+            min-height: 135px;
             border: none;
             display: block;
         }
@@ -188,12 +191,11 @@
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 20px;
-            padding: 20px;
+            padding: 0;
             margin-bottom: 32px;
-            overflow-y: auto;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 12px;
         }
 
         /* Text Input Container */
@@ -303,16 +305,8 @@
         }
 
         .chat-window::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-window::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .chat-window::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
+            width: 0;
+            display: none;
         }
 
         /* Message Bubbles */
@@ -592,10 +586,6 @@
 
         /* Voice Response Toggle */
         .voice-response-toggle {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -671,9 +661,62 @@
             opacity: 0.7;
         }
 
-        /* Chat window needs relative positioning for absolute toggle */
+        /* Chat window - no scrollbar on outer container */
         .chat-window {
             position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
+        }
+        
+        /* Fixed header for toggle and instruction - stays at top */
+        .chat-header-sticky {
+            position: relative;
+            z-index: 10;
+            background: #000000;
+            padding: 12px 15px;
+            border-radius: 20px 20px 0 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .chat-header-sticky .instruction-text {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            flex: 1;
+        }
+        
+        .chat-header-sticky .voice-response-toggle {
+            position: static;
+            flex-shrink: 0;
+        }
+        
+        /* Scrollable messages area */
+        .chat-messages-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 15px 20px;
+            min-height: 0;
+        }
+        
+        .chat-messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-messages-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
         }
 
         /* Clear Button */
@@ -902,9 +945,13 @@
             /* Chat Window */
             .chat-window {
                 height: 300px;
-                padding: 15px;
+                padding: 0;
                 border-radius: 16px;
                 margin-bottom: 20px;
+            }
+            
+            .chat-messages-container {
+                padding: 12px 15px;
             }
             
             .message {
@@ -957,6 +1004,7 @@
             
             .chat-window {
                 height: 250px;
+                padding: 0;
             }
             
             #textInput {
@@ -1005,6 +1053,7 @@
             
             .chat-window {
                 height: 200px;
+                padding: 0;
             }
             
             .debug-panel {
@@ -1073,16 +1122,20 @@
 
             <!-- Chat Transcript Window -->
             <div class="chat-window" id="chatWindow">
-                <!-- Voice Response Toggle -->
-                <div class="voice-response-toggle" id="voiceResponseToggle">
-                    <div class="toggle-response-label">Response</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="voiceResponseCheckbox" checked>
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">VOICE</span>
-                    </label>
+                <!-- Sticky Header with Toggle and Instruction -->
+                <div class="chat-header-sticky">
+                    <span class="instruction-text">Type a message below or click the microphone for voice chat</span>
+                    <div class="voice-response-toggle" id="voiceResponseToggle">
+                        <div class="toggle-response-label">Response</div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="voiceResponseCheckbox" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">VOICE</span>
+                        </label>
+                    </div>
                 </div>
-                <div class="message system">Type a message below or click the microphone for voice chat</div>
+                <!-- Scrollable messages container -->
+                <div class="chat-messages-container" id="chatMessages"></div>
             </div>
 
             <!-- Text Input Container (below chat) -->
@@ -1148,9 +1201,9 @@ PASTOR BOB'S FAMILY (VERIFIED FACTS - always use these):
   - Has 1 son: Luca (born June 1, 2022 - turned 3 in June 2025)
 - Youngest son: Christian Kopeny (born May 16, 1989)
   - Married to Hayley
-  - Has 1 daughter (born December 2024 - turned 1 in December 2025)
+  - Has 1 daughter: Cora (born December 2024 - turned 1 in December 2025)
 
-GRANDCHILDREN: Jesse's kids (Julia, Lily, Jonah, Jeffrey), Valor & Stacy's son Luca (age 3), Christian & Hayley's daughter (age 1)
+GRANDCHILDREN: Jesse's kids (Julia, Lily, Jonah, Jeffrey), Valor & Stacy's son Luca (age 3), Christian & Hayley's daughter Cora (age 1)
 
 CRITICAL - NO HALLUCINATIONS:
 - ONLY share stories, illustrations, or examples that are DIRECTLY quoted in the sermon segments provided to you
@@ -1194,10 +1247,10 @@ This format allows the videos to be embedded in the chat.`
         // CHAT FUNCTIONS
         // ============================================
         function addMessage(text, sender) {
-            const chatWindow = document.getElementById('chatWindow');
+            const chatMessages = document.getElementById('chatMessages');
             
             // Remove typing indicator if it exists
-            const existingTyping = chatWindow.querySelector('.typing');
+            const existingTyping = chatMessages.querySelector('.typing');
             if (existingTyping) existingTyping.remove();
             
             // Add message
@@ -1211,26 +1264,24 @@ This format allows the videos to be embedded in the chat.`
                 msg.textContent = text;
             }
             
-            chatWindow.appendChild(msg);
+            chatMessages.appendChild(msg);
             
             // Auto scroll
-            chatWindow.scrollTop = chatWindow.scrollHeight;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
         // ============================================
         // VIDEO SIDEBAR FUNCTIONS
         // ============================================
         let sidebarVideoCount = 0;
+        const addedVideoKeys = new Set();
+        
+        const MAX_SIDEBAR_VIDEOS = 5;
         
         function addVideoToSidebar(title, url, timestamp, text) {
             const videoList = document.getElementById('videoList');
             const videoCount = document.getElementById('videoCount');
             const emptyState = document.getElementById('videoEmptyState');
-            
-            // Hide empty state
-            if (emptyState) {
-                emptyState.style.display = 'none';
-            }
             
             // Extract video ID and start time from URL
             const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
@@ -1240,11 +1291,32 @@ This format allows the videos to be embedded in the chat.`
             }
             const videoId = videoIdMatch[1];
             
-            // Extract start time (seconds)
+            // Extract start time (seconds) for deduplication key
             let startSeconds = 0;
             const timeMatch = url.match(/[&?]t=(\d+)/);
             if (timeMatch) {
                 startSeconds = parseInt(timeMatch[1]);
+            }
+            
+            // Create unique key to prevent duplicates
+            const videoKey = `${videoId}-${startSeconds}`;
+            if (addedVideoKeys.has(videoKey)) {
+                console.log('Duplicate video skipped:', videoKey);
+                return;
+            }
+            
+            // Limit to MAX_SIDEBAR_VIDEOS
+            if (sidebarVideoCount >= MAX_SIDEBAR_VIDEOS) {
+                console.log('Max videos reached (' + MAX_SIDEBAR_VIDEOS + '), not adding:', url);
+                return;
+            }
+            
+            // Mark as added
+            addedVideoKeys.add(videoKey);
+            
+            // Hide empty state
+            if (emptyState) {
+                emptyState.style.display = 'none';
             }
             
             // Create embed URL with start parameter (correct format for iframe embed)
@@ -1292,8 +1364,9 @@ This format allows the videos to be embedded in the chat.`
                 emptyState.style.display = 'block';
             }
             
-            // Reset count
+            // Reset count and deduplication
             sidebarVideoCount = 0;
+            addedVideoKeys.clear();
             videoCount.textContent = '0';
         }
         
@@ -1371,15 +1444,15 @@ This format allows the videos to be embedded in the chat.`
         }
 
         function showTyping() {
-            const chatWindow = document.getElementById('chatWindow');
-            const existingTyping = chatWindow.querySelector('.typing');
+            const chatMessages = document.getElementById('chatMessages');
+            const existingTyping = chatMessages.querySelector('.typing');
             
             if (!existingTyping) {
                 const typing = document.createElement('div');
                 typing.className = 'typing';
                 typing.innerHTML = '<span></span><span></span><span></span>';
-                chatWindow.appendChild(typing);
-                chatWindow.scrollTop = chatWindow.scrollHeight;
+                chatMessages.appendChild(typing);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
             
             // Clear any existing timeout
@@ -1387,13 +1460,13 @@ This format allows the videos to be embedded in the chat.`
             
             // Remove typing after 5 seconds if no response
             typingTimeout = setTimeout(() => {
-                const typing = chatWindow.querySelector('.typing');
+                const typing = chatMessages.querySelector('.typing');
                 if (typing) typing.remove();
             }, 5000);
         }
 
         function hideTyping() {
-            const typing = document.getElementById('chatWindow').querySelector('.typing');
+            const typing = document.getElementById('chatMessages').querySelector('.typing');
             if (typing) typing.remove();
             if (typingTimeout) clearTimeout(typingTimeout);
         }
@@ -1484,9 +1557,9 @@ This format allows the videos to be embedded in the chat.`
                                     if (!currentMessage) {
                                         currentMessage = document.createElement('div');
                                         currentMessage.className = 'message agent';
-                                        document.getElementById('chatWindow').appendChild(currentMessage);
-                                        document.getElementById('chatWindow').scrollTop = 
-                                            document.getElementById('chatWindow').scrollHeight;
+                                        document.getElementById('chatMessages').appendChild(currentMessage);
+                                        document.getElementById('chatMessages').scrollTop = 
+                                            document.getElementById('chatMessages').scrollHeight;
                                     }
                                     // Check if response contains YouTube links
                                     if (fullResponse.includes('youtube.com')) {
@@ -1589,9 +1662,9 @@ PASTOR BOB'S FAMILY (VERIFIED FACTS - always use these):
   - Has 1 son: Luca (born June 1, 2022 - turned 3 in June 2025)
 - Youngest son: Christian Kopeny (born May 16, 1989)
   - Married to Hayley
-  - Has 1 daughter (born December 2024 - turned 1 in December 2025)
+  - Has 1 daughter: Cora (born December 2024 - turned 1 in December 2025)
 
-GRANDCHILDREN: Jesse's kids (Julia, Lily, Jonah, Jeffrey), Valor & Stacy's son Luca (age 3), Christian & Hayley's daughter (age 1)
+GRANDCHILDREN: Jesse's kids (Julia, Lily, Jonah, Jeffrey), Valor & Stacy's son Luca (age 3), Christian & Hayley's daughter Cora (age 1)
 
 CRITICAL - NO HALLUCINATIONS:
 - ONLY share stories, illustrations, or examples that are DIRECTLY quoted in the sermon segments provided to you
@@ -1610,8 +1683,8 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
 9. ONLY quote or reference stories/illustrations that appear WORD-FOR-WORD in the sermon data provided.`
                 }
             ];
-            const chatWindow = document.getElementById('chatWindow');
-            chatWindow.innerHTML = '<div class="message system">Conversation cleared. Start fresh with voice or text!</div>';
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<div class="message system">Conversation cleared. Start fresh with voice or text!</div>';
             
             // Also clear the video sidebar
             clearVideoSidebar();

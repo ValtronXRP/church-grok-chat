@@ -136,12 +136,12 @@ Pastor Bob has THREE sons:
    - Has 1 son: LUCA (born June 1, 2022 - turned 3 in June 2025)
 3. CHRISTIAN Kopeny - youngest son, born May 16, 1989
    - Married to HAYLEY
-   - Has 1 daughter (born December 2024 - turned 1 in December 2025)
+   - Has 1 daughter: CORA (born December 2024 - turned 1 in December 2025)
 
 GRANDCHILDREN SUMMARY:
 - Jesse's kids: Julia, Lily, Jonah, Jeffrey
 - Valor & Stacy's son: Luca (age 3)
-- Christian & Hayley's daughter (age 1)
+- Christian & Hayley's daughter: Cora (age 1)
 
 If asked about Pastor Bob's family - USE ONLY THESE NAMES. Do not guess or invent names.
 
