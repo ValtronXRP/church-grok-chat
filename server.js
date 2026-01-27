@@ -342,6 +342,17 @@ app.post('/api/chat', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
     
+    // Send sermon videos as separate event BEFORE Grok's response
+    if (sermonResults && sermonResults.length > 0) {
+      const videosToSend = sermonResults.slice(0, 5).map(r => ({
+        title: r.title || 'Sermon Clip',
+        url: r.timestamped_url || r.url,
+        timestamp: r.start_time || '',
+        text: (r.text || '').substring(0, 150)
+      }));
+      res.write(`data: ${JSON.stringify({ sermon_videos: videosToSend })}\n\n`);
+    }
+    
     // Stream the response
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

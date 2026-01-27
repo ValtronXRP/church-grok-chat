@@ -1381,36 +1381,11 @@ This format allows the videos to be embedded in the chat.`
             return `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        function formatMessageWithLinks(text) {
-            // Pre-process: Extract URLs from markdown links [text](url) format
-            text = text.replace(/\[([^\]]*)\]\((https?:\/\/(?:www\.)?youtube\.com\/watch\?[^)]+)\)/gi, '$2');
-            
-            // Pre-process: Remove parentheses around URLs
-            text = text.replace(/\((https?:\/\/(?:www\.)?youtube\.com\/watch\?[^)]+)\)/gi, '$1');
-            
-            // Find all YouTube URLs and add them to sidebar
-            const urlPattern = /https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\])<>]*v=([a-zA-Z0-9_-]+)[^\s\])<>]*/gi;
-            
-            let match;
-            const videosFound = [];
-            while ((match = urlPattern.exec(text)) !== null) {
-                const fullUrl = match[0].replace(/[.,;:!?]+$/, '');
-                videosFound.push(fullUrl);
-                console.log('🎬 Found YouTube video in text chat:', fullUrl);
-            }
-            
-            // Add videos to sidebar (not to chat)
-            if (videosFound.length > 0) {
-                console.log('📺 Adding', videosFound.length, 'videos to sidebar from text chat');
-                videosFound.forEach(url => {
-                    addVideoToSidebar('Sermon Clip', url, null, null);
-                });
-            }
-            
-            // Remove YouTube URLs from the text (they're now in sidebar)
+        function formatMessageText(text) {
+            // Remove any YouTube URLs Grok might have hallucinated (we get real ones from server)
             let result = text.replace(/https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\])<>]*/gi, '');
             
-            // Clean up extra whitespace and line breaks left by removed URLs
+            // Clean up extra whitespace and line breaks
             result = result.replace(/\n\s*\n\s*\n/g, '\n\n');
             result = result.replace(/^\s+|\s+$/g, '');
             
@@ -1429,6 +1404,11 @@ This format allows the videos to be embedded in the chat.`
             result = result.replace(/\n/g, '<br>');
             
             return result;
+        }
+        
+        function formatMessageWithLinks(text) {
+            // Legacy function - just use formatMessageText now
+            return formatMessageText(text);
         }
         
         function formatSecondsToTime(seconds) {
@@ -1549,6 +1529,16 @@ This format allows the videos to be embedded in the chat.`
                             
                             try {
                                 const parsed = JSON.parse(data);
+                                
+                                // Handle sermon_videos event from server (real URLs from ChromaDB)
+                                if (parsed.sermon_videos) {
+                                    console.log('📺 Received sermon videos from server:', parsed.sermon_videos.length);
+                                    parsed.sermon_videos.forEach(video => {
+                                        addVideoToSidebar(video.title, video.url, video.timestamp, video.text);
+                                    });
+                                    continue;
+                                }
+                                
                                 if (parsed.choices?.[0]?.delta?.content) {
                                     const content = parsed.choices[0].delta.content;
                                     fullResponse += content;
@@ -1561,12 +1551,8 @@ This format allows the videos to be embedded in the chat.`
                                         document.getElementById('chatMessages').scrollTop = 
                                             document.getElementById('chatMessages').scrollHeight;
                                     }
-                                    // Check if response contains YouTube links
-                                    if (fullResponse.includes('youtube.com')) {
-                                        console.log('Response contains YouTube links:', fullResponse);
-                                    }
-                                    // Use innerHTML to properly format links and references
-                                    currentMessage.innerHTML = formatMessageWithLinks(fullResponse);
+                                    // Use innerHTML to format (but don't extract URLs - server sends real ones)
+                                    currentMessage.innerHTML = formatMessageText(fullResponse);
                                 }
                             } catch (e) {
                                 // Skip invalid JSON
