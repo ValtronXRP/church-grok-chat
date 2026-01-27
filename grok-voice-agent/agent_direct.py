@@ -197,6 +197,35 @@ async def entrypoint(ctx: JobContext):
     
     session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
     
+    def filter_sermon_results(results):
+        """Filter out songs, unknown titles, and non-sermon content"""
+        filtered = []
+        for r in results:
+            title = (r.get('title') or '').lower()
+            text = (r.get('text') or '').lower()
+            
+            # Skip unknown/untitled
+            if title in ['unknown sermon', 'unknown', '']:
+                continue
+            
+            # Skip songs/music
+            song_indicators = ['worship song', 'hymn', 'music video', 'singing', 'choir']
+            if any(ind in title for ind in song_indicators):
+                continue
+            
+            # Skip very short text
+            if len(text) < 50:
+                continue
+            
+            # Skip repeated worship phrases (likely lyrics)
+            import re
+            worship_count = len(re.findall(r'\b(la la|hallelujah|glory glory|praise him)\b', text, re.I))
+            if worship_count > 2:
+                continue
+            
+            filtered.append(r)
+        return filtered
+    
     async def handle_user_query(user_text):
         nonlocal current_sermon_results, last_query, all_sermon_results
         user_lower = user_text.lower().strip()
@@ -214,13 +243,14 @@ async def entrypoint(ctx: JobContext):
                     "text": r.get('text', '')[:200]
                 })
         else:
-            results = await search_sermons(user_text, 6)
-            all_sermon_results = results
-            current_sermon_results = results[:3]
+            results = await search_sermons(user_text, 8)  # Get more to allow for filtering
+            filtered_results = filter_sermon_results(results)
+            all_sermon_results = filtered_results
+            current_sermon_results = filtered_results[:3]
             last_query["text"] = user_text
-            if results:
-                logger.info(f"Found {len(results)} sermon segments, showing first 3")
-                for r in results[:3]:
+            if filtered_results:
+                logger.info(f"Found {len(results)} segments, {len(filtered_results)} after filtering, showing first 3")
+                for r in filtered_results[:3]:
                     await send_data_message(ctx.room, "sermon_reference", {
                         "title": r.get('title', 'Sermon'),
                         "url": r.get('timestamped_url', r.get('url', '')),

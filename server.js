@@ -345,25 +345,31 @@ app.post('/api/chat', async (req, res) => {
     
     // Send sermon videos as separate event BEFORE Grok's response
     if (sermonResults && sermonResults.length > 0) {
+      console.log(`Filtering ${sermonResults.length} sermon results for videos`);
+      
       // Filter out songs and music - only keep actual sermon segments
       const filteredResults = sermonResults.filter(r => {
         const title = (r.title || '').toLowerCase();
         const text = (r.text || '').toLowerCase();
         
+        // Skip if title contains "Unknown" with no real title
+        if (title === 'unknown sermon' || title === 'unknown') return false;
+        
         // Skip if title indicates it's a song/music
-        const songIndicators = ['song', 'worship', 'hymn', 'music', 'singing', 'choir', 'praise band'];
+        const songIndicators = ['worship song', 'hymn', 'music video', 'singing', 'choir'];
         if (songIndicators.some(ind => title.includes(ind))) return false;
         
-        // Skip if text looks like song lyrics (short repeated phrases, no teaching content)
-        const isLikelyLyrics = (
-          text.length < 100 ||
-          (text.match(/\b(la la|oh |hallelujah|glory|praise)\b/gi) || []).length > 2 ||
-          !text.includes('.') // No sentences = likely lyrics
-        );
-        if (isLikelyLyrics && !text.includes('pastor bob') && !text.includes('teaches')) return false;
+        // Skip if text is very short (likely not a teaching segment)
+        if (text.length < 50) return false;
+        
+        // Skip if text has repeated worship phrases (likely lyrics)
+        const worshipPhrases = (text.match(/\b(la la|hallelujah|glory glory|praise him)\b/gi) || []).length;
+        if (worshipPhrases > 2) return false;
         
         return true;
       });
+      
+      console.log(`After filtering: ${filteredResults.length} videos to send`);
       
       const videosToSend = filteredResults.slice(0, 5).map(r => ({
         title: r.title || 'Sermon Clip',
@@ -373,6 +379,7 @@ app.post('/api/chat', async (req, res) => {
       }));
       
       if (videosToSend.length > 0) {
+        console.log(`Sending ${videosToSend.length} sermon videos to client`);
         res.write(`data: ${JSON.stringify({ sermon_videos: videosToSend })}\n\n`);
       }
     }
