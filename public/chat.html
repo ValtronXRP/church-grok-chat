@@ -1276,7 +1276,7 @@ This format allows the videos to be embedded in the chat.`
         let sidebarVideoCount = 0;
         const addedVideoKeys = new Set();
         
-        const MAX_SIDEBAR_VIDEOS = 5;
+        const MAX_SIDEBAR_VIDEOS = 20;  // Allow accumulating videos across questions
         
         function addVideoToSidebar(title, url, timestamp, text) {
             const videoList = document.getElementById('videoList');
