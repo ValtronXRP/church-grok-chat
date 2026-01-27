@@ -268,11 +268,15 @@ function formatSermonContext(sermonResults, isMoreRequest = false) {
 // ============================================
 function searchIllustrations(query, limit = 3) {
   if (!illustrationsDB || illustrationsDB.length === 0) {
+    console.log('No illustrations database loaded');
     return [];
   }
   
   const queryLower = query.toLowerCase();
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 3);
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+  
+  console.log(`Searching ${illustrationsDB.length} illustrations for: "${query}"`);
+  console.log(`Query words: ${queryWords.join(', ')}`);
   
   // Score each illustration by topic match
   const scored = illustrationsDB.map(ill => {
@@ -281,30 +285,37 @@ function searchIllustrations(query, limit = 3) {
     const text = (ill.text || '').toLowerCase();
     const title = (ill.illustration || '').toLowerCase();
     
-    // Check topic matches
+    // Check topic matches - more lenient matching
     for (const topic of topics) {
-      if (queryLower.includes(topic) || topic.includes(queryLower)) {
-        score += 10;
+      // Direct topic match in query
+      if (queryLower.includes(topic)) {
+        score += 15;
       }
+      // Check each query word against topics
       for (const word of queryWords) {
-        if (topic.includes(word)) score += 5;
+        if (topic.includes(word) || word.includes(topic)) {
+          score += 8;
+        }
       }
     }
     
     // Check text/title matches
     for (const word of queryWords) {
       if (text.includes(word)) score += 2;
-      if (title.includes(word)) score += 3;
+      if (title.includes(word)) score += 4;
     }
     
     return { ...ill, score };
   });
   
   // Return top matches with score > 0
-  return scored
+  const results = scored
     .filter(ill => ill.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+  
+  console.log(`Found ${results.length} illustration matches (top scores: ${results.map(r => r.score).join(', ')})`);
+  return results;
 }
 
 // ============================================
