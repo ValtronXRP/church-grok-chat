@@ -625,6 +625,16 @@ app.post('/api/sermon/search', async (req, res) => {
   }
 });
 
+app.post('/api/illustration/search', async (req, res) => {
+  try {
+    const response = await axios.post(`${SERMON_API_URL}/api/illustration/search`, req.body, { timeout: 10000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Illustration search proxy error:', error.message);
+    res.status(500).json({ error: 'Illustration search failed', results: [] });
+  }
+});
+
 app.get('/api/sermon/health', async (req, res) => {
   try {
     const response = await axios.get(`${SERMON_API_URL}/api/health`, { timeout: 5000 });

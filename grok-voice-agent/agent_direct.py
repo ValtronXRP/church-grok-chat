@@ -57,6 +57,23 @@ async def search_sermons_api(query, n_results=6):
         logger.warning(f"ChromaDB API error: {e}")
     return None
 
+async def search_illustrations_api(query, n_results=3):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{SERMON_API_URL}/api/illustration/search",
+                json={"query": query, "n_results": n_results},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    results = data.get('results', [])
+                    logger.info(f"Found {len(results)} illustrations for: {query}")
+                    return results
+    except Exception as e:
+        logger.warning(f"Illustration API error: {e}")
+    return []
+
 def search_sermons_local(query, n_results=5):
     """Fallback: search static JSON (583 segments)"""
     if not query or not sermons_data:
@@ -232,7 +249,6 @@ async def entrypoint(ctx: JobContext):
         is_more_request = user_lower in ['more', 'more links', 'show more', 'more clips']
         
         if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
-            # Show next batch (skip first 3 already shown)
             additional = all_sermon_results[3:6]
             if additional:
                 current_sermon_results = additional
@@ -247,7 +263,7 @@ async def entrypoint(ctx: JobContext):
             else:
                 logger.info("No more sermon segments available")
         else:
-            results = await search_sermons(user_text, 10)  # Get more to allow for filtering and "more" requests
+            results = await search_sermons(user_text, 10)
             filtered_results = filter_sermon_results(results)
             all_sermon_results = filtered_results
             current_sermon_results = filtered_results[:3]
@@ -260,6 +276,17 @@ async def entrypoint(ctx: JobContext):
                         "url": r.get('timestamped_url', r.get('url', '')),
                         "timestamp": r.get('start_time', ''),
                         "text": r.get('text', '')[:200]
+                    })
+
+            illustrations = await search_illustrations_api(user_text, 3)
+            if illustrations:
+                for ill in illustrations:
+                    await send_data_message(ctx.room, "illustration", {
+                        "title": ill.get('illustration', ill.get('title', 'Illustration')),
+                        "text": ill.get('text', '')[:300],
+                        "url": ill.get('video_url', ''),
+                        "type": ill.get('type', ''),
+                        "tone": ill.get('tone', '')
                     })
     
     @session.on("user_input_transcribed")
