@@ -614,6 +614,26 @@ app.post('/token', async (req, res) => {
   }
 });
 
+// Proxy sermon API endpoints for external access (voice agent on LiveKit)
+app.post('/api/sermon/search', async (req, res) => {
+  try {
+    const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, req.body, { timeout: 10000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Sermon search proxy error:', error.message);
+    res.status(500).json({ error: 'Sermon search failed', results: [] });
+  }
+});
+
+app.get('/api/sermon/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${SERMON_API_URL}/api/health`, { timeout: 5000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ status: 'error', error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running on http://localhost:${PORT}`);
   console.log(`📺 Open chat at: http://localhost:${PORT}/chat.html`);

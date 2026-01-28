@@ -15,7 +15,7 @@ from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import openai
 
 SERMONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sermons_static.json')
-SERMON_API_URL = os.environ.get('SERMON_API_URL', 'http://localhost:5001')
+SERMON_API_URL = os.environ.get('SERMON_API_URL', 'https://web-production-b652a.up.railway.app')
 sermons_data = []
 
 def load_sermons():
