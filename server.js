@@ -684,7 +684,10 @@ app.post('/api/illustration/search', async (req, res) => {
     if (results.ids && results.ids[0]) {
       const queryLower = query.toLowerCase();
       const stopWords = new Set(['what','does','pastor','bob','teach','about','how','can','the','and','for','with','that','this','from','have','more','when','why','who','which','there','their','been','would','could','should','going','into','also','just','very','really','much','some','only','than','then','them','these','those','will','being','doing','want','need','know','think','make','like','look','help','give','most','find','here','thing','many','well','back','because','people','tell','say','ask','use','all','way','its','get','got','are','was','were','has','had','not','but','our','out','you','your','his','her','she','him','did','one','two']);
+      const veryCommon = new Set(['god','jesus','bible','lord','christ','faith','pray','prayer','life','love','sin','church','believe','hope','spirit','holy','heaven','hell','heart','soul','world','truth','word','grace']);
       const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+      const specificWords = queryWords.filter(w => !veryCommon.has(w));
+      const commonWords = queryWords.filter(w => veryCommon.has(w));
       
       for (let i = 0; i < results.ids[0].length; i++) {
         const meta = results.metadatas[0][i] || {};
@@ -695,14 +698,22 @@ app.post('/api/illustration/search', async (req, res) => {
         const summary = (meta.summary || '').toLowerCase();
         
         let relevanceScore = 0;
-        for (const word of queryWords) {
-          if (topicsLower.some(t => t.includes(word))) relevanceScore += 3;
-          if (summary.includes(word)) relevanceScore += 2;
+        let distinctMatches = 0;
+        for (const word of specificWords) {
+          let matched = false;
+          if (topicsLower.some(t => t.includes(word))) { relevanceScore += 5; matched = true; }
+          if (summary.includes(word)) { relevanceScore += 3; matched = true; }
           const wordRegex = new RegExp('\\b' + word + '\\b', 'i');
-          if (wordRegex.test(docText)) relevanceScore += 1;
+          if (wordRegex.test(docText)) { relevanceScore += 1; matched = true; }
+          if (matched) distinctMatches++;
+        }
+        for (const word of commonWords) {
+          if (topicsLower.some(t => t.includes(word))) relevanceScore += 1;
+          if (summary.includes(word)) relevanceScore += 1;
         }
         
-        if (relevanceScore >= 4 || (relevanceScore >= 2 && dist < 0.5)) {
+        const minDistinct = specificWords.length >= 2 ? 2 : 1;
+        if (distinctMatches >= minDistinct && relevanceScore >= 6) {
           formatted.push({
             illustration: meta.summary || '',
             type: meta.type || '',
