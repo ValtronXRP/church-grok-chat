@@ -1,6 +1,7 @@
 const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 const axios = require('axios');
+const { CloudClient } = require('chromadb');
 const SermonSearch = require('./sermonSearch');
 require('dotenv').config();
 
@@ -614,34 +615,106 @@ app.post('/token', async (req, res) => {
   }
 });
 
-// Proxy sermon API endpoints for external access (voice agent on LiveKit)
+// Chroma Cloud direct connection
+let chromaClient = null;
+let sermonCollection = null;
+let illustrationCollection = null;
+
+async function initChromaCloud() {
+  const apiKey = process.env.CHROMA_API_KEY;
+  const tenant = process.env.CHROMA_TENANT;
+  const database = process.env.CHROMA_DATABASE || 'APB';
+  if (!apiKey || !tenant) {
+    console.log('Chroma Cloud not configured (missing CHROMA_API_KEY or CHROMA_TENANT)');
+    return;
+  }
+  try {
+    chromaClient = new CloudClient({ apiKey, tenant, database });
+    try {
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      const sc = await sermonCollection.count();
+      console.log(`Chroma Cloud: sermon_segments loaded (${sc} segments)`);
+    } catch (e) { console.log('sermon_segments not found:', e.message); }
+    try {
+      illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v4' });
+      const ic = await illustrationCollection.count();
+      console.log(`Chroma Cloud: illustrations_v4 loaded (${ic} items)`);
+    } catch (e) { console.log('illustrations_v4 not found:', e.message); }
+  } catch (e) {
+    console.error('Chroma Cloud init error:', e.message);
+  }
+}
+initChromaCloud();
+
 app.post('/api/sermon/search', async (req, res) => {
   try {
-    const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, req.body, { timeout: 10000 });
-    res.json(response.data);
+    const { query, n_results = 6 } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query required' });
+    if (!sermonCollection) return res.json({ query, results: [] });
+    const results = await sermonCollection.query({ queryTexts: [query], nResults: n_results });
+    const formatted = [];
+    if (results.ids && results.ids[0]) {
+      for (let i = 0; i < results.ids[0].length; i++) {
+        const meta = results.metadatas[0][i] || {};
+        const dist = results.distances ? results.distances[0][i] : 1;
+        formatted.push({
+          text: results.documents[0][i] || '',
+          title: meta.title || 'Sermon',
+          video_id: meta.video_id || '',
+          start_time: meta.start_time || '',
+          url: meta.url || '',
+          timestamped_url: meta.timestamped_url || meta.url || '',
+          relevance_score: 1 - dist,
+          main_topic: meta.main_topic || '',
+          summary: meta.summary || ''
+        });
+      }
+    }
+    res.json({ query, count: formatted.length, results: formatted });
   } catch (error) {
-    console.error('Sermon search proxy error:', error.message);
+    console.error('Sermon search error:', error.message);
     res.status(500).json({ error: 'Sermon search failed', results: [] });
   }
 });
 
 app.post('/api/illustration/search', async (req, res) => {
   try {
-    const response = await axios.post(`${SERMON_API_URL}/api/illustration/search`, req.body, { timeout: 10000 });
-    res.json(response.data);
+    const { query, n_results = 3 } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query required' });
+    if (!illustrationCollection) return res.json({ query, results: [] });
+    const results = await illustrationCollection.query({ queryTexts: [query], nResults: n_results });
+    const formatted = [];
+    if (results.ids && results.ids[0]) {
+      for (let i = 0; i < results.ids[0].length; i++) {
+        const meta = results.metadatas[0][i] || {};
+        const dist = results.distances ? results.distances[0][i] : 1;
+        const topics = meta.topics ? meta.topics.split(',') : [];
+        formatted.push({
+          illustration: meta.summary || '',
+          type: meta.type || '',
+          text: results.documents[0][i] || '',
+          video_url: meta.youtube_url || '',
+          timestamp: meta.timestamp || '',
+          topics: topics,
+          tone: meta.emotional_tone || '',
+          video_id: meta.video_id || '',
+          relevance_score: 1 - dist
+        });
+      }
+    }
+    res.json({ query, count: formatted.length, results: formatted });
   } catch (error) {
-    console.error('Illustration search proxy error:', error.message);
+    console.error('Illustration search error:', error.message);
     res.status(500).json({ error: 'Illustration search failed', results: [] });
   }
 });
 
 app.get('/api/sermon/health', async (req, res) => {
-  try {
-    const response = await axios.get(`${SERMON_API_URL}/api/health`, { timeout: 5000 });
-    res.json(response.data);
-  } catch (error) {
-    res.status(500).json({ status: 'error', error: error.message });
-  }
+  res.json({
+    status: chromaClient ? 'ok' : 'not_configured',
+    sermons: sermonCollection ? 'loaded' : 'not_loaded',
+    illustrations: illustrationCollection ? 'loaded' : 'not_loaded'
+  });
 });
 
 app.listen(PORT, () => {
