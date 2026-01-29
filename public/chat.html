@@ -2268,6 +2268,15 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
                         if (message.url) {
                             addVideoToSidebar(message.title, message.url, message.timestamp, message.text);
                         }
+                    } else if (message.type === 'illustration') {
+                        log('Received illustration from voice agent', 'info');
+                        addIllustrationToSidebar(
+                            message.title || 'Illustration',
+                            message.text || '',
+                            message.tone || '',
+                            message.url || '',
+                            ''
+                        );
                     } else if (message.type === 'speech_complete') {
                         // Agent finished speaking
                         log('Agent finished speaking', 'info');

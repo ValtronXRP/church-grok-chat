@@ -109,16 +109,8 @@ async function searchSermons(query, nResults = 6) {
     console.log('ChromaDB API error, falling back to local:', apiError.message);
   }
   
-  // FALLBACK: Use local static JSON search (583 segments)
-  try {
-    console.log(`Falling back to local search for: "${query}"`);
-    const results = sermonSearcher.search(query, nResults);
-    console.log(`Found ${results.length} local sermon results`);
-    return results;
-  } catch (error) {
-    console.error('Local sermon search error:', error);
-  }
-  
+  // sermon_segments collection was deleted - no fallback
+  console.log('No sermon results (collection deleted)');
   return [];
 }
 
@@ -448,13 +440,17 @@ app.post('/api/chat', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
     
-    // Search for relevant illustrations
+    // Search for relevant illustrations from Chroma Cloud
     let illustrationResults = [];
-    if (lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest) {
+    if (lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest && illustrationCollection) {
       try {
-        illustrationResults = searchIllustrations(lastUserMessage.content, 3);
+        const illResponse = await axios.post(`http://localhost:${PORT}/api/illustration/search`, {
+          query: lastUserMessage.content,
+          n_results: 3
+        }, { timeout: 5000 });
+        illustrationResults = illResponse.data.results || [];
         if (illustrationResults.length > 0) {
-          console.log(`Found ${illustrationResults.length} relevant illustrations`);
+          console.log(`Found ${illustrationResults.length} relevant illustrations from Chroma`);
         }
       } catch (err) {
         console.log('Illustration search error:', err.message);
@@ -682,27 +678,50 @@ app.post('/api/illustration/search', async (req, res) => {
     const { query, n_results = 3 } = req.body;
     if (!query) return res.status(400).json({ error: 'Query required' });
     if (!illustrationCollection) return res.json({ query, results: [] });
-    const results = await illustrationCollection.query({ queryTexts: [query], nResults: n_results });
+    const fetchMore = Math.min(n_results * 3, 10);
+    const results = await illustrationCollection.query({ queryTexts: [query], nResults: fetchMore });
     const formatted = [];
     if (results.ids && results.ids[0]) {
+      const queryLower = query.toLowerCase();
+      const stopWords = new Set(['what','does','pastor','bob','teach','about','how','can','the','and','for','with','that','this','from','have','more','when','why','who','which','there','their','been','would','could','should','going','into','also','just','very','really','much','some','only','than','then','them','these','those','will','being','doing','want','need','know','think','make','like','look','help','give','most','find','here','thing','many','well','back','because','people','tell','say','ask','use','all','way','its','get','got','are','was','were','has','had','not','but','our','out','you','your','his','her','she','him','did','one','two']);
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+      
       for (let i = 0; i < results.ids[0].length; i++) {
         const meta = results.metadatas[0][i] || {};
         const dist = results.distances ? results.distances[0][i] : 1;
         const topics = meta.topics ? meta.topics.split(',') : [];
-        formatted.push({
-          illustration: meta.summary || '',
-          type: meta.type || '',
-          text: results.documents[0][i] || '',
-          video_url: meta.youtube_url || '',
-          timestamp: meta.timestamp || '',
-          topics: topics,
-          tone: meta.emotional_tone || '',
-          video_id: meta.video_id || '',
-          relevance_score: 1 - dist
-        });
+        const topicsLower = topics.map(t => t.toLowerCase().trim());
+        const docText = (results.documents[0][i] || '').toLowerCase();
+        const summary = (meta.summary || '').toLowerCase();
+        
+        let relevanceScore = 0;
+        for (const word of queryWords) {
+          if (topicsLower.some(t => t.includes(word))) relevanceScore += 3;
+          if (summary.includes(word)) relevanceScore += 2;
+          const wordRegex = new RegExp('\\b' + word + '\\b', 'i');
+          if (wordRegex.test(docText)) relevanceScore += 1;
+        }
+        
+        if (relevanceScore >= 2 || dist < 0.8) {
+          formatted.push({
+            illustration: meta.summary || '',
+            type: meta.type || '',
+            text: results.documents[0][i] || '',
+            video_url: meta.youtube_url || '',
+            timestamp: meta.timestamp || '',
+            topics: topics,
+            tone: meta.emotional_tone || '',
+            video_id: meta.video_id || '',
+            relevance_score: 1 - dist,
+            topic_score: relevanceScore
+          });
+        }
       }
+      formatted.sort((a, b) => (b.topic_score + b.relevance_score) - (a.topic_score + a.relevance_score));
     }
-    res.json({ query, count: formatted.length, results: formatted });
+    const limited = formatted.slice(0, n_results);
+    console.log(`Illustration search: "${query}" -> ${formatted.length} relevant of ${fetchMore} fetched, returning ${limited.length}`);
+    res.json({ query, count: limited.length, results: limited });
   } catch (error) {
     console.error('Illustration search error:', error.message);
     res.status(500).json({ error: 'Illustration search failed', results: [] });
