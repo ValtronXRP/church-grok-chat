@@ -76,7 +76,7 @@ def init_db():
         sermon_collection = None
     
     try:
-        illustration_collection = client.get_collection(name="illustrations")
+        illustration_collection = client.get_collection(name="illustrations_v4")
         print(f"Loaded illustration collection: {illustration_collection.count()} items")
     except Exception as e:
         print(f"illustrations collection not found: {e}")
@@ -217,7 +217,7 @@ def search_illustrations():
             for i, doc in enumerate(results['documents'][0]):
                 meta = results['metadatas'][0][i]
                 
-                key = f"{meta.get('illustration', '')}-{meta.get('timestamp', '')}"
+                key = f"{meta.get('summary', meta.get('illustration', ''))}-{meta.get('timestamp', '')}"
                 if key in seen:
                     continue
                 seen.add(key)
@@ -248,12 +248,14 @@ def search_illustrations():
                     continue
                 
                 scored_results.append({
-                    'illustration': meta.get('illustration', ''),
+                    'illustration': meta.get('summary', meta.get('illustration', '')),
+                    'type': meta.get('type', ''),
                     'text': doc,
-                    'video_url': meta.get('video_url', ''),
+                    'video_url': meta.get('youtube_url', meta.get('video_url', '')),
                     'timestamp': meta.get('timestamp', ''),
                     'topics': topics,
-                    'tone': meta.get('tone', ''),
+                    'tone': meta.get('emotional_tone', meta.get('tone', '')),
+                    'video_id': meta.get('video_id', ''),
                     'relevance_score': combined_score
                 })
         
