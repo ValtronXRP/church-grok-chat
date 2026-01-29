@@ -702,7 +702,7 @@ app.post('/api/illustration/search', async (req, res) => {
           if (wordRegex.test(docText)) relevanceScore += 1;
         }
         
-        if (relevanceScore >= 2 || dist < 0.8) {
+        if (relevanceScore >= 4 || (relevanceScore >= 2 && dist < 0.5)) {
           formatted.push({
             illustration: meta.summary || '',
             type: meta.type || '',
