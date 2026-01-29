@@ -19,8 +19,11 @@
 ### 3. Complete Sentences and Thoughts
 - Every segment must start at the beginning of a sentence (never mid-sentence)
 - Every segment must end at the end of a sentence (never cut off mid-thought)
+- Illustrations must start at the beginning of the story/anecdote (the setup), not partway through
+- Sermon segments must start at the beginning of the point being made about the topic
 - Illustrations/stories must be complete from beginning to end (full narrative arc)
 - No fragments, no trailing off, no "..." endings
+- Clips shown to users must begin with a coherent opening sentence so the viewer immediately understands context
 
 ### 4. Semantic Search Relevance Requirements
 - Search results must be topically relevant to the user's question
@@ -131,7 +134,11 @@
 
 ### Worship/Announcement Detection
 To filter out non-sermon content from transcripts:
-- Skip segments in the first 5-10 minutes that contain: greetings, "welcome to", event announcements, "this week", "next Sunday"
-- Skip segments with repeated phrases typical of worship: "hallelujah", "praise", singing patterns
-- Skip segments where the speaker is clearly not Pastor Bob (different voice/name mentioned)
-- Focus on the main teaching body of each sermon (typically starts 10-15 minutes in)
+- Do NOT skip a fixed number of minutes — some videos have no worship/announcements, others have 15+ minutes
+- Instead, identify when Pastor Bob actually begins teaching by detecting:
+  - Transition phrases: "Let's open our Bibles to...", "Turn with me to...", "Today we're going to look at...", "Let's pray" (opening prayer before teaching)
+  - Shift from event/announcement language to Scripture exposition or topical teaching
+  - The presence of Bible references and teaching-style language
+- Skip segments that contain: event announcements ("this week", "next Sunday", "sign up"), greeting/welcome chatter, worship lyrics, repeated singing phrases
+- Skip segments where the speaker is clearly not Pastor Bob (worship leader, announcements person, guest unless quoted by Pastor Bob)
+- Each video must be analyzed individually — never assume a fixed skip time
