@@ -1,5 +1,8 @@
 # LiveKit Agents with xAI plugin
 livekit-agents[xai]>=1.0.0
 
+# HTTP client for API calls
+aiohttp>=3.9.0
+
 # Environment variables
 python-dotenv>=1.0.0
