@@ -341,8 +341,10 @@ async def entrypoint(ctx: JobContext):
     await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
     logger.info("Greeting sent - LISTENING")
     
-    await ctx.wait_for_participant_disconnect()
-    logger.info("User disconnected, ending session")
+    shutdown_event = asyncio.Event()
+    ctx.add_shutdown_callback(lambda: shutdown_event.set())
+    await shutdown_event.wait()
+    logger.info("Session shutdown")
 
 if __name__ == "__main__":
     load_sermons()
