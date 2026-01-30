@@ -288,7 +288,7 @@ async def entrypoint(ctx: JobContext):
                         "title": ill.get('illustration', ill.get('title', 'Illustration')),
                         "text": ill.get('text', '')[:300],
                         "url": ill.get('video_url', ''),
-                        "type": ill.get('type', ''),
+                        "illustration_type": ill.get('type', ''),
                         "tone": ill.get('tone', '')
                     })
     
