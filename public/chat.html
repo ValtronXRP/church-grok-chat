@@ -2227,10 +2227,12 @@ CRITICAL RULES YOU MUST ALWAYS FOLLOW:
             let lastUserMessage = '';
             
             // Data received event for context sync
-            room.on(LivekitClient.RoomEvent.DataReceived, (data, participant) => {
+            room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
                 try {
+                    const raw = payload instanceof Uint8Array ? payload : (payload.payload || payload.data || payload);
                     const decoder = new TextDecoder();
-                    const decoded = decoder.decode(data);
+                    const decoded = decoder.decode(raw);
+                    console.log('RAW DATA RECEIVED:', decoded.substring(0, 200));
                     const message = JSON.parse(decoded);
                     log(`Data message: ${message.type}`, 'info');
                     

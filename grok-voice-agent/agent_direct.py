@@ -342,7 +342,9 @@ async def entrypoint(ctx: JobContext):
     logger.info("Greeting sent - LISTENING")
     
     shutdown_event = asyncio.Event()
-    ctx.add_shutdown_callback(lambda: shutdown_event.set())
+    async def _on_shutdown():
+        shutdown_event.set()
+    ctx.add_shutdown_callback(_on_shutdown)
     await shutdown_event.wait()
     logger.info("Session shutdown")
 
