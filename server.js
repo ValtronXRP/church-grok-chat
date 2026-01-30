@@ -688,6 +688,8 @@ app.post('/api/illustration/search', async (req, res) => {
       const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
       const specificWords = queryWords.filter(w => !veryCommon.has(w));
       const commonWords = queryWords.filter(w => veryCommon.has(w));
+      const stem = w => w.replace(/(ing|ings|tion|tions|ness|ment|ments|ous|ive|able|ible|ful|less|ly|ed|er|est|es|s)$/, '');
+      const specificStems = specificWords.map(stem);
       
       for (let i = 0; i < results.ids[0].length; i++) {
         const meta = results.metadatas[0][i] || {};
@@ -696,15 +698,17 @@ app.post('/api/illustration/search', async (req, res) => {
         const topicsLower = topics.map(t => t.toLowerCase().trim());
         const docText = (results.documents[0][i] || '').toLowerCase();
         const summary = (meta.summary || '').toLowerCase();
+        const allText = topicsLower.join(' ') + ' ' + summary + ' ' + docText;
         
         let relevanceScore = 0;
         let distinctMatches = 0;
-        for (const word of specificWords) {
+        for (let si = 0; si < specificWords.length; si++) {
+          const word = specificWords[si];
+          const wordStem = specificStems[si];
           let matched = false;
-          if (topicsLower.some(t => t.includes(word))) { relevanceScore += 5; matched = true; }
-          if (summary.includes(word)) { relevanceScore += 3; matched = true; }
-          const wordRegex = new RegExp('\\b' + word + '\\b', 'i');
-          if (wordRegex.test(docText)) { relevanceScore += 1; matched = true; }
+          if (topicsLower.some(t => t.includes(word) || t.includes(wordStem))) { relevanceScore += 5; matched = true; }
+          if (summary.includes(word) || summary.includes(wordStem)) { relevanceScore += 3; matched = true; }
+          if (docText.includes(word) || docText.includes(wordStem)) { relevanceScore += 1; matched = true; }
           if (matched) distinctMatches++;
         }
         for (const word of commonWords) {
@@ -712,8 +716,12 @@ app.post('/api/illustration/search', async (req, res) => {
           if (summary.includes(word)) relevanceScore += 1;
         }
         
+        const chromaRelevance = 1 - dist;
+        if (chromaRelevance > 0.3) relevanceScore += 3;
+        
         const minDistinct = specificWords.length >= 2 ? 2 : 1;
-        if (distinctMatches >= minDistinct && relevanceScore >= 6) {
+        const minScore = specificWords.length === 0 ? 2 : 4;
+        if (distinctMatches >= minDistinct && relevanceScore >= minScore) {
           formatted.push({
             illustration: meta.summary || '',
             type: meta.type || '',
