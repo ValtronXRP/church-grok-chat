@@ -186,7 +186,9 @@ class APBAssistant(Agent):
 
 async def send_data_message(room, message_type, data):
     try:
-        message = json.dumps({"type": message_type, **data})
+        payload = {k: v for k, v in data.items() if k != "type"}
+        payload["type"] = message_type
+        message = json.dumps(payload)
         await room.local_participant.publish_data(message.encode('utf-8'), reliable=True)
         logger.info(f"Sent {message_type}")
     except Exception as e:
