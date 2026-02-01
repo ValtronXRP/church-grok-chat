@@ -735,6 +735,29 @@ app.post('/api/illustration/search', async (req, res) => {
     res.json({ query, count: limited.length, results: limited });
   } catch (error) {
     console.error('Illustration search error:', error.message);
+    try {
+      console.log('Retrying with fresh collection reference...');
+      illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v4' });
+      const retryResults = await illustrationCollection.query({ queryTexts: [req.body.query], nResults: 3 });
+      if (retryResults.ids && retryResults.ids[0] && retryResults.ids[0].length > 0) {
+        const retryFormatted = retryResults.ids[0].map((id, i) => ({
+          illustration: (retryResults.metadatas[0][i] || {}).summary || '',
+          type: (retryResults.metadatas[0][i] || {}).type || '',
+          text: retryResults.documents[0][i] || '',
+          video_url: (retryResults.metadatas[0][i] || {}).youtube_url || '',
+          timestamp: (retryResults.metadatas[0][i] || {}).timestamp || '',
+          topics: ((retryResults.metadatas[0][i] || {}).topics || '').split(','),
+          tone: (retryResults.metadatas[0][i] || {}).emotional_tone || '',
+          video_id: (retryResults.metadatas[0][i] || {}).video_id || '',
+          relevance_score: retryResults.distances ? 1 - retryResults.distances[0][i] : 0,
+          topic_score: 5
+        }));
+        console.log(`Retry succeeded: ${retryFormatted.length} results`);
+        return res.json({ query: req.body.query, count: retryFormatted.length, results: retryFormatted.slice(0, req.body.n_results || 3) });
+      }
+    } catch (retryErr) {
+      console.error('Retry also failed:', retryErr.message);
+    }
     res.status(500).json({ error: 'Illustration search failed', results: [] });
   }
 });
