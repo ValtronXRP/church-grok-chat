@@ -91,27 +91,36 @@ try {
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
 async function searchSermons(query, nResults = 6) {
-  // PRIMARY: Use ChromaDB vector search API (109K+ segments)
-  try {
-    console.log(`Searching ChromaDB for: "${query}" (n=${nResults})`);
-    const response = await axios.post(`${SERMON_API_URL}/api/sermon/search`, {
-      query: query,
-      n_results: nResults
-    }, {
-      timeout: 5000
-    });
-    
-    if (response.data && response.data.results && response.data.results.length > 0) {
-      console.log(`ChromaDB found ${response.data.results.length} sermon results`);
-      return response.data.results;
-    }
-  } catch (apiError) {
-    console.log('ChromaDB API error, falling back to local:', apiError.message);
+  // Query Chroma directly (no HTTP self-call)
+  if (!sermonCollection) {
+    console.log('sermon_segments collection not available');
+    return [];
   }
-  
-  // sermon_segments collection was deleted - no fallback
-  console.log('No sermon results (collection deleted)');
-  return [];
+  try {
+    console.log(`Searching sermon_segments for: "${query}" (n=${nResults})`);
+    const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults });
+    const formatted = [];
+    if (results.ids && results.ids[0]) {
+      for (let i = 0; i < results.ids[0].length; i++) {
+        const meta = results.metadatas[0][i] || {};
+        const dist = results.distances ? results.distances[0][i] : 1;
+        formatted.push({
+          text: results.documents[0][i] || '',
+          title: meta.title || 'Sermon',
+          video_id: meta.video_id || '',
+          start_time: meta.start_time || '',
+          url: meta.url || '',
+          timestamped_url: meta.timestamped_url || meta.url || '',
+          relevance_score: 1 - dist
+        });
+      }
+    }
+    console.log(`Found ${formatted.length} sermon results`);
+    return formatted;
+  } catch (err) {
+    console.log('Sermon search error:', err.message);
+    return [];
+  }
 }
 
 // Keep the old filtering function for API results

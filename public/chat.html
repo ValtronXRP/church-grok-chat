@@ -1480,8 +1480,9 @@ This format allows the videos to be embedded in the chat.`
                 return;
             }
             
-            // Mark as added
+            // Mark as added (both local and global for cross-section dedup)
             addedVideoKeys.add(videoKey);
+            globalVideoIds.add(videoId);
             
             // Hide empty state
             if (emptyState) {
@@ -1538,6 +1539,7 @@ This format allows the videos to be embedded in the chat.`
             // Reset count and deduplication
             sidebarVideoCount = 0;
             addedVideoKeys.clear();
+            globalVideoIds.clear();  // Also clear cross-section dedup
             videoCount.textContent = '0';
         }
         
@@ -1547,6 +1549,9 @@ This format allows the videos to be embedded in the chat.`
         let illustrationCount = 0;
         const addedIllustrationKeys = new Set();
         const MAX_SIDEBAR_ILLUSTRATIONS = 10;
+        
+        // Shared set for cross-section video deduplication (video_id only, not timestamp)
+        const globalVideoIds = new Set();
         
         function addIllustrationToSidebar(title, text, tone, url, timestamp) {
             const illustrationList = document.getElementById('illustrationList');
@@ -1576,17 +1581,25 @@ This format allows the videos to be embedded in the chat.`
             const item = document.createElement('div');
             item.className = 'sidebar-illustration-item';
             
-            // Check if we have a video URL
+            // Check if we have a video URL (skip if already shown in sermon clips)
             let videoHtml = '';
+            let illVideoId = null;
             if (url && url.includes('youtube.com')) {
                 const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
                 if (videoIdMatch) {
-                    const videoId = videoIdMatch[1];
+                    illVideoId = videoIdMatch[1];
+                    // Skip if this video is already shown in sermon clips
+                    if (globalVideoIds.has(illVideoId)) {
+                        console.log('Skipping illustration - video already in sermon clips:', illVideoId);
+                        return;
+                    }
                     let startSeconds = 0;
                     const timeMatch = url.match(/[&?]t=(\d+)/);
                     if (timeMatch) startSeconds = parseInt(timeMatch[1]);
-                    const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
+                    const embedUrl = `https://www.youtube-nocookie.com/embed/${illVideoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
                     videoHtml = `<iframe src="${embedUrl}" title="${title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen playsinline webkit-playsinline loading="lazy"></iframe>`;
+                    // Mark this video as used
+                    globalVideoIds.add(illVideoId);
                 }
             }
             
@@ -1624,6 +1637,10 @@ This format allows the videos to be embedded in the chat.`
             illustrationCount = 0;
             addedIllustrationKeys.clear();
             illustrationCountEl.textContent = '0';
+        }
+        
+        function clearAllVideoDedup() {
+            globalVideoIds.clear();
         }
         
         function formatSecondsToTimestamp(totalSeconds) {

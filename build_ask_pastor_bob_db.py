@@ -41,9 +41,9 @@ BATCH_DIR = "/Users/valorkopeny/Desktop/SERMONS_ZIP_05"
 VDB_PATH = "./ask-pastor-bob-vdb"
 COLLECTION_NAME = "sermon_chunks"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-CHUNK_MIN_WORDS = 80
-CHUNK_MAX_WORDS = 450
-CHUNK_TARGET_WORDS = 250
+CHUNK_MIN_WORDS = 30
+CHUNK_MAX_WORDS = 160
+CHUNK_TARGET_WORDS = 120
 CHECKPOINT_EVERY = 50
 
 WORSHIP_KEYWORDS = re.compile(

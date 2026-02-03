@@ -253,6 +253,8 @@ async def entrypoint(ctx: JobContext):
         user_lower = user_text.lower().strip()
         is_more_request = user_lower in ['more', 'more links', 'show more', 'more clips']
         
+        sermon_context = ""
+        
         if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
             additional = all_sermon_results[3:6]
             if additional:
@@ -273,6 +275,7 @@ async def entrypoint(ctx: JobContext):
             all_sermon_results = filtered_results
             current_sermon_results = filtered_results[:3]
             last_query["text"] = user_text
+            
             if filtered_results:
                 logger.info(f"Found {len(results)} segments, {len(filtered_results)} after filtering, showing first 3")
                 for r in filtered_results[:3]:
@@ -282,6 +285,12 @@ async def entrypoint(ctx: JobContext):
                         "timestamp": r.get('start_time', ''),
                         "text": r.get('text', '')[:200]
                     })
+                
+                sermon_context = "\n\nRELEVANT SERMON CONTENT FROM PASTOR BOB:\n"
+                for i, r in enumerate(filtered_results[:3]):
+                    sermon_context += f"\n[Clip {i+1}] {r.get('title', 'Sermon')} at {r.get('start_time', '')}:\n"
+                    sermon_context += f'"{r.get("text", "")[:400]}"\n'
+                sermon_context += "\nUse these actual quotes to answer. Say 'Pastor Bob teaches...' when referencing this content."
 
             illustrations = await search_illustrations_api(user_text, 3)
             if illustrations:
@@ -293,6 +302,13 @@ async def entrypoint(ctx: JobContext):
                         "illustration_type": ill.get('type', ''),
                         "tone": ill.get('tone', '')
                     })
+        
+        if sermon_context:
+            try:
+                await session.generate_reply(instructions=sermon_context)
+                logger.info("Injected sermon context into LLM response")
+            except Exception as e:
+                logger.warning(f"Could not inject sermon context: {e}")
     
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
