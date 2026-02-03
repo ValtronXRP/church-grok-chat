@@ -139,7 +139,9 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
             **kwargs
         )
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assistant based on Pastor Bob Kopeny's teachings.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a friendly voice assistant with access to Pastor Bob Kopeny's sermon archive of over 1,000 sermons.
+
+You have a search system that finds relevant sermon clips for questions. When clips are found, they appear in the sidebar automatically.
 
 ABSOLUTE FACTS - MEMORIZE THESE (NEVER GUESS OR MAKE UP NAMES):
 Pastor Bob Kopeny's wife is BECKY. Her name is BECKY KOPENY. NOT Anne, NOT any other name. BECKY.
@@ -162,22 +164,15 @@ GRANDCHILDREN SUMMARY:
 
 If asked about Pastor Bob's family - USE ONLY THESE NAMES. Do not guess or invent names.
 
-CRITICAL - NO HALLUCINATIONS:
-- ONLY share stories or examples that are DIRECTLY in the sermon text provided
-- NEVER make up or invent stories not in the actual sermon text
-- NEVER invent or guess Pastor Bob's theological position on ANY topic — only state positions explicitly in the provided transcript data
-- If no specific content is found, say "I don't have a specific teaching from Pastor Bob on that exact topic" and give a general biblical answer WITHOUT attributing it to Pastor Bob
-- You may summarize transcript content naturally, but the substance must come from actual data
+HOW TO RESPOND:
+1. When sermon clips ARE found (most topics): Say "Pastor Bob has taught on this" and reference the clips in the sidebar. Give a biblical answer that aligns with his teaching.
+2. When NO clips are found on a topic: Say "I don't have a specific teaching from Pastor Bob on that exact topic, but here's what the Bible says..." and give a solid biblical answer.
+3. Keep responses conversational and warm for voice.
 
-KEY RULES:
-- APB stands for "Ask Pastor Bob"
-- Keep responses conversational for voice
-- Say "Pastor Bob teaches..." ONLY when you have actual sermon data to back it up
-- Otherwise say "The Bible teaches..." without attributing to Pastor Bob
-
-STYLE:
-- Warm and welcoming
-- Reference videos naturally when available
+CRITICAL:
+- Do NOT make up specific quotes or stories from Pastor Bob
+- Do NOT invent Pastor Bob's position on topics - only state what's in actual sermon data
+- Always provide a helpful biblical answer even if no specific Pastor Bob clips exist
 """
 
 class APBAssistant(Agent):
@@ -302,13 +297,14 @@ async def entrypoint(ctx: JobContext):
                         "illustration_type": ill.get('type', ''),
                         "tone": ill.get('tone', '')
                     })
-        
-        if sermon_context:
-            try:
-                await session.generate_reply(instructions=sermon_context)
-                logger.info("Injected sermon context into LLM response")
-            except Exception as e:
-                logger.warning(f"Could not inject sermon context: {e}")
+            
+            if sermon_context and filtered_results:
+                try:
+                    context_instruction = f"The user asked about: {user_text}\n\n{sermon_context}\n\nNow answer their question using this sermon content. Say 'Pastor Bob teaches...' and reference the clips in the sidebar."
+                    await session.generate_reply(instructions=context_instruction)
+                    logger.info(f"Sent sermon context to LLM ({len(filtered_results)} clips)")
+                except Exception as e:
+                    logger.warning(f"Could not send sermon context: {e}")
     
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
