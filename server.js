@@ -93,8 +93,15 @@ try {
 async function searchSermons(query, nResults = 6) {
   // Query Chroma directly (no HTTP self-call)
   if (!sermonCollection) {
-    console.log('sermon_segments collection not available');
-    return [];
+    // Try to get fresh collection reference
+    try {
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      const sc = await sermonCollection.count();
+      console.log(`Lazy-loaded sermon_segments (${sc} segments)`);
+    } catch (e) {
+      console.log('sermon_segments collection not available:', e.message);
+      return [];
+    }
   }
   try {
     console.log(`Searching sermon_segments for: "${query}" (n=${nResults})`);
@@ -118,8 +125,33 @@ async function searchSermons(query, nResults = 6) {
     console.log(`Found ${formatted.length} sermon results`);
     return formatted;
   } catch (err) {
-    console.log('Sermon search error:', err.message);
-    return [];
+    console.log('Sermon search error, retrying with fresh collection:', err.message);
+    // Retry with fresh collection reference
+    try {
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults });
+      const formatted = [];
+      if (results.ids && results.ids[0]) {
+        for (let i = 0; i < results.ids[0].length; i++) {
+          const meta = results.metadatas[0][i] || {};
+          const dist = results.distances ? results.distances[0][i] : 1;
+          formatted.push({
+            text: results.documents[0][i] || '',
+            title: meta.title || 'Sermon',
+            video_id: meta.video_id || '',
+            start_time: meta.start_time || '',
+            url: meta.url || '',
+            timestamped_url: meta.timestamped_url || meta.url || '',
+            relevance_score: 1 - dist
+          });
+        }
+      }
+      console.log(`Retry found ${formatted.length} sermon results`);
+      return formatted;
+    } catch (retryErr) {
+      console.log('Sermon search retry failed:', retryErr.message);
+      return [];
+    }
   }
 }
 
@@ -484,24 +516,33 @@ app.post('/api/chat', async (req, res) => {
     if (sermonResults && sermonResults.length > 0) {
       console.log(`Filtering ${sermonResults.length} sermon results for videos`);
       
-      // Filter out songs and music - only keep actual sermon segments
+      // Filter out songs, music, and non-teaching content
       const filteredResults = sermonResults.filter(r => {
         const title = (r.title || '').toLowerCase();
         const text = (r.text || '').toLowerCase();
         
         // Skip if title contains "Unknown" with no real title
-        if (title === 'unknown sermon' || title === 'unknown') return false;
+        if (title === 'unknown sermon' || title === 'unknown' || title === 'sermon') return false;
         
         // Skip if title indicates it's a song/music
-        const songIndicators = ['worship song', 'hymn', 'music video', 'singing', 'choir'];
+        const songIndicators = ['worship song', 'hymn', 'music video', 'singing', 'choir', 'worship set'];
         if (songIndicators.some(ind => title.includes(ind))) return false;
         
         // Skip if text is very short (likely not a teaching segment)
-        if (text.length < 50) return false;
+        if (text.length < 100) return false;
         
         // Skip if text has repeated worship phrases (likely lyrics)
-        const worshipPhrases = (text.match(/\b(la la|hallelujah|glory glory|praise him)\b/gi) || []).length;
+        const worshipPhrases = (text.match(/\b(la la|hallelujah|glory glory|praise him|oh lord|we worship|we praise|sing to|lift your|raise your hands?|clap your)\b/gi) || []).length;
         if (worshipPhrases > 2) return false;
+        
+        // Skip if text is mostly music notation or repeated phrases
+        const words = text.split(/\s+/);
+        const uniqueWords = new Set(words);
+        if (words.length > 20 && uniqueWords.size < words.length * 0.4) return false;  // Too repetitive
+        
+        // Skip announcements and logistics
+        const announcementPhrases = (text.match(/\b(sign up|register|next week|potluck|meet in|parking lot|nursery|children'?s ministry|youth group|ladies'? group|men'?s group)\b/gi) || []).length;
+        if (announcementPhrases > 1) return false;
         
         return true;
       });
