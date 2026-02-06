@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY reranker_requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the reranker service
+COPY reranker_service.py .
+
+# Expose port
+EXPOSE 5050
+
+# Run with gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--timeout", "120", "--workers", "1", "reranker_service:app"]

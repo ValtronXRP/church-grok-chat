@@ -62,6 +62,7 @@ const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const PORT = process.env.PORT || 3001;
 const SERMON_API_URL = process.env.SERMON_API_URL || 'http://localhost:5001';
+const RERANKER_URL = process.env.RERANKER_URL || 'http://localhost:5050';
 const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://') : '';
 
 // Initialize local sermon search
@@ -90,10 +91,157 @@ try {
 // ============================================
 // SERMON SEARCH HELPER FUNCTIONS
 // ============================================
+function computeKeywordRelevance(text, query) {
+  const stopWords = new Set(['what', 'does', 'how', 'can', 'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'about', 'pastor', 'bob', 'teach', 'say', 'tell', 'bible']);
+  const queryWords = query.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+  const textLower = text.toLowerCase();
+  let matches = 0;
+  for (const word of queryWords) {
+    if (textLower.includes(word)) matches++;
+    const variations = {
+      'baptism': ['baptize', 'baptized', 'baptizing'],
+      'holy': ['spirit', 'ghost'],
+      'spirit': ['holy', 'spiritual'],
+      'forgive': ['forgiveness', 'forgiving', 'forgiven'],
+      'faith': ['faithful', 'believe', 'trust'],
+      'pray': ['prayer', 'praying'],
+      'salvation': ['saved', 'save', 'saving'],
+      'sin': ['sinful', 'sinner', 'sins'],
+      'love': ['loving', 'loved', 'loves']
+    };
+    if (variations[word]) {
+      for (const v of variations[word]) {
+        if (textLower.includes(v)) { matches += 0.5; break; }
+      }
+    }
+  }
+  return queryWords.length > 0 ? matches / queryWords.length : 0;
+}
+
+function isWorshipContent(text, title) {
+  const textLower = (text || '').toLowerCase();
+  const titleLower = (title || '').toLowerCase();
+  if (titleLower === 'unknown sermon' || titleLower === 'unknown' || titleLower === '') return true;
+  const worshipIndicators = ['worship song', 'hymn', 'music video', 'singing', 'choir', 'la la la', 'hallelujah hallelujah'];
+  if (worshipIndicators.some(w => titleLower.includes(w))) return true;
+  const worshipPhrases = /\b(la la|glory glory|praise him praise him|hallelujah hallelujah)\b/gi;
+  if ((textLower.match(worshipPhrases) || []).length > 2) return true;
+  if (textLower.length < 100) return true;
+  return false;
+}
+
+const PINNED_STORY_CLIPS = {
+  becky_story: {
+    keywords: ['becky', 'wife', 'how did bob meet', 'how did pastor bob meet', 'how they met', 'bob and becky', 'bob meet becky', 'married', 'engagement', 'how bob met', 'love story', 'bob\'s wife', 'pastor bob\'s wife', 'when did bob get married', 'bob get married', 'who is bob married to', 'who did bob marry', 'becky kopeny'],
+    clips: [
+      {
+        title: 'How To Press On (03/26/2017)',
+        url: 'https://www.youtube.com/watch?v=sGIJP13TxPQ',
+        timestamped_url: 'https://www.youtube.com/watch?v=sGIJP13TxPQ&t=2382s',
+        start_time: '39:42',
+        video_id: 'sGIJP13TxPQ',
+        text: 'Pastor Bob shares the full story of how he met Becky - from meeting her briefly at church, to God putting her name in his mind at the intersection of Chapman and Kramer while driving to seminary, to the Lord revealing she had gotten engaged the night before, to God telling him to propose three weeks after their first date.',
+        relevance_score: 1.0
+      },
+      {
+        title: 'Who Cares? (12/10/2017)',
+        url: 'https://www.youtube.com/watch?v=BRd6nCCTLKI',
+        timestamped_url: 'https://www.youtube.com/watch?v=BRd6nCCTLKI&t=2014s',
+        start_time: '33:34',
+        video_id: 'BRd6nCCTLKI',
+        text: 'Pastor Bob shares that when he first met Becky she was engaged to be married. They were just friends and he encouraged her spiritually. He shares about caring for someone and not knowing how they feel.',
+        relevance_score: 0.95
+      },
+      {
+        title: 'Getting God\'s Guidance - Numbers 9:1-23',
+        url: 'https://www.youtube.com/watch?v=y-vXvEoyJb4',
+        timestamped_url: 'https://www.youtube.com/watch?v=y-vXvEoyJb4&t=5448s',
+        start_time: '1:30:48',
+        video_id: 'y-vXvEoyJb4',
+        text: 'Pastor Bob shares about going into the library, finding Becky, learning she was dating a guy seriously heading toward engagement. He shares about God\'s guidance and how when you\'re in God\'s will, things can move very quickly - they were engaged three weeks after their first date.',
+        relevance_score: 0.9
+      }
+    ]
+  },
+  testimony: {
+    keywords: ['testimony', 'how was bob saved', 'when was bob saved', 'how did bob get saved', 'bob\'s testimony', 'pastor bob saved', 'bob come to christ', 'bob receive christ', 'when did bob become a christian', 'how did bob become', 'bob\'s salvation', 'bob get saved', 'pastor bob\'s testimony', 'bob become a believer', 'how bob got saved', 'when bob got saved', 'bob\'s faith journey', 'how did pastor bob come to know', 'fred', 'jeff maples', 'gene schaeffer', 'jr high camp', 'junior high camp', '8th grade'],
+    clips: [
+      {
+        title: 'Be Faithful - 2 Timothy 1',
+        url: 'https://www.youtube.com/watch?v=72R6uNs2ka4',
+        timestamped_url: 'https://www.youtube.com/watch?v=72R6uNs2ka4',
+        start_time: '',
+        video_id: '72R6uNs2ka4',
+        text: 'Pastor Bob shares his testimony of how he received Christ. Two men - Jeff Maples and Gene Schaeffer, who were in their 30s - shared Christ with him at a Jr. High church camp when he was 13. They shared for about five minutes and asked if he would receive Christ. He said yes. He thanks God for the unbroken chain of people who shared the gospel down to him.',
+        relevance_score: 1.0
+      }
+    ]
+  }
+};
+
+function detectPersonalStoryQuery(query) {
+  const q = query.toLowerCase().replace(/['']/g, "'");
+  const matches = [];
+  for (const [storyKey, story] of Object.entries(PINNED_STORY_CLIPS)) {
+    for (const kw of story.keywords) {
+      if (q.includes(kw)) {
+        matches.push(storyKey);
+        break;
+      }
+    }
+  }
+  return matches;
+}
+
+async function searchHybrid(query, nResults = 6, searchType = 'all') {
+  try {
+    const response = await axios.post(`${RERANKER_URL}/search`, {
+      query,
+      type: searchType,
+      n_results: nResults,
+      n_candidates: 20
+    }, { timeout: 10000 });
+
+    if (response.data && response.data.results) {
+      const results = response.data.results;
+      console.log(`Reranker returned ${results.length} results (${response.data.timing_ms}ms, ${response.data.pinned_count || 0} pinned)`);
+      
+      const sermons = results.filter(r => r.source === 'sermon').map(r => ({
+        text: r.text,
+        title: r.title || 'Sermon',
+        video_id: r.video_id || '',
+        start_time: r.start_time || '',
+        url: r.url || '',
+        timestamped_url: r.timestamped_url || r.url || '',
+        relevance_score: r.rerank_score || 0,
+        source: 'sermon'
+      }));
+      const illustrations = results.filter(r => r.source === 'illustration').map(r => ({
+        text: r.text,
+        title: r.title || r.summary || 'Illustration',
+        topics: r.topics ? r.topics.split(',') : [],
+        tone: r.emotional_tone || '',
+        url: r.youtube_url || r.url || '',
+        timestamp: r.start_time || '',
+        source: 'illustration'
+      }));
+      const website = results.filter(r => r.source === 'website').map(r => ({
+        text: r.text,
+        page: r.page || '',
+        url: r.url || '',
+        relevance_score: r.rerank_score || 0,
+        source: 'website'
+      }));
+      return { sermons, illustrations, website };
+    }
+  } catch (err) {
+    console.log(`Reranker unavailable (${err.message}), falling back to direct Chroma`);
+  }
+  return null;
+}
+
 async function searchSermons(query, nResults = 6) {
-  // Query Chroma directly (no HTTP self-call)
   if (!sermonCollection) {
-    // Try to get fresh collection reference
     try {
       sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
       const sc = await sermonCollection.count();
@@ -104,50 +252,74 @@ async function searchSermons(query, nResults = 6) {
     }
   }
   try {
-    console.log(`Searching sermon_segments for: "${query}" (n=${nResults})`);
-    const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults });
+    console.log(`Searching sermon_segments for: "${query}" (n=${nResults * 2})`);
+    const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults * 2 });
     const formatted = [];
     if (results.ids && results.ids[0]) {
       for (let i = 0; i < results.ids[0].length; i++) {
         const meta = results.metadatas[0][i] || {};
         const dist = results.distances ? results.distances[0][i] : 1;
+        const text = results.documents[0][i] || '';
+        const vectorScore = 1 - dist;
+        const keywordScore = computeKeywordRelevance(text, query);
+        const combinedScore = (vectorScore * 0.6) + (keywordScore * 0.4);
         formatted.push({
-          text: results.documents[0][i] || '',
+          text: text,
           title: meta.title || 'Sermon',
           video_id: meta.video_id || '',
           start_time: meta.start_time || '',
           url: meta.url || '',
           timestamped_url: meta.timestamped_url || meta.url || '',
-          relevance_score: 1 - dist
+          relevance_score: combinedScore,
+          vector_score: vectorScore,
+          keyword_score: keywordScore
         });
       }
     }
-    console.log(`Found ${formatted.length} sermon results`);
-    return formatted;
+    formatted.sort((a, b) => b.relevance_score - a.relevance_score);
+    // Deduplicate by text content (same text can appear with different titles)
+    const seen = new Set();
+    const deduped = formatted.filter(r => {
+      const key = r.text.substring(0, 200);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const filtered = deduped
+      .filter(r => !isWorshipContent(r.text, r.title))
+      .filter(r => r.relevance_score > 0.15 || r.keyword_score > 0.2)
+      .slice(0, nResults);
+    console.log(`Found ${formatted.length} results, ${deduped.length} after dedup, returning ${filtered.length} after relevance filtering`);
+    return filtered;
   } catch (err) {
     console.log('Sermon search error, retrying with fresh collection:', err.message);
-    // Retry with fresh collection reference
     try {
       sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
-      const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults });
+      const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults * 2 });
       const formatted = [];
       if (results.ids && results.ids[0]) {
         for (let i = 0; i < results.ids[0].length; i++) {
           const meta = results.metadatas[0][i] || {};
           const dist = results.distances ? results.distances[0][i] : 1;
+          const text = results.documents[0][i] || '';
+          const vectorScore = 1 - dist;
+          const keywordScore = computeKeywordRelevance(text, query);
+          const combinedScore = (vectorScore * 0.6) + (keywordScore * 0.4);
           formatted.push({
-            text: results.documents[0][i] || '',
-            title: meta.title || 'Sermon',
-            video_id: meta.video_id || '',
-            start_time: meta.start_time || '',
-            url: meta.url || '',
+            text, title: meta.title || 'Sermon', video_id: meta.video_id || '',
+            start_time: meta.start_time || '', url: meta.url || '',
             timestamped_url: meta.timestamped_url || meta.url || '',
-            relevance_score: 1 - dist
+            relevance_score: combinedScore
           });
         }
       }
-      console.log(`Retry found ${formatted.length} sermon results`);
-      return formatted;
+      formatted.sort((a, b) => b.relevance_score - a.relevance_score);
+      const filtered = formatted
+        .filter(r => !isWorshipContent(r.text, r.title))
+        .filter(r => r.relevance_score > 0.25)
+        .slice(0, nResults);
+      console.log(`Retry found ${filtered.length} sermon results`);
+      return filtered;
     } catch (retryErr) {
       console.log('Sermon search retry failed:', retryErr.message);
       return [];
@@ -214,38 +386,19 @@ async function searchSermonsOld(query) {
   return [];
 }
 
-function formatSermonContext(sermonResults, isMoreRequest = false) {
-  if (!sermonResults || sermonResults.length === 0) {
-    return '\n\n⚠️ NO SERMON SEGMENTS FOUND: Please still answer based on general biblical principles, but mention that no specific sermons from Pastor Bob Kopeny were found on this topic.\n';
+function formatSermonContext(sermonResults, isMoreRequest = false, websiteResults = []) {
+  const hasSermons = sermonResults && sermonResults.length > 0;
+  const hasWebsite = websiteResults && websiteResults.length > 0;
+
+  if (!hasSermons && !hasWebsite) {
+    return '\n\nNo specific sermon segments found. Answer based on biblical principles. Do NOT mention that no sermons were found - just give a helpful biblical answer.\n';
   }
   
-  const first3 = sermonResults.slice(0, 3);
-  const hasMore = sermonResults.length > 3;
-  
-  // Collect illustrations and scripture references
-  const illustrations = [];
-  const scriptures = [];
-  first3.forEach(result => {
-    const text_lower = result.text.toLowerCase();
-    if (text_lower.includes('remember when') || text_lower.includes('story') || 
-        text_lower.includes('once ') || text_lower.includes('example') ||
-        text_lower.includes('illustration') || text_lower.includes('let me tell you') ||
-        text_lower.includes('imagine') || text_lower.includes('picture this')) {
-      illustrations.push({ text: result.text.substring(0, 400), url: result.timestamped_url });
-    }
-    // Look for scripture references
-    const scriptureMatch = result.text.match(/([1-3]?\s?[A-Z][a-z]+)\s+(\d+):(\d+)/g);
-    if (scriptureMatch) {
-      scriptures.push(...scriptureMatch);
-    }
-  });
-  
-  if (isMoreRequest) {
+  if (isMoreRequest && hasSermons) {
     const additional = sermonResults.slice(3);
     if (additional.length === 0) {
       return '\n\nNo additional sermon segments available on this topic.\n';
     }
-    
     let context = '\n\nProvide additional videos. Format each as:\n';
     context += '"Here are more related videos:"\n';
     context += 'Then for each video, put the link on its own line:\n\n';
@@ -256,44 +409,43 @@ function formatSermonContext(sermonResults, isMoreRequest = false) {
     return context;
   }
   
-  let context = '\n\n🔴 REQUIRED RESPONSE STRUCTURE:\n\n';
-  context += '1. SUMMARY: 2-3 sentences on what Pastor Bob teaches about this topic\n\n';
-  context += '2. SCRIPTURE: Mention any Bible verses Pastor Bob references (see list below)\n\n';
-  context += '3. ILLUSTRATION: If there\'s a story or illustration from Pastor Bob, share it naturally\n\n';
-  context += '4. VIDEO SEGMENTS: Say "Here are some sermon clips where Pastor Bob discusses this:"\n';
-  context += '   Then for EACH video, put the YouTube link on its OWN LINE followed by a brief description.\n';
-  context += '   Format example:\n';
-  context += '   https://www.youtube.com/watch?v=VIDEO_ID&t=123s\n';
-  context += '   Pastor Bob explains how forgiveness frees us from bitterness.\n\n';
-  if (hasMore) {
-    context += '5. END WITH: "If you\'d like more sermon clips, just say more."\n\n';
+  let context = '\n\n=== PASTOR BOB\'S ACTUAL CONTENT (USE THIS TO ANSWER) ===\n\n';
+  context += 'IMPORTANT: The content below IS from Pastor Bob\'s real teachings and his church. You MUST use it to answer.\n';
+  context += 'Say "Pastor Bob teaches..." and share the content. Do NOT say "I\'d need to check" - you HAVE the content right here.\n';
+  context += 'Do NOT mention clips, sidebar, or videos in your answer.\n\n';
+
+  if (hasSermons) {
+    const first3 = sermonResults.slice(0, 3);
+
+    const scriptures = [];
+    first3.forEach(result => {
+      const scriptureMatch = result.text.match(/([1-3]?\s?[A-Z][a-z]+)\s+(\d+):(\d+)/g);
+      if (scriptureMatch) scriptures.push(...scriptureMatch);
+    });
+    if (scriptures.length > 0) {
+      context += 'Scripture references: ' + scriptures.slice(0, 5).join(', ') + '\n\n';
+    }
+
+    context += 'SERMON SEGMENTS:\n\n';
+    first3.forEach((result, i) => {
+      context += `[Segment ${i + 1}] "${result.title || 'Sermon'}":\n`;
+      context += `"${result.text.substring(0, 1200)}"\n\n`;
+    });
+
+    if (sermonResults.length > 3) {
+      context += 'If user wants more, say "Would you like me to share more of what Pastor Bob teaches on this?"\n\n';
+    }
   }
-  
-  context += '⚠️ CRITICAL: Each YouTube URL must be on its own line for embedding to work!\n';
-  context += 'Do NOT wrap URLs in parentheses or combine with other text on same line.\n\n';
-  
-  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  context += 'SCRIPTURE REFERENCES FOUND:\n';
-  context += scriptures.length > 0 ? scriptures.slice(0, 5).join(', ') : 'None specific';
-  context += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  
-  if (illustrations.length > 0) {
-    context += 'ILLUSTRATION FROM PASTOR BOB:\n';
-    context += `"${illustrations[0].text}"\n`;
-    context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+
+  if (hasWebsite) {
+    context += '=== CHURCH WEBSITE INFO (Calvary Chapel East Anaheim) ===\n\n';
+    websiteResults.forEach((result, i) => {
+      context += `[${result.page || 'Church Info'}]:\n`;
+      context += `${result.text.substring(0, 800)}\n\n`;
+    });
+    context += 'Use the above church info to answer questions about service times, events, registrations, ministries, giving, and statement of faith.\n\n';
   }
-  
-  context += 'VIDEO SEGMENTS TO INCLUDE (use exact URLs):\n\n';
-  first3.forEach((result, i) => {
-    context += `Video ${i + 1}: ${result.timestamped_url}\n`;
-    context += `Summary: ${result.text.substring(0, 150)}...\n\n`;
-  });
-  context += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-  
-  if (hasMore) {
-    context += `\n📌 ${sermonResults.length - 3} more videos available if user says "more"\n`;
-  }
-  
+
   return context;
 }
 
@@ -398,8 +550,10 @@ app.post('/api/chat', async (req, res) => {
     
     // Check if we should search for relevant sermons
     let enhancedMessages = [...messages];
-    let sermonResults = [];  // Declare at function scope so it's available for video sending
-    let isMoreRequest = false;  // Track if user wants more clips
+    let sermonResults = [];
+    let illustrationResults = [];
+    let websiteResults = [];
+    let isMoreRequest = false;
     const lastUserMessage = messages[messages.length - 1];
     
     if (lastUserMessage && lastUserMessage.role === 'user') {
@@ -422,24 +576,49 @@ app.post('/api/chat', async (req, res) => {
         }
       }
       
-      // Search for relevant sermons (don't let this break the chat)
-      // For "more" requests, get additional results
-      try {
-        const numResults = isMoreRequest ? 12 : 6;  // Get more for "more" requests
-        sermonResults = await searchSermons(searchQuery, numResults);
-      } catch (searchError) {
-        console.log('Sermon search skipped due to error:', searchError.message);
-        sermonResults = [];
+      // Search using hybrid reranker first, fallback to direct Chroma
+      const numResults = isMoreRequest ? 12 : 6;
+      
+      const hybridResults = await searchHybrid(searchQuery, numResults);
+      if (hybridResults) {
+        sermonResults = hybridResults.sermons || [];
+        illustrationResults = hybridResults.illustrations || [];
+        websiteResults = hybridResults.website || [];
+        console.log(`Hybrid search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations, ${websiteResults.length} website`);
+      } else {
+        try {
+          sermonResults = await searchSermons(searchQuery, numResults);
+        } catch (searchError) {
+          console.log('Sermon search skipped due to error:', searchError.message);
+          sermonResults = [];
+        }
       }
       
-      if (sermonResults.length > 0) {
-        console.log(`Found ${sermonResults.length} relevant sermon segments`);
+      // Detect personal story queries and prepend pinned clips
+      const storyMatches = detectPersonalStoryQuery(searchQuery);
+      if (storyMatches.length > 0 && !isMoreRequest) {
+        const pinnedClips = [];
+        const pinnedVideoIds = new Set();
+        for (const storyKey of storyMatches) {
+          const story = PINNED_STORY_CLIPS[storyKey];
+          if (story) {
+            for (const clip of story.clips) {
+              pinnedClips.push(clip);
+              pinnedVideoIds.add(clip.video_id);
+            }
+          }
+        }
+        sermonResults = sermonResults.filter(r => !pinnedVideoIds.has(r.video_id));
+        sermonResults = [...pinnedClips, ...sermonResults];
+        console.log(`Pinned ${pinnedClips.length} personal story clips for: ${storyMatches.join(', ')}`);
+      }
+      
+      if (sermonResults.length > 0 || websiteResults.length > 0) {
+        console.log(`Found ${sermonResults.length} sermon segments, ${websiteResults.length} website results`);
         
-        // Add sermon context to the system message
-        const sermonContext = formatSermonContext(sermonResults, isMoreRequest);
+        const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults);
         console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
         
-        // Find and update the system message
         const systemMsgIndex = enhancedMessages.findIndex(m => m.role === 'system');
         if (systemMsgIndex >= 0) {
           enhancedMessages[systemMsgIndex] = {
@@ -481,17 +660,24 @@ app.post('/api/chat', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
     
-    // Search for relevant illustrations from Chroma Cloud
-    let illustrationResults = [];
-    if (lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest && illustrationCollection) {
+    // If hybrid search didn't provide illustrations, fall back to old illustration search
+    if ((!illustrationResults || illustrationResults.length === 0) && lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest && illustrationCollection) {
       try {
         const illResponse = await axios.post(`http://localhost:${PORT}/api/illustration/search`, {
           query: lastUserMessage.content,
           n_results: 3
         }, { timeout: 5000 });
-        illustrationResults = illResponse.data.results || [];
-        if (illustrationResults.length > 0) {
-          console.log(`Found ${illustrationResults.length} relevant illustrations from Chroma`);
+        const oldIllResults = illResponse.data.results || [];
+        if (oldIllResults.length > 0) {
+          illustrationResults = oldIllResults.map(ill => ({
+            title: ill.illustration || 'Illustration',
+            text: ill.text || '',
+            topics: ill.topics || [],
+            tone: ill.tone || '',
+            url: ill.video_url || '',
+            timestamp: ill.timestamp || ''
+          }));
+          console.log(`Found ${illustrationResults.length} illustrations from fallback search`);
         }
       } catch (err) {
         console.log('Illustration search error:', err.message);
@@ -501,11 +687,11 @@ app.post('/api/chat', async (req, res) => {
     // Send illustrations as separate event
     if (illustrationResults && illustrationResults.length > 0) {
       const illustrationsToSend = illustrationResults.map(ill => ({
-        title: ill.illustration || 'Illustration',
+        title: ill.title || ill.illustration || 'Illustration',
         text: ill.text || '',
         topics: ill.topics || [],
-        tone: ill.tone || '',
-        url: ill.video_url || '',
+        tone: ill.tone || ill.emotional_tone || '',
+        url: ill.url || ill.video_url || '',
         timestamp: ill.timestamp || ''
       }));
       console.log(`Sending ${illustrationsToSend.length} illustrations to client`);
