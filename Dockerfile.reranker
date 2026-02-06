@@ -13,4 +13,4 @@ COPY reranker_service.py .
 ENV PORT=5050
 
 # Run with gunicorn - use shell form to expand $PORT
-CMD gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --preload reranker_service:app
+CMD gunicorn --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class sync --log-level debug reranker_service:app
