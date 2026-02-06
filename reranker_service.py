@@ -111,11 +111,19 @@ def init_models():
     print("Reranker loaded")
 
     print("Connecting to Chroma Cloud...")
-    chroma_client = chromadb.CloudClient(
-        api_key=CHROMA_API_KEY,
-        tenant=CHROMA_TENANT,
-        database=CHROMA_DATABASE
-    )
+    print(f"  CHROMA_TENANT: {CHROMA_TENANT[:10]}..." if CHROMA_TENANT else "  CHROMA_TENANT: NOT SET")
+    print(f"  CHROMA_DATABASE: {CHROMA_DATABASE}" if CHROMA_DATABASE else "  CHROMA_DATABASE: NOT SET")
+    print(f"  CHROMA_API_KEY: {'set' if CHROMA_API_KEY else 'NOT SET'}")
+    
+    try:
+        chroma_client = chromadb.CloudClient(
+            api_key=CHROMA_API_KEY,
+            tenant=CHROMA_TENANT,
+            database=CHROMA_DATABASE
+        )
+    except Exception as e:
+        print(f"ERROR connecting to Chroma: {e}")
+        chroma_client = None
 
     try:
         sermon_collection = chroma_client.get_collection('sermon_segments_v2')
