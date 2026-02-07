@@ -9,8 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the reranker service
 COPY reranker_service.py .
 
-# Railway uses $PORT env var
-ENV PORT=5050
-
-# Run with gunicorn - use shell form to expand $PORT
-CMD gunicorn --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class sync --log-level debug reranker_service:app
+# Run with gunicorn
+CMD gunicorn --bind 0.0.0.0:${PORT:-8080} --timeout 600 --workers 1 reranker_service:app
