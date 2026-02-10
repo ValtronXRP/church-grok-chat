@@ -235,7 +235,7 @@ async function searchHybrid(query, nResults = 6, searchType = 'all') {
       return { sermons, illustrations, website };
     }
   } catch (err) {
-    console.log(`Reranker unavailable (${err.message}), falling back to direct Chroma`);
+    console.log(`Reranker unavailable (${err.message}), falling back to direct Chroma`, err.response?.status, err.response?.data);
   }
   return null;
 }
@@ -925,7 +925,7 @@ app.post('/api/sermon/search', async (req, res) => {
         return res.json({ query, count: formatted.length, results: formatted });
       }
     } catch (rerankerErr) {
-      console.log(`Sermon reranker fallback: ${rerankerErr.message}`);
+      console.log(`Sermon reranker fallback: ${rerankerErr.message}`, rerankerErr.response?.status, rerankerErr.response?.data);
     }
     res.json({ query, count: 0, results: [] });
   } catch (error) {
@@ -964,7 +964,7 @@ app.post('/api/illustration/search', async (req, res) => {
         return res.json({ query, count: formatted.length, results: formatted });
       }
     } catch (rerankerErr) {
-      console.log(`Illustration reranker fallback: ${rerankerErr.message}`);
+      console.log(`Illustration reranker fallback: ${rerankerErr.message}`, rerankerErr.response?.status, rerankerErr.response?.data);
     }
     res.json({ query, count: 0, results: [] });
   } catch (error) {
@@ -974,10 +974,22 @@ app.post('/api/illustration/search', async (req, res) => {
 });
 
 app.get('/api/sermon/health', async (req, res) => {
+  let rerankerStatus = 'unknown';
+  let rerankerError = null;
+  try {
+    const r = await axios.get(`${RERANKER_URL}/ping`, { timeout: 5000 });
+    rerankerStatus = r.data ? 'ok' : 'no_data';
+  } catch (e) {
+    rerankerStatus = 'error';
+    rerankerError = e.message;
+  }
   res.json({
     status: chromaClient ? 'ok' : 'not_configured',
     sermons: sermonCollection ? 'loaded' : 'not_loaded',
-    illustrations: illustrationCollection ? 'loaded' : 'not_loaded'
+    illustrations: illustrationCollection ? 'loaded' : 'not_loaded',
+    reranker_url: RERANKER_URL,
+    reranker: rerankerStatus,
+    reranker_error: rerankerError
   });
 });
 
