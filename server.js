@@ -62,7 +62,7 @@ const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const PORT = process.env.PORT || 3001;
 const SERMON_API_URL = process.env.SERMON_API_URL || 'http://localhost:5001';
-const RERANKER_URL = process.env.RERANKER_URL || 'http://localhost:5050';
+const RERANKER_URL = process.env.RERANKER_URL || 'http://127.0.0.1:5050';
 const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://') : '';
 
 // Initialize local sermon search
@@ -200,7 +200,7 @@ async function searchHybrid(query, nResults = 6, searchType = 'all') {
       type: searchType,
       n_results: nResults,
       n_candidates: 20
-    }, { timeout: 10000 });
+    }, { timeout: 120000 });
 
     if (response.data && response.data.results) {
       const results = response.data.results;
@@ -243,11 +243,11 @@ async function searchHybrid(query, nResults = 6, searchType = 'all') {
 async function searchSermons(query, nResults = 6) {
   if (!sermonCollection) {
     try {
-      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments_v2' });
       const sc = await sermonCollection.count();
-      console.log(`Lazy-loaded sermon_segments (${sc} segments)`);
+      console.log(`Loaded sermon_segments_v2 (${sc} segments)`);
     } catch (e) {
-      console.log('sermon_segments collection not available:', e.message);
+      console.log('sermon_segments_v2 collection not available:', e.message);
       return [];
     }
   }
@@ -294,7 +294,7 @@ async function searchSermons(query, nResults = 6) {
   } catch (err) {
     console.log('Sermon search error, retrying with fresh collection:', err.message);
     try {
-      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments_v2' });
       const results = await sermonCollection.query({ queryTexts: [query], nResults: nResults * 2 });
       const formatted = [];
       if (results.ids && results.ids[0]) {
@@ -409,9 +409,13 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
     return context;
   }
   
-  let context = '\n\n=== PASTOR BOB\'S ACTUAL CONTENT (USE THIS TO ANSWER) ===\n\n';
-  context += 'IMPORTANT: The content below IS from Pastor Bob\'s real teachings and his church. You MUST use it to answer.\n';
-  context += 'Say "Pastor Bob teaches..." and share the content. Do NOT say "I\'d need to check" - you HAVE the content right here.\n';
+  let context = '\n\n=== PASTOR BOB\'S ACTUAL SERMON CONTENT (YOU MUST USE THIS) ===\n\n';
+  context += 'CRITICAL INSTRUCTION: The segments below ARE Pastor Bob\'s real teachings. You MUST:\n';
+  context += '1. READ the content carefully and EXTRACT the answer from it\n';
+  context += '2. Say "Pastor Bob teaches that..." and then SHARE the actual content\n';
+  context += '3. Quote or paraphrase what he says in the segments\n';
+  context += '4. NEVER say "I\'d need to check" or "I don\'t have a specific teaching" - YOU HAVE THE CONTENT RIGHT HERE\n';
+  context += '5. If the user asks about a topic and ANY segment mentions it, USE THAT CONTENT to answer\n';
   context += 'Do NOT mention clips, sidebar, or videos in your answer.\n\n';
 
   if (hasSermons) {
@@ -863,15 +867,29 @@ async function initChromaCloud() {
   try {
     chromaClient = new CloudClient({ apiKey, tenant, database });
     try {
-      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+      sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments_v2' });
       const sc = await sermonCollection.count();
-      console.log(`Chroma Cloud: sermon_segments loaded (${sc} segments)`);
-    } catch (e) { console.log('sermon_segments not found:', e.message); }
+      console.log(`Chroma Cloud: sermon_segments_v2 loaded (${sc} segments)`);
+    } catch (e) {
+      console.log('sermon_segments_v2 not found, trying sermon_segments:', e.message);
+      try {
+        sermonCollection = await chromaClient.getCollection({ name: 'sermon_segments' });
+        const sc = await sermonCollection.count();
+        console.log(`Chroma Cloud: sermon_segments fallback loaded (${sc} segments)`);
+      } catch (e2) { console.log('sermon_segments also not found:', e2.message); }
+    }
     try {
-      illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v4' });
+      illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v5' });
       const ic = await illustrationCollection.count();
-      console.log(`Chroma Cloud: illustrations_v4 loaded (${ic} items)`);
-    } catch (e) { console.log('illustrations_v4 not found:', e.message); }
+      console.log(`Chroma Cloud: illustrations_v5 loaded (${ic} items)`);
+    } catch (e) {
+      console.log('illustrations_v5 not found, trying illustrations_v4:', e.message);
+      try {
+        illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v4' });
+        const ic = await illustrationCollection.count();
+        console.log(`Chroma Cloud: illustrations_v4 fallback loaded (${ic} items)`);
+      } catch (e2) { console.log('illustrations_v4 also not found:', e2.message); }
+    }
   } catch (e) {
     console.error('Chroma Cloud init error:', e.message);
   }
@@ -882,27 +900,34 @@ app.post('/api/sermon/search', async (req, res) => {
   try {
     const { query, n_results = 6 } = req.body;
     if (!query) return res.status(400).json({ error: 'Query required' });
-    if (!sermonCollection) return res.json({ query, results: [] });
-    const results = await sermonCollection.query({ queryTexts: [query], nResults: n_results });
-    const formatted = [];
-    if (results.ids && results.ids[0]) {
-      for (let i = 0; i < results.ids[0].length; i++) {
-        const meta = results.metadatas[0][i] || {};
-        const dist = results.distances ? results.distances[0][i] : 1;
-        formatted.push({
-          text: results.documents[0][i] || '',
-          title: meta.title || 'Sermon',
-          video_id: meta.video_id || '',
-          start_time: meta.start_time || '',
-          url: meta.url || '',
-          timestamped_url: meta.timestamped_url || meta.url || '',
-          relevance_score: 1 - dist,
-          main_topic: meta.main_topic || '',
-          summary: meta.summary || ''
-        });
+    try {
+      const rerankerResponse = await axios.post(`${RERANKER_URL}/search`, {
+        query,
+        type: 'sermons',
+        n_results: n_results,
+        n_candidates: 20
+      }, { timeout: 120000 });
+      if (rerankerResponse.data && rerankerResponse.data.results) {
+        const formatted = rerankerResponse.data.results
+          .filter(r => r.source === 'sermon')
+          .map(r => ({
+            text: r.text || '',
+            title: r.title || 'Sermon',
+            video_id: r.video_id || '',
+            start_time: r.start_time || '',
+            url: r.url || '',
+            timestamped_url: r.timestamped_url || r.url || '',
+            relevance_score: r.rerank_score || 0,
+            main_topic: r.main_topic || '',
+            summary: r.summary || ''
+          }));
+        console.log(`Sermon search via reranker: ${formatted.length} results for "${query}"`);
+        return res.json({ query, count: formatted.length, results: formatted });
       }
+    } catch (rerankerErr) {
+      console.log(`Sermon reranker fallback: ${rerankerErr.message}`);
     }
-    res.json({ query, count: formatted.length, results: formatted });
+    res.json({ query, count: 0, results: [] });
   } catch (error) {
     console.error('Sermon search error:', error.message);
     res.status(500).json({ error: 'Sermon search failed', results: [] });
@@ -913,96 +938,37 @@ app.post('/api/illustration/search', async (req, res) => {
   try {
     const { query, n_results = 3 } = req.body;
     if (!query) return res.status(400).json({ error: 'Query required' });
-    if (!illustrationCollection) return res.json({ query, results: [] });
-    const fetchMore = Math.min(n_results * 3, 10);
-    const results = await illustrationCollection.query({ queryTexts: [query], nResults: fetchMore });
-    const formatted = [];
-    if (results.ids && results.ids[0]) {
-      const queryLower = query.toLowerCase();
-      const stopWords = new Set(['what','does','pastor','bob','teach','about','how','can','the','and','for','with','that','this','from','have','more','when','why','who','which','there','their','been','would','could','should','going','into','also','just','very','really','much','some','only','than','then','them','these','those','will','being','doing','want','need','know','think','make','like','look','help','give','most','find','here','thing','many','well','back','because','people','tell','say','ask','use','all','way','its','get','got','are','was','were','has','had','not','but','our','out','you','your','his','her','she','him','did','one','two']);
-      const veryCommon = new Set(['god','jesus','bible','lord','christ','faith','pray','prayer','life','love','sin','church','believe','hope','spirit','holy','heaven','hell','heart','soul','world','truth','word','grace']);
-      const queryWords = queryLower.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
-      const specificWords = queryWords.filter(w => !veryCommon.has(w));
-      const commonWords = queryWords.filter(w => veryCommon.has(w));
-      
-      for (let i = 0; i < results.ids[0].length; i++) {
-        const meta = results.metadatas[0][i] || {};
-        const dist = results.distances ? results.distances[0][i] : 1;
-        const topics = meta.topics ? meta.topics.split(',') : [];
-        const topicsLower = topics.map(t => t.toLowerCase().trim());
-        const docText = (results.documents[0][i] || '').toLowerCase();
-        const summary = (meta.summary || '').toLowerCase();
-        
-        let relevanceScore = 0;
-        let distinctMatches = 0;
-        const prefixMatch = (text, word) => {
-          if (text.includes(word)) return true;
-          if (word.length >= 4) {
-            const root = word.substring(0, Math.max(4, word.length - 2));
-            const words = text.split(/[\s,]+/);
-            return words.some(w => w.startsWith(root));
-          }
-          return false;
-        };
-        for (const word of specificWords) {
-          let matched = false;
-          if (topicsLower.some(t => prefixMatch(t, word))) { relevanceScore += 5; matched = true; }
-          if (prefixMatch(summary, word)) { relevanceScore += 3; matched = true; }
-          const wordRegex = new RegExp('\\b' + word.substring(0, Math.max(4, word.length - 2)), 'i');
-          if (wordRegex.test(docText)) { relevanceScore += 1; matched = true; }
-          if (matched) distinctMatches++;
-        }
-        for (const word of commonWords) {
-          if (topicsLower.some(t => prefixMatch(t, word))) relevanceScore += 1;
-          if (prefixMatch(summary, word)) relevanceScore += 1;
-        }
-        
-        const minDistinct = specificWords.length >= 2 ? 2 : 1;
-        if (distinctMatches >= minDistinct && relevanceScore >= 6) {
-          formatted.push({
-            illustration: meta.summary || '',
-            type: meta.type || '',
-            text: results.documents[0][i] || '',
-            video_url: meta.youtube_url || '',
-            timestamp: meta.timestamp || '',
-            topics: topics,
-            tone: meta.emotional_tone || '',
-            video_id: meta.video_id || '',
-            relevance_score: 1 - dist,
-            topic_score: relevanceScore
-          });
-        }
+    try {
+      const rerankerResponse = await axios.post(`${RERANKER_URL}/search`, {
+        query,
+        type: 'illustrations',
+        n_results: n_results,
+        n_candidates: 20
+      }, { timeout: 120000 });
+      if (rerankerResponse.data && rerankerResponse.data.results) {
+        const formatted = rerankerResponse.data.results
+          .filter(r => r.source === 'illustration')
+          .map(r => ({
+            illustration: r.summary || r.title || '',
+            type: r.type || '',
+            text: r.text || '',
+            video_url: r.youtube_url || r.url || '',
+            timestamp: r.start_time || r.timestamp || '',
+            topics: r.topics ? r.topics.split(',') : [],
+            tone: r.emotional_tone || r.tone || '',
+            video_id: r.video_id || '',
+            relevance_score: r.rerank_score || 0,
+            topic_score: 10
+          }));
+        console.log(`Illustration search via reranker: ${formatted.length} results for "${query}"`);
+        return res.json({ query, count: formatted.length, results: formatted });
       }
-      formatted.sort((a, b) => (b.topic_score + b.relevance_score) - (a.topic_score + a.relevance_score));
+    } catch (rerankerErr) {
+      console.log(`Illustration reranker fallback: ${rerankerErr.message}`);
     }
-    const limited = formatted.slice(0, n_results);
-    console.log(`Illustration search: "${query}" -> ${formatted.length} relevant of ${fetchMore} fetched, returning ${limited.length}`);
-    res.json({ query, count: limited.length, results: limited });
+    res.json({ query, count: 0, results: [] });
   } catch (error) {
     console.error('Illustration search error:', error.message);
-    try {
-      console.log('Retrying with fresh collection reference...');
-      illustrationCollection = await chromaClient.getCollection({ name: 'illustrations_v4' });
-      const retryResults = await illustrationCollection.query({ queryTexts: [req.body.query], nResults: 3 });
-      if (retryResults.ids && retryResults.ids[0] && retryResults.ids[0].length > 0) {
-        const retryFormatted = retryResults.ids[0].map((id, i) => ({
-          illustration: (retryResults.metadatas[0][i] || {}).summary || '',
-          type: (retryResults.metadatas[0][i] || {}).type || '',
-          text: retryResults.documents[0][i] || '',
-          video_url: (retryResults.metadatas[0][i] || {}).youtube_url || '',
-          timestamp: (retryResults.metadatas[0][i] || {}).timestamp || '',
-          topics: ((retryResults.metadatas[0][i] || {}).topics || '').split(','),
-          tone: (retryResults.metadatas[0][i] || {}).emotional_tone || '',
-          video_id: (retryResults.metadatas[0][i] || {}).video_id || '',
-          relevance_score: retryResults.distances ? 1 - retryResults.distances[0][i] : 0,
-          topic_score: 5
-        }));
-        console.log(`Retry succeeded: ${retryFormatted.length} results`);
-        return res.json({ query: req.body.query, count: retryFormatted.length, results: retryFormatted.slice(0, req.body.n_results || 3) });
-      }
-    } catch (retryErr) {
-      console.error('Retry also failed:', retryErr.message);
-    }
     res.status(500).json({ error: 'Illustration search failed', results: [] });
   }
 });

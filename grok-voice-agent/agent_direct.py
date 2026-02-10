@@ -41,38 +41,38 @@ def time_to_seconds(time_str):
     return 0
 
 async def search_sermons_api(query, n_results=6):
-    """Search ChromaDB API (132K+ segments)"""
+    """Search via reranker (768-dim mpnet + cross-encoder)"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{SERMON_API_URL}/api/sermon/search",
-                json={"query": query, "n_results": n_results},
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{RERANKER_URL}/search",
+                json={"query": query, "type": "sermons", "n_results": n_results, "n_candidates": 20},
+                timeout=aiohttp.ClientTimeout(total=120)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    results = data.get('results', [])
-                    logger.info(f"ChromaDB found {len(results)} segments for: {query}")
+                    results = [r for r in data.get('results', []) if r.get('source') == 'sermon']
+                    logger.info(f"Reranker found {len(results)} sermon segments for: {query}")
                     return results
     except Exception as e:
-        logger.warning(f"ChromaDB API error: {e}")
+        logger.warning(f"Reranker API error: {e}")
     return None
 
 async def search_illustrations_api(query, n_results=3):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{SERMON_API_URL}/api/illustration/search",
-                json={"query": query, "n_results": n_results},
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{RERANKER_URL}/search",
+                json={"query": query, "type": "illustrations", "n_results": n_results, "n_candidates": 20},
+                timeout=aiohttp.ClientTimeout(total=120)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    results = data.get('results', [])
-                    logger.info(f"Found {len(results)} illustrations for: {query}")
+                    results = [r for r in data.get('results', []) if r.get('source') == 'illustration']
+                    logger.info(f"Reranker found {len(results)} illustrations for: {query}")
                     return results
     except Exception as e:
-        logger.warning(f"Illustration API error: {e}")
+        logger.warning(f"Illustration reranker error: {e}")
     return []
 
 def search_sermons_local(query, n_results=5):
@@ -118,7 +118,7 @@ async def search_hybrid(query, n_results=6, search_type='all'):
             async with session.post(
                 f"{RERANKER_URL}/search",
                 json={"query": query, "type": search_type, "n_results": n_results, "n_candidates": 20},
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=120)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -161,12 +161,14 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant based on Pastor Bob Kopeny's teachings.
 
-=== HOW TO ANSWER ===
-1. When sermon content is provided to you, ALWAYS use it to give a substantive answer. Say "Pastor Bob teaches..." and share the content.
-2. For personal/biographical questions, use the VERIFIED FACTS below.
-3. Only if NO sermon content is provided AND the topic isn't in verified facts, give a biblical answer.
-4. NEVER say "I'd need to check" or "I don't have" when sermon content IS provided - that content IS from his sermons.
-5. NEVER invent or guess information not in the provided content or verified facts.
+=== HOW TO ANSWER (CRITICAL) ===
+1. When sermon content is provided, you MUST use it. READ the segments carefully and EXTRACT the answer.
+2. Say "Pastor Bob teaches that..." and then QUOTE or PARAPHRASE what's in the segments.
+3. The sermon segments ARE his actual teachings - treat them as the authoritative source.
+4. NEVER say "I'd need to check" or "I don't have a specific teaching" when content IS provided.
+5. For personal/biographical questions, use the VERIFIED FACTS below.
+6. Only if NO sermon content is provided AND the topic isn't in verified facts, give a biblical answer.
+7. NEVER invent information - but DO use what's in the provided segments.
 
 === VERIFIED FACTS ABOUT PASTOR BOB (ONLY USE THESE) ===
 
@@ -208,11 +210,12 @@ TESTIMONY (HOW BOB WAS SAVED):
 Say "First John" NOT "one John", "Second Corinthians" NOT "two Corinthians", etc.
 
 === HOW TO RESPOND ===
-1. ONLY share information from the sermon content provided OR the verified facts above
-2. For theological questions: ONLY state Pastor Bob's position if it's in the sermon content provided
-3. For complex topics (like baptism of the Holy Spirit): Say "Pastor Bob has taught on this - let me share what's in this specific teaching" and ONLY quote what's provided
-4. If asked about something not in the content: Share what the Bible says, or say "I'd need to check Pastor Bob's specific sermons on that"
-5. NEVER mention clips, sidebar, or videos
+1. When sermon content is provided, USE IT to answer. Read each segment and extract relevant information.
+2. For theological questions: Quote or paraphrase what Pastor Bob says in the provided segments.
+3. For complex topics: Say "Pastor Bob teaches that..." and share what's in the content. Don't hedge or deflect.
+4. If the segments mention the topic AT ALL, use that content to give a substantive answer.
+5. ONLY say "I'd need to check" if literally NO sermon content was provided on the topic.
+6. NEVER mention clips, sidebar, or videos in your verbal response.
 
 === ABSOLUTE RULES ===
 - NEVER invent stories, quotes, or teachings
@@ -413,11 +416,15 @@ async def entrypoint(ctx: JobContext):
                         "text": r.get('text', '')[:200]
                     })
 
-                sermon_context = "\n\nPASTOR BOB'S ACTUAL SERMON CONTENT:\n"
-                for i, r in enumerate(filtered_results[:3]):
-                    sermon_context += f"\n[Segment {i+1}] \"{r.get('title', 'Sermon')}\":\n"
-                    sermon_context += f'"{r.get("text", "")[:1200]}"\n'
-                sermon_context += "\nYou MUST use this content to answer. Say 'Pastor Bob teaches...' and share what's in the segments above. Do NOT say you need to check or don't have teachings."
+                sermon_context = "\n\n=== PASTOR BOB'S ACTUAL SERMON CONTENT (YOU MUST USE THIS) ===\n"
+                sermon_context += "CRITICAL: These segments ARE Pastor Bob's real teachings. You MUST:\n"
+                sermon_context += "1. READ the content and EXTRACT the answer from it\n"
+                sermon_context += "2. Say 'Pastor Bob teaches that...' and SHARE the actual content\n"
+                sermon_context += "3. NEVER say 'I'd need to check' - YOU HAVE THE CONTENT RIGHT HERE\n\n"
+                for i, r in enumerate(filtered_results[:5]):
+                    sermon_context += f"[Segment {i+1}] \"{r.get('title', 'Sermon')}\":\n"
+                    sermon_context += f'"{r.get("text", "")[:1200]}"\n\n'
+                sermon_context += "USE THE CONTENT ABOVE TO ANSWER. Do NOT say you need to check or don't have teachings."
 
             if website_results:
                 sermon_context += "\n\n=== CHURCH WEBSITE INFO (Calvary Chapel East Anaheim) ===\n"
