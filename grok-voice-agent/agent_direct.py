@@ -451,7 +451,7 @@ async def entrypoint(ctx: JobContext):
                     logger.warning(f"Could not send context: {e}")
             else:
                 try:
-                    context_instruction = f"The user asked: {user_text}\n\nAnswer based on biblical principles. Say 'The Bible teaches...' and give a helpful, substantive answer."
+                    context_instruction = f"The user asked: {user_text}\n\nAnswer the question directly from the Bible. Do NOT say you need to check, do NOT say you lack information. Just give a warm, helpful biblical answer."
                     await session.generate_reply(instructions=context_instruction)
                     logger.info("No sermon results - answering from Bible")
                 except Exception as e:

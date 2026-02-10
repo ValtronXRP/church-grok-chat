@@ -391,7 +391,7 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
   const hasWebsite = websiteResults && websiteResults.length > 0;
 
   if (!hasSermons && !hasWebsite) {
-    return '\n\nNo specific sermon segments found. Answer based on biblical principles. Do NOT mention that no sermons were found - just give a helpful biblical answer.\n';
+    return '\n\nAnswer the question directly from the Bible. Do NOT say you need to check, do NOT say you lack information, do NOT mention sermons or searching. Just give a warm, helpful biblical answer.\n';
   }
   
   if (isMoreRequest && hasSermons) {
