@@ -13,15 +13,22 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Install PyTorch CPU-only (for reranker)
+RUN pip install --no-cache-dir torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+
 # Copy package files
 COPY package*.json ./
 COPY grok-voice-agent/requirements.txt ./grok-voice-agent/
 COPY chromadb_api/requirements.txt ./chromadb_api/
+COPY reranker_requirements.txt ./reranker_requirements.txt
 
-# Install dependencies
+# Install all dependencies in a single pip resolve to avoid version conflicts
 RUN npm install
-RUN pip install -r grok-voice-agent/requirements.txt
-RUN pip install -r chromadb_api/requirements.txt
+COPY combined_requirements.txt ./combined_requirements.txt
+RUN pip install --no-cache-dir -r combined_requirements.txt
+
+# Pre-download reranker models into the image
+RUN python3 -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('sentence-transformers/all-mpnet-base-v2'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
 
 # Copy application files
 COPY . .
@@ -30,7 +37,7 @@ COPY . .
 RUN chmod +x start.sh
 
 # Expose ports
-EXPOSE 3000 5001
+EXPOSE 3000 5001 5050
 
 # Start all services
 CMD ["bash", "start.sh"]
