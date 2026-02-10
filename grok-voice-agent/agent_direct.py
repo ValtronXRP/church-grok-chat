@@ -272,6 +272,122 @@ def detect_personal_story(query):
 class APBAssistant(Agent):
     def __init__(self):
         super().__init__(instructions=PASTOR_BOB_INSTRUCTIONS)
+        self._room = None
+        self._all_sermon_results = []
+        self._current_sermon_results = []
+        self._last_query = None
+
+    async def on_user_turn_completed(self, turn_ctx, new_message):
+        user_text = ""
+        if hasattr(new_message, 'text_content'):
+            user_text = new_message.text_content
+        elif hasattr(new_message, 'content'):
+            content = new_message.content
+            if isinstance(content, str):
+                user_text = content
+            elif isinstance(content, list):
+                for c in content:
+                    if isinstance(c, str):
+                        user_text += c
+                    elif hasattr(c, 'text'):
+                        user_text += c.text
+                    elif hasattr(c, 'transcript'):
+                        user_text += c.transcript
+        
+        if not user_text:
+            return
+        
+        logger.info(f"on_user_turn_completed: '{user_text[:80]}'")
+        
+        import re
+        def filter_results(results):
+            filtered = []
+            for r in results:
+                title = (r.get('title') or '').lower()
+                text = (r.get('text') or '').lower()
+                if title in ['unknown sermon', 'unknown', '']:
+                    continue
+                if any(ind in title for ind in ['worship song', 'hymn', 'music video', 'singing', 'choir']):
+                    continue
+                if len(text) < 50:
+                    continue
+                worship_count = len(re.findall(r'\b(la la|hallelujah|glory glory|praise him)\b', text, re.I))
+                if worship_count > 2:
+                    continue
+                filtered.append(r)
+            return filtered
+        
+        filtered_results = []
+        website_results = []
+        illustration_results = []
+        
+        hybrid = await search_hybrid(user_text, 10)
+        if hybrid:
+            raw_sermons = hybrid.get('sermons', [])
+            filtered_results = filter_results(raw_sermons)
+            illustration_results = hybrid.get('illustrations', [])
+            website_results = hybrid.get('website', [])
+            logger.info(f"Search: {len(filtered_results)} sermons, {len(illustration_results)} illustrations")
+        else:
+            results = await search_sermons(user_text, 10)
+            filtered_results = filter_results(results)
+            illustration_results = await search_illustrations_api(user_text, 3) or []
+        
+        story_matches = detect_personal_story(user_text)
+        if story_matches:
+            pinned = []
+            pinned_vids = set()
+            for sk in story_matches:
+                story = PINNED_STORY_CLIPS.get(sk)
+                if story:
+                    for clip in story["clips"]:
+                        pinned.append(clip)
+                        pinned_vids.add(clip["video_id"])
+            filtered_results = [r for r in filtered_results if r.get("video_id") not in pinned_vids]
+            filtered_results = pinned + filtered_results
+        
+        self._all_sermon_results = filtered_results
+        self._current_sermon_results = filtered_results[:3]
+        self._last_query = user_text
+        
+        if self._room:
+            for r in filtered_results[:3]:
+                await send_data_message(self._room, "sermon_reference", {
+                    "title": r.get('title', 'Sermon'),
+                    "url": r.get('timestamped_url', r.get('url', '')),
+                    "timestamp": r.get('start_time', ''),
+                    "text": r.get('text', '')[:200]
+                })
+            for ill in illustration_results:
+                await send_data_message(self._room, "illustration", {
+                    "title": ill.get('illustration', ill.get('title', ill.get('summary', 'Illustration'))),
+                    "text": ill.get('text', '')[:300],
+                    "url": ill.get('video_url', ill.get('youtube_url', ill.get('url', ''))),
+                    "illustration_type": ill.get('type', ''),
+                    "tone": ill.get('tone', ill.get('emotional_tone', ''))
+                })
+        
+        if filtered_results or website_results:
+            sermon_context = "\n\n=== PASTOR BOB'S ACTUAL SERMON CONTENT (USE THIS TO ANSWER) ===\n\n"
+            for i, r in enumerate(filtered_results[:5]):
+                sermon_context += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
+                sermon_context += f'"{r.get("text", "")[:1200]}"\n\n'
+            if website_results:
+                sermon_context += "\n=== CHURCH WEBSITE INFO ===\n"
+                for wr in website_results[:2]:
+                    sermon_context += f"[{wr.get('page', 'Church Info')}]: {wr.get('text', '')[:600]}\n"
+            sermon_context += "\nUSE THE CONTENT ABOVE. Say 'Pastor Bob teaches...' and share what he says."
+            
+            try:
+                turn_ctx.add_message(role="system", content=sermon_context)
+                logger.info(f"Injected sermon context ({len(filtered_results)} sermons) into chat context")
+            except Exception as e:
+                logger.warning(f"Could not add to turn_ctx: {e}, trying generate_reply")
+        else:
+            try:
+                turn_ctx.add_message(role="system", content="\nAnswer the question directly from the Bible. Be warm and helpful.")
+            except Exception as e:
+                logger.warning(f"Could not add fallback to turn_ctx: {e}")
 
 async def send_data_message(room, message_type, data):
     try:
@@ -308,143 +424,8 @@ async def entrypoint(ctx: JobContext):
     
     session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
     
-    def filter_sermon_results(results):
-        """Filter out songs, unknown titles, and non-sermon content"""
-        filtered = []
-        for r in results:
-            title = (r.get('title') or '').lower()
-            text = (r.get('text') or '').lower()
-            
-            # Skip unknown/untitled
-            if title in ['unknown sermon', 'unknown', '']:
-                continue
-            
-            # Skip songs/music
-            song_indicators = ['worship song', 'hymn', 'music video', 'singing', 'choir']
-            if any(ind in title for ind in song_indicators):
-                continue
-            
-            # Skip very short text
-            if len(text) < 50:
-                continue
-            
-            # Skip repeated worship phrases (likely lyrics)
-            import re
-            worship_count = len(re.findall(r'\b(la la|hallelujah|glory glory|praise him)\b', text, re.I))
-            if worship_count > 2:
-                continue
-            
-            filtered.append(r)
-        return filtered
-    
-    async def handle_user_query(user_text):
-        nonlocal current_sermon_results, last_query, all_sermon_results
-        user_lower = user_text.lower().strip()
-        is_more_request = user_lower in ['more', 'more links', 'show more', 'more clips']
-        
-        sermon_context = ""
-        
-        if is_more_request and all_sermon_results and len(all_sermon_results) > 3:
-            additional = all_sermon_results[3:6]
-            if additional:
-                current_sermon_results = additional
-                logger.info(f"Showing {len(additional)} additional sermon segments")
-                for r in additional:
-                    await send_data_message(ctx.room, "sermon_reference", {
-                        "title": r.get('title', 'Sermon'),
-                        "url": r.get('timestamped_url', r.get('url', '')),
-                        "timestamp": r.get('start_time', ''),
-                        "text": r.get('text', '')[:200]
-                    })
-            else:
-                logger.info("No more sermon segments available")
-        else:
-            filtered_results = []
-            website_results = []
-            illustration_results = []
-
-            hybrid = await search_hybrid(user_text, 10)
-            if hybrid:
-                raw_sermons = hybrid.get('sermons', [])
-                logger.info(f"Hybrid returned {len(raw_sermons)} raw sermons")
-                filtered_results = filter_sermon_results(raw_sermons)
-                logger.info(f"After filtering: {len(filtered_results)} sermons")
-                illustration_results = hybrid.get('illustrations', [])
-                website_results = hybrid.get('website', [])
-            else:
-                logger.info("Hybrid failed, using fallback search")
-                results = await search_sermons(user_text, 10)
-                filtered_results = filter_sermon_results(results)
-                illustration_results = await search_illustrations_api(user_text, 3) or []
-
-            story_matches = detect_personal_story(user_text)
-            if story_matches:
-                pinned = []
-                pinned_vids = set()
-                for sk in story_matches:
-                    story = PINNED_STORY_CLIPS.get(sk)
-                    if story:
-                        for clip in story["clips"]:
-                            pinned.append(clip)
-                            pinned_vids.add(clip["video_id"])
-                filtered_results = [r for r in filtered_results if r.get("video_id") not in pinned_vids]
-                filtered_results = pinned + filtered_results
-                logger.info(f"Pinned {len(pinned)} personal story clips for: {story_matches}")
-
-            all_sermon_results = filtered_results
-            current_sermon_results = filtered_results[:3]
-            last_query["text"] = user_text
-
-            if filtered_results:
-                logger.info(f"Showing {len(filtered_results)} sermon segments (first 3)")
-                for r in filtered_results[:3]:
-                    await send_data_message(ctx.room, "sermon_reference", {
-                        "title": r.get('title', 'Sermon'),
-                        "url": r.get('timestamped_url', r.get('url', '')),
-                        "timestamp": r.get('start_time', ''),
-                        "text": r.get('text', '')[:200]
-                    })
-
-                sermon_context = "\n\n=== PASTOR BOB'S ACTUAL SERMON CONTENT (YOU MUST USE THIS) ===\n"
-                sermon_context += "CRITICAL: These segments ARE Pastor Bob's real teachings. You MUST:\n"
-                sermon_context += "1. READ the content and EXTRACT the answer from it\n"
-                sermon_context += "2. Say 'Pastor Bob teaches that...' and SHARE the actual content\n"
-                sermon_context += "3. NEVER say 'I'd need to check' - YOU HAVE THE CONTENT RIGHT HERE\n\n"
-                for i, r in enumerate(filtered_results[:5]):
-                    sermon_context += f"[Segment {i+1}] \"{r.get('title', 'Sermon')}\":\n"
-                    sermon_context += f'"{r.get("text", "")[:1200]}"\n\n'
-                sermon_context += "USE THE CONTENT ABOVE TO ANSWER. Do NOT say you need to check or don't have teachings."
-
-            if website_results:
-                sermon_context += "\n\n=== CHURCH WEBSITE INFO (Calvary Chapel East Anaheim) ===\n"
-                for wr in website_results[:2]:
-                    sermon_context += f"[{wr.get('page', 'Church Info')}]: {wr.get('text', '')[:600]}\n"
-                sermon_context += "Use this church info for questions about service times, events, registrations, ministries, giving, statement of faith.\n"
-
-            if illustration_results:
-                for ill in illustration_results:
-                    await send_data_message(ctx.room, "illustration", {
-                        "title": ill.get('illustration', ill.get('title', ill.get('summary', 'Illustration'))),
-                        "text": ill.get('text', '')[:300],
-                        "url": ill.get('video_url', ill.get('youtube_url', ill.get('url', ''))),
-                        "illustration_type": ill.get('type', ''),
-                        "tone": ill.get('tone', ill.get('emotional_tone', ''))
-                    })
-
-            if sermon_context and (filtered_results or website_results):
-                try:
-                    context_instruction = f"The user asked: {user_text}\n\n{sermon_context}\n\nUse the content above to give a substantive answer. Say 'Pastor Bob teaches...' naturally. Do NOT mention clips, videos, or sidebar."
-                    await session.generate_reply(instructions=context_instruction)
-                    logger.info(f"Sent context to LLM ({len(filtered_results)} sermons, {len(website_results)} website)")
-                except Exception as e:
-                    logger.warning(f"Could not send context: {e}")
-            else:
-                try:
-                    context_instruction = f"The user asked: {user_text}\n\nAnswer the question directly from the Bible. Do NOT say you need to check, do NOT say you lack information. Just give a warm, helpful biblical answer."
-                    await session.generate_reply(instructions=context_instruction)
-                    logger.info("No sermon results - answering from Bible")
-                except Exception as e:
-                    logger.warning(f"Could not generate reply: {e}")
+    apb_agent = APBAssistant()
+    apb_agent._room = ctx.room
     
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
@@ -452,11 +433,9 @@ async def entrypoint(ctx: JobContext):
             user_text = event.transcript
             logger.info(f"USER SAID: {user_text}")
             asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
-            asyncio.create_task(handle_user_query(user_text))
     
     @session.on("conversation_item_added")
     def on_conversation_item(event):
-        nonlocal current_sermon_results, last_sent_message
         try:
             item = event.item
             role = getattr(item, 'role', None)
@@ -480,15 +459,16 @@ async def entrypoint(ctx: JobContext):
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
                     response_with_links = text
-                    if current_sermon_results:
+                    if apb_agent._current_sermon_results:
                         response_with_links += "\n\nRelated sermon videos:\n"
-                        for r in current_sermon_results:
-                            response_with_links += f"- {r['title']} ({r['start_time']}): {r['timestamped_url']}\n"
+                        for r in apb_agent._current_sermon_results:
+                            url = r.get('timestamped_url', r.get('url', ''))
+                            response_with_links += f"- {r.get('title', 'Sermon')} ({r.get('start_time', '')}): {url}\n"
                     asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": response_with_links}))
         except Exception as e:
             logger.error(f"Error in conversation_item_added: {e}")
 
-    await session.start(room=ctx.room, agent=APBAssistant())
+    await session.start(room=ctx.room, agent=apb_agent)
     logger.info("Session started")
     
     greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
