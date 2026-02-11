@@ -2413,16 +2413,9 @@ TESTIMONY (HOW BOB WAS SAVED):
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     if (event.results[i].isFinal) {
                         const transcript = event.results[i][0].transcript.trim();
-                        if (transcript && transcript.length > 2 && isConnected && room && room.localParticipant) {
+                        if (transcript && transcript.length > 2) {
                             log('Browser STT: ' + transcript, 'info');
-                            try {
-                                const encoder = new TextEncoder();
-                                const queryData = encoder.encode(JSON.stringify({ type: 'user_query', text: transcript }));
-                                await room.localParticipant.publishData(queryData, { reliable: true });
-                                log('Sent speech transcript to voice agent for sermon search', 'info');
-                            } catch (e) {
-                                log('Failed to send speech transcript: ' + e, 'warning');
-                            }
+                            handleVoiceQuery(transcript);
                         }
                     }
                 }
@@ -2448,6 +2441,92 @@ TESTIMONY (HOW BOB WAS SAVED):
             }
         }
         
+        async function handleVoiceQuery(transcript) {
+            log('Voice query: ' + transcript, 'info');
+            addMessage(transcript, 'user');
+            conversationHistory.push({ role: 'user', content: transcript });
+            showTyping();
+
+            try {
+                const response = await fetch(GROK_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: conversationHistory,
+                        model: 'grok-3',
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+
+                if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                let currentMessage = null;
+
+                hideTyping();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.sermon_videos) {
+                                    parsed.sermon_videos.forEach(video => {
+                                        addVideoToSidebar(video.title, video.url, video.timestamp, video.text);
+                                    });
+                                    continue;
+                                }
+                                if (parsed.illustrations) {
+                                    parsed.illustrations.forEach(ill => {
+                                        addIllustrationToSidebar(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
+                                    });
+                                    continue;
+                                }
+                                if (parsed.choices?.[0]?.delta?.content) {
+                                    fullResponse += parsed.choices[0].delta.content;
+                                    if (!currentMessage) {
+                                        currentMessage = document.createElement('div');
+                                        currentMessage.className = 'message agent';
+                                        document.getElementById('chatMessages').appendChild(currentMessage);
+                                    }
+                                    currentMessage.innerHTML = formatMessageText(fullResponse);
+                                    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+
+                if (fullResponse) {
+                    conversationHistory.push({ role: 'assistant', content: fullResponse });
+                    log('Text agent response received, sending to voice agent', 'info');
+
+                    if (isConnected && room && room.localParticipant) {
+                        const encoder = new TextEncoder();
+                        const speakData = encoder.encode(JSON.stringify({
+                            type: 'speak_answer',
+                            text: fullResponse
+                        }));
+                        await room.localParticipant.publishData(speakData, { reliable: true });
+                        log('Sent speak_answer to voice agent', 'success');
+                    }
+                }
+            } catch (error) {
+                log('Voice query error: ' + error.message, 'error');
+                hideTyping();
+                addMessage('Failed to get answer. Please try again.', 'system');
+            }
+        }
+
         function stopBrowserSpeechRecognition() {
             if (browserRecognition) {
                 try { browserRecognition.stop(); } catch(e) {}

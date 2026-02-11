@@ -2,8 +2,6 @@ import asyncio
 import logging
 import os
 import json
-import re
-import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,98 +12,6 @@ logger = logging.getLogger("apb")
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import openai
-
-RERANKER_URL = os.environ.get('RERANKER_URL', 'http://localhost:5050')
-
-PINNED_STORY_CLIPS = {
-    "becky_story": {
-        "keywords": ["becky", "wife", "how did bob meet", "how did pastor bob meet", "how they met",
-                      "bob and becky", "bob meet becky", "married", "engagement", "how bob met",
-                      "love story", "bob's wife", "pastor bob's wife", "when did bob get married",
-                      "bob get married", "who is bob married to", "who did bob marry", "becky kopeny"],
-        "clips": [
-            {
-                "title": "How To Press On (03/26/2017)",
-                "url": "https://www.youtube.com/watch?v=sGIJP13TxPQ",
-                "timestamped_url": "https://www.youtube.com/watch?v=sGIJP13TxPQ&t=2382s",
-                "start_time": "39:42",
-                "video_id": "sGIJP13TxPQ",
-                "text": "Pastor Bob shares the full story of how he met Becky - from meeting her briefly at church, to God putting her name in his mind at the intersection of Chapman and Kramer while driving to seminary, to the Lord revealing she had gotten engaged the night before, to God telling him to propose three weeks after their first date."
-            },
-            {
-                "title": "Who Cares? (12/10/2017)",
-                "url": "https://www.youtube.com/watch?v=BRd6nCCTLKI",
-                "timestamped_url": "https://www.youtube.com/watch?v=BRd6nCCTLKI&t=2014s",
-                "start_time": "33:34",
-                "video_id": "BRd6nCCTLKI",
-                "text": "Pastor Bob shares that when he first met Becky she was engaged to be married. They were just friends and he encouraged her spiritually."
-            }
-        ]
-    },
-    "testimony": {
-        "keywords": ["testimony", "how was bob saved", "when was bob saved", "how did bob get saved",
-                      "bob's testimony", "pastor bob saved", "bob come to christ", "bob receive christ",
-                      "when did bob become a christian", "how did bob become", "bob's salvation",
-                      "bob get saved", "pastor bob's testimony", "bob become a believer",
-                      "how bob got saved", "when bob got saved", "bob's faith journey",
-                      "how did pastor bob come to know", "fred", "jeff maples", "gene schaeffer",
-                      "jr high camp", "junior high camp", "8th grade"],
-        "clips": [
-            {
-                "title": "Be Faithful - 2 Timothy 1",
-                "url": "https://www.youtube.com/watch?v=72R6uNs2ka4",
-                "timestamped_url": "https://www.youtube.com/watch?v=72R6uNs2ka4",
-                "start_time": "",
-                "video_id": "72R6uNs2ka4",
-                "text": "Pastor Bob shares his testimony - Jeff Maples and Gene Schaeffer shared Christ with him at a Jr. High church camp when he was 13. His friend Fred invited him. They shared for five minutes and asked if he would receive Christ."
-            }
-        ]
-    }
-}
-
-def detect_personal_story(query):
-    q = query.lower()
-    matches = []
-    for story_key, story in PINNED_STORY_CLIPS.items():
-        for kw in story["keywords"]:
-            if kw in q:
-                matches.append(story_key)
-                break
-    return matches
-
-def filter_results(results):
-    filtered = []
-    for r in results:
-        title = (r.get('title') or '').lower()
-        text = (r.get('text') or '').lower()
-        if title in ['unknown sermon', 'unknown', '']:
-            continue
-        if any(ind in title for ind in ['worship song', 'hymn', 'music video', 'singing', 'choir']):
-            continue
-        if len(text) < 50:
-            continue
-        worship_count = len(re.findall(r'\b(la la|hallelujah|glory glory|praise him)\b', text, re.I))
-        if worship_count > 2:
-            continue
-        filtered.append(r)
-    return filtered
-
-async def do_sermon_search(query, n_results=5):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{RERANKER_URL}/search/fast",
-                json={"query": query, "n_results": n_results},
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    sermons = data.get('results', [])
-                    logger.info(f"Fast search: {len(sermons)} sermons ({data.get('timing_ms', 0)}ms)")
-                    return sermons
-    except Exception as e:
-        logger.warning(f"Fast search error: {e}")
-    return []
 
 
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
@@ -128,65 +34,32 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
             **kwargs
         )
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. Your job is to answer questions based on Pastor Bob Kopeny's sermon teachings.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm voice assistant for Calvary Chapel East Anaheim.
 
-=== YOUR #1 JOB ===
-When sermon segments are provided in your instructions, you MUST read them and answer the user's question using that content. Say "Pastor Bob teaches..." and share what he says. The segments are his REAL words from REAL sermons. Always give a substantive answer.
+=== IMPORTANT: YOUR ROLE ===
+You are the VOICE interface only. A separate system searches Pastor Bob's sermons and will provide you with the answer to speak. Your job is to:
+1. When the user asks a question, give a BRIEF warm acknowledgment like "Great question, let me find what Pastor Bob teaches on that." or "Sure, let me pull up Pastor Bob's teaching on that."
+2. When you receive sermon-based instructions with an answer to speak, read it aloud warmly and naturally.
+3. For simple greetings or small talk, respond naturally.
 
-=== BANNED PHRASES (NEVER SAY THESE - NOT EVEN REPHRASED) ===
-- "I'd need to check"
+=== BANNED PHRASES ===
 - "I don't have a specific teaching"
-- "I'd have to look into"
-- "I'm not sure what Pastor Bob says about"
-- "The sermon segments provided don't directly address"
-- "The segments don't specifically cover"
-- "While the provided segments don't..."
-- "I don't have a specific sermon on that"
-- "Let me look into that"
-- Any variation of hedging, deflecting, mentioning what segments do or don't contain, or saying you lack information
+- "I'd need to check"
+- "I don't have that in my materials"
+- Any variation of saying you lack information
 
-=== WHAT TO DO INSTEAD ===
-- Sermon segments provided that answer the question? USE THEM. Say "Pastor Bob teaches..." and share what he says.
-- Sermon segments provided but on a related topic? USE whatever is relevant AND supplement with solid biblical teaching. NEVER mention that segments don't directly address something.
-- No sermon segments provided? Give a solid biblical answer as if Pastor Bob would teach it. Do NOT mention the absence of segments.
-- Personal questions about Pastor Bob? Use the VERIFIED FACTS below.
-- The user does NOT know about sermon segments. Just answer warmly and authoritatively.
-
-=== VERIFIED FACTS ABOUT PASTOR BOB (ONLY USE THESE) ===
-
-FAMILY:
-- Wife: BECKY KOPENY (maiden name: Becky Olson)
-- HOW THEY MET (FULL STORY): Bob first met Becky briefly at church years before - she was walking by, mentioned she went to Cal State Fullerton and worked at the Placentia library, and her boyfriend was waiting in the car. Years later, while driving to Talbot Seminary, Bob stopped at the intersection of Chapman and Kramer in Placentia. Out of the blue, "Becky Cal State Fullerton Placentia library" came into his mind. He wasn't looking for a date. He drove in and asked if she still worked there. She did. She told him she was dating a guy seriously, heading toward engagement. A month later at the same intersection, "Becky" came to mind again. He went back, asked her out. They went to breakfast and prayed together. After a week of prayer, he called again. She was hard to reach. When he finally got her, she said "how about right now" to meeting. They went for coffee. At that coffee, the Lord revealed to Bob BEFORE Becky told him that she had gotten engaged to the other man the night before. They became just friends - Bob encouraged her spiritually. Eventually her engagement ended. Three weeks after their first date, Bob felt God telling him to propose. He resisted because he'd taught others to date for a year then be engaged for a year. They married about 3.5 months after their first date. Bob was about 25.
-
-THREE SONS:
-1. JESSE - oldest (born July 24, 1984) - 4 children: Julia, Lily, Jonah, Jeffrey
-2. VALOR - middle (born Dec 2, 1985) - married to STACY, son LUCA (born June 1, 2022)
-3. CHRISTIAN - youngest (born May 16, 1989) - married to HAYLEY, daughter CORA (born Dec 2024)
-
-EDUCATION:
-- Biola University - Bible major
-- Talbot Seminary (at Biola) - first class was Koine Greek
-
-CAREER BEFORE MINISTRY:
-- Police Officer at La Habra Police Department
-- Detective at Placentia Police Department
-- Attended and graduated from two police academies (paid his own way in the 70s)
-
-TESTIMONY (HOW BOB WAS SAVED):
-- Raised Lutheran, parents brought him to church every Sunday
-- Saved in 8th GRADE (age 13) at a JR. HIGH CHURCH CAMP that his friend FRED invited him to attend
-- Fred brought Bob to his church and to the camp
-- Two men - JEFF MAPLES and GENE SCHAEFFER (in their 30s) - shared Christ with him one night for about five minutes and asked if he would receive Christ. He said yes.
-- Did NOT have a dramatic experience when saved - didn't feel different
-- By 9th grade, still saved but "you wouldn't have known it" - wasn't living it out
-- Later prayed a "surrendering prayer" for full surrender to God
+=== VERIFIED FACTS ABOUT PASTOR BOB (for small talk only) ===
+- Wife: Becky Kopeny
+- Three sons: Jesse, Valor, Christian
+- Was a police officer/detective before ministry
+- Saved at age 13 at a Jr. High church camp
+- Pastors Calvary Chapel East Anaheim
 
 === RULES ===
-1. NEVER invent stories, quotes, or teachings.
-2. Spell his name correctly: KOPENY (not Copeny).
-3. Be warm, helpful, and conversational.
-4. NEVER mention clips, sidebar, or videos in your verbal response.
-5. Bible book names: Say "First John" NOT "one John". Say "Second Corinthians" NOT "two Corinthians". Always spell out First, Second, Third.
+1. Keep acknowledgments SHORT (1 sentence max).
+2. When given sermon content to speak, share it warmly and thoroughly.
+3. NEVER invent stories or teachings.
+4. Bible book names: Say "First John" NOT "one John". Always spell out First, Second, Third.
 """
 
 
@@ -201,33 +74,13 @@ async def send_data_message(room, message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-def extract_text_from_item(item):
-    text = ""
-    content = getattr(item, 'content', None)
-    if content:
-        if isinstance(content, list):
-            for c in content:
-                if isinstance(c, str):
-                    text += c
-                elif hasattr(c, 'text'):
-                    text += (c.text or '')
-                elif hasattr(c, 'transcript'):
-                    text += (c.transcript or '')
-        elif isinstance(content, str):
-            text = content
-    if not text and hasattr(item, 'text_content'):
-        text = item.text_content or ''
-    if not text and hasattr(item, 'text'):
-        text = item.text or ''
-    return text.strip()
-
-
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
-    last_results = {"sermons": []}
-    pending_search = {"task": None, "query": None}
+
+    session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
+    apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
     def on_data_received(data_packet):
         try:
@@ -236,15 +89,16 @@ async def entrypoint(ctx: JobContext):
             msg_type = message.get('type')
             logger.info(f"Data received: {msg_type}")
 
-            if msg_type == 'user_query' and message.get('text'):
-                user_text = message['text'].strip()
-                if user_text and len(user_text) > 2:
-                    logger.info(f"GOT USER QUERY VIA DATA: {user_text[:80]}")
-                    asyncio.create_task(search_and_follow_up(user_text))
+            if msg_type == 'speak_answer' and message.get('text'):
+                answer_text = message['text'].strip()
+                if answer_text:
+                    logger.info(f"GOT ANSWER TO SPEAK: {answer_text[:100]}...")
+                    asyncio.create_task(speak_answer(answer_text))
             elif msg_type == 'silent_connection':
                 text_to_speak = message.get('textToSpeak', '')
                 if text_to_speak:
                     logger.info(f"Got text to speak: {text_to_speak[:80]}")
+                    asyncio.create_task(speak_answer(text_to_speak))
         except Exception as e:
             logger.error(f"Data parse error: {e}")
 
@@ -253,63 +107,12 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info(f"Connected to room: {ctx.room.name}")
 
-    session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
-
-    apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
-
-    async def search_and_follow_up(user_text):
-        logger.info(f"Background search for: '{user_text[:80]}'")
-
-        sermons_raw = await do_sermon_search(user_text, 5)
-        sermons = filter_results(sermons_raw)
-
-        story_matches = detect_personal_story(user_text)
-        if story_matches:
-            pinned = []
-            pinned_vids = set()
-            for sk in story_matches:
-                story = PINNED_STORY_CLIPS.get(sk)
-                if story:
-                    for clip in story["clips"]:
-                        pinned.append(clip)
-                        pinned_vids.add(clip["video_id"])
-            sermons = [r for r in sermons if r.get("video_id") not in pinned_vids]
-            sermons = pinned + sermons
-
-        last_results["sermons"] = sermons[:5]
-
-        for r in sermons[:3]:
-            await send_data_message(ctx.room, "sermon_reference", {
-                "title": r.get('title', 'Sermon'),
-                "url": r.get('timestamped_url', r.get('url', '')),
-                "timestamp": r.get('start_time', ''),
-                "text": r.get('text', '')[:200]
-            })
-
-        if sermons:
-            instructions = f'The user just asked: "{user_text}"\n\n'
-            instructions += "Here is Pastor Bob's ACTUAL sermon content on this topic. You MUST use it to give a BETTER, more detailed answer now.\n\n"
-            instructions += "=== PASTOR BOB'S ACTUAL SERMON CONTENT ===\n\n"
-            for i, r in enumerate(sermons[:5]):
-                instructions += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
-                instructions += f'"{r.get("text", "")[:800]}"\n\n'
-            instructions += "Now give the user a warm, detailed answer using the sermon content above. Say 'Pastor Bob teaches...' and share what he actually says. DO NOT repeat your previous answer. Give NEW details from the segments.\n"
-
-            logger.info(f"Generating follow-up with {len(sermons)} sermons")
-            await session.generate_reply(instructions=instructions)
-        else:
-            logger.info("No sermon results found, skipping follow-up")
-
-    @session.on("user_input_transcribed")
-    def on_user_transcript(event):
-        if event.is_final and event.transcript:
-            user_text = event.transcript.strip()
-            if not user_text:
-                return
-            logger.info(f"USER SAID (transcribed): {user_text}")
-            asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
-            pending_search["query"] = user_text
-            pending_search["task"] = asyncio.create_task(search_and_follow_up(user_text))
+    async def speak_answer(text):
+        trimmed = text[:2000]
+        instructions = f"Read the following answer to the user warmly and naturally. This is Pastor Bob's actual teaching from his sermons. Do NOT add your own commentary or say 'according to the search' or anything meta. Just share the teaching as if you know it:\n\n{trimmed}"
+        logger.info(f"Generating speech for answer ({len(trimmed)} chars)")
+        await session.generate_reply(instructions=instructions)
+        logger.info("generate_reply called for speak_answer")
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):
@@ -317,29 +120,28 @@ async def entrypoint(ctx: JobContext):
             item = event.item
             role = getattr(item, 'role', None)
 
-            if role == 'user':
-                user_text = extract_text_from_item(item)
-                if user_text and len(user_text) > 2:
-                    logger.info(f"USER (conversation_item): {user_text[:100]}")
-                    if not pending_search.get("query"):
-                        asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
-                        pending_search["query"] = user_text
-                        pending_search["task"] = asyncio.create_task(search_and_follow_up(user_text))
+            if role == 'assistant':
+                text = ""
+                content = getattr(item, 'content', None)
+                if content:
+                    if isinstance(content, list):
+                        for c in content:
+                            if isinstance(c, str):
+                                text += c
+                            elif hasattr(c, 'text'):
+                                text += (c.text or '')
+                            elif hasattr(c, 'transcript'):
+                                text += (c.transcript or '')
+                    elif isinstance(content, str):
+                        text = content
+                if not text and hasattr(item, 'text'):
+                    text = item.text or ''
+                text = text.strip()
 
-            elif role == 'assistant':
-                text = extract_text_from_item(item)
                 if text and text != last_sent_message["text"]:
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
-                    response_with_links = text
-                    current_results = last_results.get("sermons", [])
-                    if current_results:
-                        response_with_links += "\n\nRelated sermon videos:\n"
-                        for r in current_results[:3]:
-                            url = r.get('timestamped_url', r.get('url', ''))
-                            response_with_links += f"- {r.get('title', 'Sermon')} ({r.get('start_time', '')}): {url}\n"
-                    asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": response_with_links}))
-                    pending_search["query"] = None
+                    asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": text}))
         except Exception as e:
             logger.error(f"Error in conversation_item_added: {e}")
 
