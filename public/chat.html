@@ -2066,20 +2066,14 @@ TESTIMONY (HOW BOB WAS SAVED):
                 await room.connect(data.url, data.token, roomOptions);
                 log(`Connected to room: ${room.name}`, 'success');
 
-                // Step 6: Enable microphone - CRITICAL!
-                log('Enabling microphone...', 'info');
-                await room.localParticipant.setMicrophoneEnabled(true);
-                log('Microphone enabled and publishing audio', 'success');
+                // Step 6: Do NOT publish mic to LiveKit (prevents xAI from hearing and auto-responding)
+                // Browser STT handles speech recognition separately
+                log('Mic NOT published to LiveKit - using browser STT only', 'info');
                 
-                // Enable transcriptions to see what's being said
                 await room.localParticipant.setTrackSubscriptionPermissions({
                     allParticipantTracks: true,
                     allTracks: true
                 });
-
-                // Verify
-                const tracks = room.localParticipant.audioTrackPublications;
-                log(`Audio tracks published: ${tracks.size}`, 'info');
                 
                 // Send connection type to agent and store response text if available
                 if (!showGreeting) {
@@ -2117,9 +2111,7 @@ TESTIMONY (HOW BOB WAS SAVED):
                     })(); // Execute immediately, no setTimeout
                 }
 
-                // Step 7: Start monitoring
-                startAudioMonitoring();
-                
+                // Step 7: Start browser speech recognition (separate from LiveKit)
                 startBrowserSpeechRecognition();
                 
                 // Wait a moment then check for agent
