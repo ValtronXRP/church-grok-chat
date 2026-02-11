@@ -233,7 +233,18 @@ async def entrypoint(ctx: JobContext):
         try:
             raw_data = data_packet.data if hasattr(data_packet, 'data') else data_packet
             message = json.loads(raw_data.decode('utf-8') if isinstance(raw_data, bytes) else raw_data)
-            logger.info(f"Data received: {message.get('type')}")
+            msg_type = message.get('type')
+            logger.info(f"Data received: {msg_type}")
+
+            if msg_type == 'user_query' and message.get('text'):
+                user_text = message['text'].strip()
+                if user_text and len(user_text) > 2:
+                    logger.info(f"GOT USER QUERY VIA DATA: {user_text[:80]}")
+                    asyncio.create_task(search_and_follow_up(user_text))
+            elif msg_type == 'silent_connection':
+                text_to_speak = message.get('textToSpeak', '')
+                if text_to_speak:
+                    logger.info(f"Got text to speak: {text_to_speak[:80]}")
         except Exception as e:
             logger.error(f"Data parse error: {e}")
 

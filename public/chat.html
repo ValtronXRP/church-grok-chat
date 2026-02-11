@@ -1769,7 +1769,15 @@ TESTIMONY (HOW BOB WAS SAVED):
             try {
                 log('Sending text message to Grok API: ' + text, 'info');
                 
-                // Call the Grok API
+                if (isConnected && room && room.localParticipant) {
+                    try {
+                        const encoder = new TextEncoder();
+                        const queryData = encoder.encode(JSON.stringify({ type: 'user_query', text: text }));
+                        await room.localParticipant.publishData(queryData, { reliable: true });
+                        log('Sent user query to voice agent for sermon search', 'info');
+                    } catch (e) { log('Failed to send query to voice agent: ' + e, 'warning'); }
+                }
+                
                 const response = await fetch(GROK_API_URL, {
                     method: 'POST',
                     headers: {
@@ -2112,6 +2120,8 @@ TESTIMONY (HOW BOB WAS SAVED):
                 // Step 7: Start monitoring
                 startAudioMonitoring();
                 
+                startBrowserSpeechRecognition();
+                
                 // Wait a moment then check for agent
                 setTimeout(() => {
                     checkForAgent();
@@ -2381,6 +2391,70 @@ TESTIMONY (HOW BOB WAS SAVED):
             });
         }
 
+        let browserRecognition = null;
+        
+        function startBrowserSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                log('Browser speech recognition not available', 'warning');
+                return;
+            }
+            
+            if (browserRecognition) {
+                try { browserRecognition.stop(); } catch(e) {}
+            }
+            
+            browserRecognition = new SpeechRecognition();
+            browserRecognition.continuous = true;
+            browserRecognition.interimResults = false;
+            browserRecognition.lang = 'en-US';
+            
+            browserRecognition.onresult = async (event) => {
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        const transcript = event.results[i][0].transcript.trim();
+                        if (transcript && transcript.length > 2 && isConnected && room && room.localParticipant) {
+                            log('Browser STT: ' + transcript, 'info');
+                            try {
+                                const encoder = new TextEncoder();
+                                const queryData = encoder.encode(JSON.stringify({ type: 'user_query', text: transcript }));
+                                await room.localParticipant.publishData(queryData, { reliable: true });
+                                log('Sent speech transcript to voice agent for sermon search', 'info');
+                            } catch (e) {
+                                log('Failed to send speech transcript: ' + e, 'warning');
+                            }
+                        }
+                    }
+                }
+            };
+            
+            browserRecognition.onend = () => {
+                if (isConnected) {
+                    try { browserRecognition.start(); } catch(e) {}
+                }
+            };
+            
+            browserRecognition.onerror = (event) => {
+                if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                    log('Speech recognition error: ' + event.error, 'warning');
+                }
+            };
+            
+            try {
+                browserRecognition.start();
+                log('Browser speech recognition started', 'info');
+            } catch(e) {
+                log('Could not start speech recognition: ' + e, 'warning');
+            }
+        }
+        
+        function stopBrowserSpeechRecognition() {
+            if (browserRecognition) {
+                try { browserRecognition.stop(); } catch(e) {}
+                browserRecognition = null;
+            }
+        }
+
         // ============================================
         // DISCONNECT
         // ============================================
@@ -2402,6 +2476,8 @@ TESTIMONY (HOW BOB WAS SAVED):
                 clearInterval(audioMonitorInterval);
                 audioMonitorInterval = null;
             }
+            
+            stopBrowserSpeechRecognition();
             
             if (room) {
                 room.disconnect();
