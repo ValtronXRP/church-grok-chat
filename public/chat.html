@@ -1970,12 +1970,54 @@ TESTIMONY (HOW BOB WAS SAVED):
         // ============================================
         // MAIN TOGGLE
         // ============================================
+        let voiceListening = false;
+
         async function toggleVoice() {
-            if (isConnected) {
-                disconnect();
+            if (voiceListening) {
+                stopVoiceMode();
             } else {
-                await connect(true); // true = show greeting
+                await startVoiceMode();
             }
+        }
+
+        async function startVoiceMode() {
+            const btn = document.getElementById('voiceBtn');
+            const status = document.getElementById('voiceStatus');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+            } catch(e) {
+                log('Microphone access denied', 'error');
+                addMessage('Microphone access is required for voice mode.', 'system');
+                return;
+            }
+
+            voiceListening = true;
+            isConnected = true;
+            btn.classList.add('listening');
+            document.getElementById('micIcon').style.display = 'none';
+            document.getElementById('stopIcon').style.display = 'block';
+            status.textContent = 'Listening — Speak now!';
+            addMessage('Voice mode active! Ask your question.', 'system');
+            speakText('Welcome to Ask Pastor Bob! How can I help you today?');
+            startBrowserSpeechRecognition();
+            log('Voice mode started (Browser STT + TTS)', 'success');
+        }
+
+        function stopVoiceMode() {
+            const btn = document.getElementById('voiceBtn');
+            const status = document.getElementById('voiceStatus');
+            voiceListening = false;
+            isConnected = false;
+            window.speechSynthesis.cancel();
+            stopBrowserSpeechRecognition();
+            btn.classList.remove('listening');
+            document.getElementById('micIcon').style.display = 'block';
+            document.getElementById('stopIcon').style.display = 'none';
+            status.textContent = '';
+            addMessage('Voice mode stopped.', 'system');
+            log('Voice mode stopped', 'info');
         }
 
         // ============================================
@@ -2066,24 +2108,15 @@ TESTIMONY (HOW BOB WAS SAVED):
                 await room.connect(data.url, data.token, roomOptions);
                 log(`Connected to room: ${room.name}`, 'success');
 
-                // Step 6: Publish real mic briefly so xAI session initializes,
-                // then replace with silent track so xAI can't hear questions
-                log('Publishing mic for session init...', 'info');
+                // Step 6: Enable microphone
+                log('Enabling microphone...', 'info');
                 await room.localParticipant.setMicrophoneEnabled(true);
+                log('Microphone enabled', 'success');
                 
                 await room.localParticipant.setTrackSubscriptionPermissions({
                     allParticipantTracks: true,
                     allTracks: true
                 });
-                
-                // After 3 seconds (enough for session init + greeting), mute mic
-                // so xAI never hears actual questions
-                setTimeout(async () => {
-                    try {
-                        log('Muting mic - xAI will no longer hear user', 'info');
-                        await room.localParticipant.setMicrophoneEnabled(false);
-                    } catch(e) { log('Mute error: ' + e, 'warning'); }
-                }, 3000);
                 
                 // Send connection type to agent and store response text if available
                 if (!showGreeting) {
@@ -2443,6 +2476,24 @@ TESTIMONY (HOW BOB WAS SAVED):
             }
         }
         
+        function speakText(text) {
+            if (!('speechSynthesis' in window)) {
+                log('Speech synthesis not available', 'warning');
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const cleanText = text.replace(/\n+/g, ' ').replace(/https?:\/\/\S+/g, '').replace(/\*\*/g, '').trim();
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.rate = 1.05;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find(v => v.name.includes('Daniel') || v.name.includes('Samantha') || v.name.includes('Google US English'));
+            if (preferred) utterance.voice = preferred;
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+
         async function handleVoiceQuery(transcript) {
             log('Voice query: ' + transcript, 'info');
             addMessage(transcript, 'user');
@@ -2450,14 +2501,14 @@ TESTIMONY (HOW BOB WAS SAVED):
             showTyping();
 
             try {
-                const response = await fetch(GROK_API_URL, {
+                const response = await fetch(GROK_API_URL + '?fast=1', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         messages: conversationHistory,
                         model: 'grok-3',
                         temperature: 0.7,
-                        max_tokens: 1000
+                        max_tokens: 500
                     })
                 });
 
@@ -2510,17 +2561,8 @@ TESTIMONY (HOW BOB WAS SAVED):
 
                 if (fullResponse) {
                     conversationHistory.push({ role: 'assistant', content: fullResponse });
-                    log('Text agent response received, sending to voice agent', 'info');
-
-                    if (isConnected && room && room.localParticipant) {
-                        const encoder = new TextEncoder();
-                        const speakData = encoder.encode(JSON.stringify({
-                            type: 'speak_answer',
-                            text: fullResponse
-                        }));
-                        await room.localParticipant.publishData(speakData, { reliable: true });
-                        log('Sent speak_answer to voice agent', 'success');
-                    }
+                    speakText(fullResponse);
+                    log('Speaking response via browser TTS', 'success');
                 }
             } catch (error) {
                 log('Voice query error: ' + error.message, 'error');

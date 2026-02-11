@@ -193,6 +193,33 @@ function detectPersonalStoryQuery(query) {
   return matches;
 }
 
+async function searchFast(query, nResults = 5) {
+  try {
+    const response = await axios.post(`${RERANKER_URL}/search/fast`, {
+      query,
+      n_results: nResults
+    }, { timeout: 10000 });
+
+    if (response.data && response.data.results) {
+      const results = response.data.results;
+      console.log(`Fast search returned ${results.length} results (${response.data.timing_ms}ms)`);
+      return results.map(r => ({
+        text: r.text,
+        title: r.title || 'Sermon',
+        video_id: r.video_id || '',
+        start_time: r.start_time || '',
+        url: r.url || '',
+        timestamped_url: r.timestamped_url || r.url || '',
+        relevance_score: r.distance || 0,
+        source: 'sermon'
+      }));
+    }
+  } catch (err) {
+    console.log(`Fast search error: ${err.message}`);
+  }
+  return [];
+}
+
 async function searchHybrid(query, nResults = 6, searchType = 'all') {
   try {
     const response = await axios.post(`${RERANKER_URL}/search`, {
@@ -581,21 +608,26 @@ app.post('/api/chat', async (req, res) => {
         }
       }
       
-      // Search using hybrid reranker first, fallback to direct Chroma
+      const useFastSearch = req.query.fast === '1';
       const numResults = isMoreRequest ? 12 : 6;
       
-      const hybridResults = await searchHybrid(searchQuery, numResults);
-      if (hybridResults) {
-        sermonResults = hybridResults.sermons || [];
-        illustrationResults = hybridResults.illustrations || [];
-        websiteResults = hybridResults.website || [];
-        console.log(`Hybrid search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations, ${websiteResults.length} website`);
+      if (useFastSearch) {
+        sermonResults = await searchFast(searchQuery, 5);
+        console.log(`Fast search: ${sermonResults.length} sermons`);
       } else {
-        try {
-          sermonResults = await searchSermons(searchQuery, numResults);
-        } catch (searchError) {
-          console.log('Sermon search skipped due to error:', searchError.message);
-          sermonResults = [];
+        const hybridResults = await searchHybrid(searchQuery, numResults);
+        if (hybridResults) {
+          sermonResults = hybridResults.sermons || [];
+          illustrationResults = hybridResults.illustrations || [];
+          websiteResults = hybridResults.website || [];
+          console.log(`Hybrid search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations, ${websiteResults.length} website`);
+        } else {
+          try {
+            sermonResults = await searchSermons(searchQuery, numResults);
+          } catch (searchError) {
+            console.log('Sermon search skipped due to error:', searchError.message);
+            sermonResults = [];
+          }
         }
       }
       
