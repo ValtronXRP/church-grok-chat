@@ -199,7 +199,7 @@ async function searchHybrid(query, nResults = 6, searchType = 'all') {
       query,
       type: searchType,
       n_results: nResults,
-      n_candidates: 50
+      n_candidates: 30
     }, { timeout: 120000 });
 
     if (response.data && response.data.results) {
@@ -905,7 +905,7 @@ app.post('/api/sermon/search', async (req, res) => {
         query,
         type: 'sermons',
         n_results: n_results,
-        n_candidates: 50
+        n_candidates: 30
       }, { timeout: 120000 });
       if (rerankerResponse.data && rerankerResponse.data.results) {
         const formatted = rerankerResponse.data.results
@@ -943,7 +943,7 @@ app.post('/api/illustration/search', async (req, res) => {
         query,
         type: 'illustrations',
         n_results: n_results,
-        n_candidates: 50
+        n_candidates: 30
       }, { timeout: 120000 });
       if (rerankerResponse.data && rerankerResponse.data.results) {
         const formatted = rerankerResponse.data.results

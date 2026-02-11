@@ -117,7 +117,7 @@ async def search_hybrid(query, n_results=6, search_type='all'):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{RERANKER_URL}/search",
-                json={"query": query, "type": search_type, "n_results": n_results, "n_candidates": 50},
+                json={"query": query, "type": search_type, "n_results": n_results, "n_candidates": 30},
                 timeout=aiohttp.ClientTimeout(total=120)
             ) as response:
                 if response.status == 200:
