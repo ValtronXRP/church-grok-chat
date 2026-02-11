@@ -1970,54 +1970,12 @@ TESTIMONY (HOW BOB WAS SAVED):
         // ============================================
         // MAIN TOGGLE
         // ============================================
-        let voiceListening = false;
-
         async function toggleVoice() {
-            if (voiceListening) {
-                stopVoiceMode();
+            if (isConnected) {
+                disconnect();
             } else {
-                await startVoiceMode();
+                await connect(true);
             }
-        }
-
-        async function startVoiceMode() {
-            const btn = document.getElementById('voiceBtn');
-            const status = document.getElementById('voiceStatus');
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(t => t.stop());
-            } catch(e) {
-                log('Microphone access denied', 'error');
-                addMessage('Microphone access is required for voice mode.', 'system');
-                return;
-            }
-
-            voiceListening = true;
-            isConnected = true;
-            btn.classList.add('listening');
-            document.getElementById('micIcon').style.display = 'none';
-            document.getElementById('stopIcon').style.display = 'block';
-            status.textContent = 'Listening — Speak now!';
-            addMessage('Voice mode active! Ask your question.', 'system');
-            speakText('Welcome to Ask Pastor Bob! How can I help you today?');
-            startBrowserSpeechRecognition();
-            log('Voice mode started (Browser STT + TTS)', 'success');
-        }
-
-        function stopVoiceMode() {
-            const btn = document.getElementById('voiceBtn');
-            const status = document.getElementById('voiceStatus');
-            voiceListening = false;
-            isConnected = false;
-            window.speechSynthesis.cancel();
-            stopBrowserSpeechRecognition();
-            btn.classList.remove('listening');
-            document.getElementById('micIcon').style.display = 'block';
-            document.getElementById('stopIcon').style.display = 'none';
-            status.textContent = '';
-            addMessage('Voice mode stopped.', 'system');
-            log('Voice mode stopped', 'info');
         }
 
         // ============================================
@@ -2154,7 +2112,8 @@ TESTIMONY (HOW BOB WAS SAVED):
                     })(); // Execute immediately, no setTimeout
                 }
 
-                // Step 7: Start browser speech recognition (separate from LiveKit)
+                // Step 7: Start monitoring and browser STT
+                startAudioMonitoring();
                 startBrowserSpeechRecognition();
                 
                 // Wait a moment then check for agent
@@ -2476,98 +2435,17 @@ TESTIMONY (HOW BOB WAS SAVED):
             }
         }
         
-        function speakText(text) {
-            if (!('speechSynthesis' in window)) {
-                log('Speech synthesis not available', 'warning');
-                return;
-            }
-            window.speechSynthesis.cancel();
-            const cleanText = text.replace(/\n+/g, ' ').replace(/https?:\/\/\S+/g, '').replace(/\*\*/g, '').trim();
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.rate = 1.05;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            const voices = window.speechSynthesis.getVoices();
-            const preferred = voices.find(v => v.name.includes('Daniel') || v.name.includes('Samantha') || v.name.includes('Google US English'));
-            if (preferred) utterance.voice = preferred;
-            utterance.lang = 'en-US';
-            window.speechSynthesis.speak(utterance);
-        }
-
         async function handleVoiceQuery(transcript) {
-            log('Voice query: ' + transcript, 'info');
-            addMessage(transcript, 'user');
-            conversationHistory.push({ role: 'user', content: transcript });
-            showTyping();
-
-            try {
-                const response = await fetch(GROK_API_URL + '?fast=1', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: conversationHistory,
-                        model: 'grok-3',
-                        temperature: 0.7,
-                        max_tokens: 500
-                    })
-                });
-
-                if (!response.ok) throw new Error(`API returned ${response.status}`);
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let fullResponse = '';
-                let currentMessage = null;
-
-                hideTyping();
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') continue;
-                            try {
-                                const parsed = JSON.parse(data);
-                                if (parsed.sermon_videos) {
-                                    parsed.sermon_videos.forEach(video => {
-                                        addVideoToSidebar(video.title, video.url, video.timestamp, video.text);
-                                    });
-                                    continue;
-                                }
-                                if (parsed.illustrations) {
-                                    parsed.illustrations.forEach(ill => {
-                                        addIllustrationToSidebar(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
-                                    });
-                                    continue;
-                                }
-                                if (parsed.choices?.[0]?.delta?.content) {
-                                    fullResponse += parsed.choices[0].delta.content;
-                                    if (!currentMessage) {
-                                        currentMessage = document.createElement('div');
-                                        currentMessage.className = 'message agent';
-                                        document.getElementById('chatMessages').appendChild(currentMessage);
-                                    }
-                                    currentMessage.innerHTML = formatMessageText(fullResponse);
-                                    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-                                }
-                            } catch (e) {}
-                        }
-                    }
+            log('Voice query (sending to agent): ' + transcript, 'info');
+            if (isConnected && room && room.localParticipant) {
+                try {
+                    const encoder = new TextEncoder();
+                    const queryData = encoder.encode(JSON.stringify({ type: 'user_query', text: transcript }));
+                    await room.localParticipant.publishData(queryData, { reliable: true });
+                    log('Sent user query to voice agent', 'success');
+                } catch (e) {
+                    log('Failed to send query: ' + e, 'warning');
                 }
-
-                if (fullResponse) {
-                    conversationHistory.push({ role: 'assistant', content: fullResponse });
-                    speakText(fullResponse);
-                    log('Speaking response via browser TTS', 'success');
-                }
-            } catch (error) {
-                log('Voice query error: ' + error.message, 'error');
-                hideTyping();
-                addMessage('Failed to get answer. Please try again.', 'system');
             }
         }
 
