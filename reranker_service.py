@@ -3,18 +3,25 @@
 Hybrid search service with cross-encoder reranking.
 Provides a local API that server.js calls for high-quality semantic search.
 
+Uses local mpnet model for 768-dim query embeddings to match our collections.
+Cross-encoder reranker for quality scoring.
+
 Endpoints:
   POST /search - Unified search across sermons, illustrations, website
   GET /health - Health check
 """
 
-import os, json, time, hashlib
+import os, sys, json, time, hashlib, gc
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+
+import logging
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
+logger = logging.getLogger(__name__)
 
 from flask import Flask, request, jsonify
 import chromadb
 from sentence_transformers import SentenceTransformer, CrossEncoder
-import numpy as np
 
 app = Flask(__name__)
 
@@ -102,18 +109,27 @@ def detect_pinned_stories(query):
 def init_models():
     global embedder, reranker, chroma_client, sermon_collection, illustration_collection, website_collection
 
-    print("Loading embedding model...")
+    t0 = time.time()
+    logger.info("Loading embedding model (768-dim for matching our collections)...")
+    sys.stdout.flush()
     embedder = SentenceTransformer(EMBEDDING_MODEL, device='cpu')
-    print(f"Embedder loaded: dim={embedder.get_sentence_embedding_dimension()}")
+    logger.info(f"Embedder loaded: dim={embedder.get_sentence_embedding_dimension()} ({time.time()-t0:.1f}s)")
+    sys.stdout.flush()
+    gc.collect()
 
-    print("Loading cross-encoder reranker...")
+    t1 = time.time()
+    logger.info("Loading cross-encoder reranker...")
+    sys.stdout.flush()
     reranker = CrossEncoder(RERANKER_MODEL, device='cpu')
-    print("Reranker loaded")
+    logger.info(f"Reranker loaded ({time.time()-t1:.1f}s)")
+    sys.stdout.flush()
+    gc.collect()
 
-    print("Connecting to Chroma Cloud...")
-    print(f"  CHROMA_TENANT: {CHROMA_TENANT[:10]}..." if CHROMA_TENANT else "  CHROMA_TENANT: NOT SET")
-    print(f"  CHROMA_DATABASE: {CHROMA_DATABASE}" if CHROMA_DATABASE else "  CHROMA_DATABASE: NOT SET")
-    print(f"  CHROMA_API_KEY: {'set' if CHROMA_API_KEY else 'NOT SET'}")
+    logger.info("Connecting to Chroma Cloud...")
+    logger.info(f"  CHROMA_TENANT: {CHROMA_TENANT[:10]}..." if CHROMA_TENANT else "  CHROMA_TENANT: NOT SET")
+    logger.info(f"  CHROMA_DATABASE: {CHROMA_DATABASE}" if CHROMA_DATABASE else "  CHROMA_DATABASE: NOT SET")
+    logger.info(f"  CHROMA_API_KEY: {'set' if CHROMA_API_KEY else 'NOT SET'}")
+    sys.stdout.flush()
     
     try:
         chroma_client = chromadb.CloudClient(
@@ -121,46 +137,53 @@ def init_models():
             tenant=CHROMA_TENANT,
             database=CHROMA_DATABASE
         )
+        logger.info("Chroma Cloud connected")
     except Exception as e:
-        print(f"ERROR connecting to Chroma: {e}")
+        logger.error(f"ERROR connecting to Chroma: {e}")
         chroma_client = None
+    sys.stdout.flush()
+
+    if chroma_client is None:
+        logger.error("No Chroma client - skipping collection loading")
+        return
 
     try:
         sermon_collection = chroma_client.get_collection('sermon_segments_v2')
         sc = sermon_collection.count()
-        print(f"sermon_segments_v2: {sc} segments")
+        logger.info(f"sermon_segments_v2: {sc} segments")
     except Exception as e:
-        print(f"sermon_segments_v2 not found, trying sermon_segments: {e}")
+        logger.warning(f"sermon_segments_v2 not found, trying sermon_segments: {e}")
         try:
             sermon_collection = chroma_client.get_collection('sermon_segments')
             sc = sermon_collection.count()
-            print(f"sermon_segments (fallback): {sc} segments")
+            logger.info(f"sermon_segments (fallback): {sc} segments")
         except:
-            print("No sermon collection available")
+            logger.warning("No sermon collection available")
             sermon_collection = None
 
     try:
         illustration_collection = chroma_client.get_collection('illustrations_v5')
         ic = illustration_collection.count()
-        print(f"illustrations_v5: {ic} illustrations")
+        logger.info(f"illustrations_v5: {ic} illustrations")
     except:
         try:
             illustration_collection = chroma_client.get_collection('illustrations_v4')
             ic = illustration_collection.count()
-            print(f"illustrations_v4 (fallback): {ic} illustrations")
+            logger.info(f"illustrations_v4 (fallback): {ic} illustrations")
         except:
-            print("No illustration collection available")
+            logger.warning("No illustration collection available")
             illustration_collection = None
 
     try:
         website_collection = chroma_client.get_collection('church_website')
         wc = website_collection.count()
-        print(f"church_website: {wc} pages")
+        logger.info(f"church_website: {wc} pages")
     except:
-        print("No website collection available")
+        logger.warning("No website collection available")
         website_collection = None
 
-    print("All models and collections ready")
+    logger.info(f"All models and collections ready (total {time.time()-t0:.1f}s)")
+    sys.stdout.flush()
 
 
 def search_and_rerank(query, collection, n_candidates=20, n_results=6, source_type="sermon"):
@@ -210,12 +233,16 @@ def search_and_rerank(query, collection, n_candidates=20, n_results=6, source_ty
         return []
 
     pairs = [[query, c['text']] for c in candidates]
-    scores = reranker.predict(pairs)
-
-    import math
-    for i, c in enumerate(candidates):
-        score = float(scores[i])
-        c['rerank_score'] = 0.0 if math.isnan(score) else score
+    try:
+        scores = reranker.predict(pairs)
+        import math
+        for i, c in enumerate(candidates):
+            score = float(scores[i])
+            c['rerank_score'] = (1.0 - c['vector_dist']) if math.isnan(score) else score
+    except Exception as e:
+        logger.error(f"Reranker error: {e}, using vector distance")
+        for c in candidates:
+            c['rerank_score'] = 1.0 - c['vector_dist']
 
     candidates.sort(key=lambda x: x['rerank_score'], reverse=True)
 
@@ -224,14 +251,21 @@ def search_and_rerank(query, collection, n_candidates=20, n_results=6, source_ty
 
 @app.route('/health', methods=['GET'])
 def health():
+    if not models_initialized:
+        return jsonify({'status': 'starting', 'message': 'Models loading on first request'})
     return jsonify({
         'status': 'ok',
+        'mode': 'local-mpnet-768dim',
         'embedder': EMBEDDING_MODEL,
         'reranker': RERANKER_MODEL,
         'sermons': sermon_collection.count() if sermon_collection else 0,
         'illustrations': illustration_collection.count() if illustration_collection else 0,
         'website': website_collection.count() if website_collection else 0
     })
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({'status': 'alive'})
 
 
 @app.route('/search', methods=['POST'])
@@ -278,6 +312,67 @@ def search():
         'pinned_count': len(pinned)
     }
     return jsonify(response)
+
+
+@app.route('/search/fast', methods=['POST'])
+def search_fast():
+    data = request.json
+    query = data.get('query', '')
+    n_results = data.get('n_results', 5)
+
+    if not query:
+        return jsonify({'error': 'No query provided'}), 400
+
+    start = time.time()
+    all_results = []
+
+    pinned, pinned_vids = detect_pinned_stories(query)
+    if pinned:
+        all_results.extend(pinned)
+
+    if sermon_collection:
+        query_emb = embedder.encode([query], normalize_embeddings=True).tolist()
+        results = sermon_collection.query(
+            query_embeddings=query_emb,
+            n_results=n_results + 5,
+            include=['metadatas', 'documents', 'distances']
+        )
+        if results['ids'] and results['ids'][0]:
+            seen = set()
+            for i in range(len(results['ids'][0])):
+                text = results['documents'][0][i] or ''
+                key = text[:200]
+                if key in seen:
+                    continue
+                seen.add(key)
+                meta = results['metadatas'][0][i] or {}
+                dist = results['distances'][0][i] if results['distances'] else 1.0
+                title = meta.get('title', '')
+                if is_worship_content(text, title):
+                    continue
+                vid = meta.get('video_id', '')
+                if vid in pinned_vids:
+                    continue
+                all_results.append({
+                    'text': text,
+                    'title': title,
+                    'video_id': vid,
+                    'start_time': meta.get('start_time', ''),
+                    'url': meta.get('url', ''),
+                    'timestamped_url': meta.get('timestamped_url', meta.get('url', '')),
+                    'rerank_score': 1.0 - dist,
+                    'source': 'sermon',
+                })
+                if len(all_results) >= n_results + len(pinned):
+                    break
+
+    elapsed = time.time() - start
+    return jsonify({
+        'query': query,
+        'results': all_results[:n_results + len(pinned)],
+        'timing_ms': round(elapsed * 1000),
+        'pinned_count': len(pinned)
+    })
 
 
 @app.route('/search/sermons', methods=['POST'])
@@ -335,9 +430,30 @@ def is_worship_content(text, title):
     return False
 
 
-init_models()
+models_initialized = False
+
+def ensure_models():
+    global models_initialized
+    if not models_initialized:
+        init_models()
+        models_initialized = True
+
+@app.before_request
+def before_request():
+    from flask import request as req
+    if req.endpoint not in ('health', 'ping'):
+        ensure_models()
+
+logger.info("Pre-loading models at startup...")
+sys.stdout.flush()
+try:
+    ensure_models()
+    logger.info("Models ready, accepting requests.")
+except Exception as e:
+    logger.error(f"Failed to load models at startup: {e}")
+sys.stdout.flush()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', os.environ.get('RERANKER_PORT', 5050)))
+    port = int(os.environ.get('RERANKER_PORT', os.environ.get('PORT', 5050)))
     print(f"\nReranker service starting on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)

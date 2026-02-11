@@ -90,25 +90,22 @@ def filter_results(results):
         filtered.append(r)
     return filtered
 
-async def do_sermon_search(query, n_results=6):
+async def do_sermon_search(query, n_results=5):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{RERANKER_URL}/search",
-                json={"query": query, "type": "all", "n_results": n_results, "n_candidates": 20},
-                timeout=aiohttp.ClientTimeout(total=120)
+                f"{RERANKER_URL}/search/fast",
+                json={"query": query, "n_results": n_results},
+                timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    results = data.get('results', [])
-                    sermons = [r for r in results if r.get('source') == 'sermon']
-                    illustrations = [r for r in results if r.get('source') == 'illustration']
-                    website = [r for r in results if r.get('source') == 'website']
-                    logger.info(f"Reranker: {len(sermons)} sermons, {len(illustrations)} illustrations, {len(website)} website ({data.get('timing_ms', 0)}ms)")
-                    return sermons, illustrations, website
+                    sermons = data.get('results', [])
+                    logger.info(f"Fast search: {len(sermons)} sermons ({data.get('timing_ms', 0)}ms)")
+                    return sermons
     except Exception as e:
-        logger.warning(f"Reranker error: {e}")
-    return [], [], []
+        logger.warning(f"Fast search error: {e}")
+    return []
 
 
 class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
@@ -227,7 +224,7 @@ async def entrypoint(ctx: JobContext):
         async with search_lock:
             logger.info(f"Searching for: '{user_text[:80]}'")
 
-            sermons_raw, illustrations, website = await do_sermon_search(user_text, 8)
+            sermons_raw = await do_sermon_search(user_text, 5)
             sermons = filter_results(sermons_raw)
 
             story_matches = detect_personal_story(user_text)
@@ -252,12 +249,6 @@ async def entrypoint(ctx: JobContext):
                     "timestamp": r.get('start_time', ''),
                     "text": r.get('text', '')[:200]
                 })
-            for ill in illustrations[:3]:
-                await send_data_message(ctx.room, "illustration", {
-                    "title": ill.get('illustration', ill.get('title', ill.get('summary', 'Illustration'))),
-                    "text": ill.get('text', '')[:300],
-                    "url": ill.get('video_url', ill.get('youtube_url', ill.get('url', ''))),
-                })
 
             instructions = f'The user asked: "{user_text}"\n\n'
 
@@ -265,13 +256,8 @@ async def entrypoint(ctx: JobContext):
                 instructions += "=== PASTOR BOB'S ACTUAL SERMON CONTENT (USE THIS TO ANSWER) ===\n\n"
                 for i, r in enumerate(sermons[:5]):
                     instructions += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
-                    instructions += f'"{r.get("text", "")[:1200]}"\n\n'
+                    instructions += f'"{r.get("text", "")[:800]}"\n\n'
                 instructions += "USE THE CONTENT ABOVE. Say 'Pastor Bob teaches...' and share what he says from these segments. Be warm and conversational.\n"
-            elif website:
-                instructions += "=== CHURCH WEBSITE INFO ===\n"
-                for wr in website[:2]:
-                    instructions += f"[{wr.get('page', 'Church Info')}]: {wr.get('text', '')[:600]}\n"
-                instructions += "Use this church info to answer the question.\n"
             else:
                 instructions += "No specific sermon content found. Answer the question warmly from the Bible. Do NOT say you lack information or need to check. Just give a solid biblical answer.\n"
 
