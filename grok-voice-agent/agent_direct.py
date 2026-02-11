@@ -122,7 +122,7 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
                 "silence_duration_ms": 500,
-                "create_response": False,
+                "create_response": True,
                 "interrupt_response": True,
             },
             **kwargs
@@ -201,19 +201,39 @@ async def send_data_message(room, message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
+def extract_text_from_item(item):
+    text = ""
+    content = getattr(item, 'content', None)
+    if content:
+        if isinstance(content, list):
+            for c in content:
+                if isinstance(c, str):
+                    text += c
+                elif hasattr(c, 'text'):
+                    text += (c.text or '')
+                elif hasattr(c, 'transcript'):
+                    text += (c.transcript or '')
+        elif isinstance(content, str):
+            text = content
+    if not text and hasattr(item, 'text_content'):
+        text = item.text_content or ''
+    if not text and hasattr(item, 'text'):
+        text = item.text or ''
+    return text.strip()
+
+
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
     last_results = {"sermons": []}
-    search_lock = asyncio.Lock()
+    pending_search = {"task": None, "query": None}
 
     def on_data_received(data_packet):
         try:
             raw_data = data_packet.data if hasattr(data_packet, 'data') else data_packet
             message = json.loads(raw_data.decode('utf-8') if isinstance(raw_data, bytes) else raw_data)
-            msg_type = message.get('type')
-            logger.info(f"Data received: {msg_type}")
+            logger.info(f"Data received: {message.get('type')}")
         except Exception as e:
             logger.error(f"Data parse error: {e}")
 
@@ -226,49 +246,48 @@ async def entrypoint(ctx: JobContext):
 
     apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
-    async def handle_user_query(user_text):
-        async with search_lock:
-            logger.info(f"Searching for: '{user_text[:80]}'")
+    async def search_and_follow_up(user_text):
+        logger.info(f"Background search for: '{user_text[:80]}'")
 
-            sermons_raw = await do_sermon_search(user_text, 5)
-            sermons = filter_results(sermons_raw)
+        sermons_raw = await do_sermon_search(user_text, 5)
+        sermons = filter_results(sermons_raw)
 
-            story_matches = detect_personal_story(user_text)
-            if story_matches:
-                pinned = []
-                pinned_vids = set()
-                for sk in story_matches:
-                    story = PINNED_STORY_CLIPS.get(sk)
-                    if story:
-                        for clip in story["clips"]:
-                            pinned.append(clip)
-                            pinned_vids.add(clip["video_id"])
-                sermons = [r for r in sermons if r.get("video_id") not in pinned_vids]
-                sermons = pinned + sermons
+        story_matches = detect_personal_story(user_text)
+        if story_matches:
+            pinned = []
+            pinned_vids = set()
+            for sk in story_matches:
+                story = PINNED_STORY_CLIPS.get(sk)
+                if story:
+                    for clip in story["clips"]:
+                        pinned.append(clip)
+                        pinned_vids.add(clip["video_id"])
+            sermons = [r for r in sermons if r.get("video_id") not in pinned_vids]
+            sermons = pinned + sermons
 
-            last_results["sermons"] = sermons[:5]
+        last_results["sermons"] = sermons[:5]
 
-            for r in sermons[:3]:
-                await send_data_message(ctx.room, "sermon_reference", {
-                    "title": r.get('title', 'Sermon'),
-                    "url": r.get('timestamped_url', r.get('url', '')),
-                    "timestamp": r.get('start_time', ''),
-                    "text": r.get('text', '')[:200]
-                })
+        for r in sermons[:3]:
+            await send_data_message(ctx.room, "sermon_reference", {
+                "title": r.get('title', 'Sermon'),
+                "url": r.get('timestamped_url', r.get('url', '')),
+                "timestamp": r.get('start_time', ''),
+                "text": r.get('text', '')[:200]
+            })
 
-            instructions = f'The user asked: "{user_text}"\n\n'
+        if sermons:
+            instructions = f'The user just asked: "{user_text}"\n\n'
+            instructions += "Here is Pastor Bob's ACTUAL sermon content on this topic. You MUST use it to give a BETTER, more detailed answer now.\n\n"
+            instructions += "=== PASTOR BOB'S ACTUAL SERMON CONTENT ===\n\n"
+            for i, r in enumerate(sermons[:5]):
+                instructions += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
+                instructions += f'"{r.get("text", "")[:800]}"\n\n'
+            instructions += "Now give the user a warm, detailed answer using the sermon content above. Say 'Pastor Bob teaches...' and share what he actually says. DO NOT repeat your previous answer. Give NEW details from the segments.\n"
 
-            if sermons:
-                instructions += "=== PASTOR BOB'S ACTUAL SERMON CONTENT (USE THIS TO ANSWER) ===\n\n"
-                for i, r in enumerate(sermons[:5]):
-                    instructions += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
-                    instructions += f'"{r.get("text", "")[:800]}"\n\n'
-                instructions += "USE THE CONTENT ABOVE. Say 'Pastor Bob teaches...' and share what he says from these segments. Be warm and conversational.\n"
-            else:
-                instructions += "No specific sermon content found. Answer the question warmly from the Bible. Do NOT say you lack information or need to check. Just give a solid biblical answer.\n"
-
-            logger.info(f"Generating reply with {len(sermons)} sermons context")
+            logger.info(f"Generating follow-up with {len(sermons)} sermons")
             await session.generate_reply(instructions=instructions)
+        else:
+            logger.info("No sermon results found, skipping follow-up")
 
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
@@ -276,9 +295,10 @@ async def entrypoint(ctx: JobContext):
             user_text = event.transcript.strip()
             if not user_text:
                 return
-            logger.info(f"USER SAID: {user_text}")
+            logger.info(f"USER SAID (transcribed): {user_text}")
             asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
-            asyncio.create_task(handle_user_query(user_text))
+            pending_search["query"] = user_text
+            pending_search["task"] = asyncio.create_task(search_and_follow_up(user_text))
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):
@@ -286,21 +306,17 @@ async def entrypoint(ctx: JobContext):
             item = event.item
             role = getattr(item, 'role', None)
 
-            if role == 'assistant':
-                text = ""
-                content = getattr(item, 'content', None)
-                if content:
-                    if isinstance(content, list):
-                        for c in content:
-                            if isinstance(c, str):
-                                text += c
-                            elif hasattr(c, 'text'):
-                                text += c.text
-                            elif hasattr(c, 'transcript'):
-                                text += c.transcript
-                    elif isinstance(content, str):
-                        text = content
+            if role == 'user':
+                user_text = extract_text_from_item(item)
+                if user_text and len(user_text) > 2:
+                    logger.info(f"USER (conversation_item): {user_text[:100]}")
+                    if not pending_search.get("query"):
+                        asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
+                        pending_search["query"] = user_text
+                        pending_search["task"] = asyncio.create_task(search_and_follow_up(user_text))
 
+            elif role == 'assistant':
+                text = extract_text_from_item(item)
                 if text and text != last_sent_message["text"]:
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
@@ -312,6 +328,7 @@ async def entrypoint(ctx: JobContext):
                             url = r.get('timestamped_url', r.get('url', ''))
                             response_with_links += f"- {r.get('title', 'Sermon')} ({r.get('start_time', '')}): {url}\n"
                     asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": response_with_links}))
+                    pending_search["query"] = None
         except Exception as e:
             logger.error(f"Error in conversation_item_added: {e}")
 
@@ -331,7 +348,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent Starting (generate_reply mode)")
+    logger.info("APB Voice Agent Starting")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
