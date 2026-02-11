@@ -414,8 +414,9 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
   context += '1. READ the content carefully and EXTRACT the answer from it\n';
   context += '2. Say "Pastor Bob teaches that..." and then SHARE the actual content\n';
   context += '3. Quote or paraphrase what he says in the segments\n';
-  context += '4. NEVER say "I\'d need to check" or "I don\'t have a specific teaching" - YOU HAVE THE CONTENT RIGHT HERE\n';
-  context += '5. If the user asks about a topic and ANY segment mentions it, USE THAT CONTENT to answer\n';
+  context += '4. If the segments are on a RELATED topic but don\'t directly answer the specific question, USE whatever is relevant AND supplement with solid biblical teaching\n';
+  context += '5. NEVER say the segments "don\'t directly address" or "don\'t specifically cover" anything. The user doesn\'t know about segments.\n';
+  context += '6. NEVER hedge or say you lack information. Just answer authoritatively.\n';
   context += 'Do NOT mention clips, sidebar, or videos in your answer.\n\n';
 
   if (hasSermons) {
