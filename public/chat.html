@@ -2066,22 +2066,10 @@ TESTIMONY (HOW BOB WAS SAVED):
                 await room.connect(data.url, data.token, roomOptions);
                 log(`Connected to room: ${room.name}`, 'success');
 
-                // Step 6: Publish a SILENT audio track so xAI session initializes
-                // Real speech recognition is handled by browser STT, not xAI
-                log('Publishing silent audio track...', 'info');
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0; // completely silent
-                oscillator.connect(gainNode);
-                const dest = audioCtx.createMediaStreamDestination();
-                gainNode.connect(dest);
-                oscillator.start();
-                const silentTrack = dest.stream.getAudioTracks()[0];
-                await room.localParticipant.publishTrack(silentTrack, {
-                    source: LivekitClient.Track.Source.Microphone,
-                });
-                log('Silent audio track published - xAI session will initialize', 'info');
+                // Step 6: Enable microphone so xAI session initializes
+                log('Enabling microphone...', 'info');
+                await room.localParticipant.setMicrophoneEnabled(true);
+                log('Microphone enabled', 'success');
                 
                 await room.localParticipant.setTrackSubscriptionPermissions({
                     allParticipantTracks: true,

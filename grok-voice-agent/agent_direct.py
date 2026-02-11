@@ -28,13 +28,27 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
                 "silence_duration_ms": 500,
-                "create_response": False,
+                "create_response": True,
                 "interrupt_response": True,
             },
             **kwargs
         )
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm voice assistant for Calvary Chapel East Anaheim. You ONLY speak when given specific instructions via generate_reply. Do not generate responses on your own.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm voice assistant for Calvary Chapel East Anaheim.
+
+CRITICAL INSTRUCTION: When the user asks ANY theological question, Bible question, or question about Pastor Bob's teachings, you MUST respond with ONLY one of these short phrases:
+- "Great question! One moment while I look that up."
+- "Let me find what Pastor Bob teaches on that."
+- "Good question, give me just a moment."
+
+Do NOT try to answer the question yourself. Do NOT share any Bible knowledge. Do NOT say "I don't have" anything. Just say one of the short phrases above and wait.
+
+The ONLY time you answer directly is:
+- Greetings: "Welcome to Ask Pastor Bob! How can I help you today?"
+- Simple small talk like "How are you?" or "Thank you"
+- If the user says goodbye
+
+For EVERYTHING ELSE, just say "One moment while I look that up" and nothing more.
 """
 
 
@@ -53,6 +67,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
+    awaiting_answer = {"active": False}
 
     session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
     apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
@@ -68,6 +83,7 @@ async def entrypoint(ctx: JobContext):
                 answer_text = message['text'].strip()
                 if answer_text:
                     logger.info(f"GOT ANSWER TO SPEAK: {answer_text[:100]}...")
+                    awaiting_answer["active"] = False
                     asyncio.create_task(speak_answer(answer_text))
             elif msg_type == 'silent_connection':
                 text_to_speak = message.get('textToSpeak', '')
@@ -116,7 +132,12 @@ async def entrypoint(ctx: JobContext):
                 if text and text != last_sent_message["text"]:
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
-                    asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": text}))
+                    stall_phrases = ["one moment", "let me find", "let me look", "give me just a moment", "look that up"]
+                    is_stall = any(p in text.lower() for p in stall_phrases)
+                    if not is_stall:
+                        asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": text}))
+                    else:
+                        logger.info("Suppressing stall phrase from chat display")
         except Exception as e:
             logger.error(f"Error in conversation_item_added: {e}")
 
