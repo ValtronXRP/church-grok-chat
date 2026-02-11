@@ -12,21 +12,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("apb")
 
 from livekit import rtc
-from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, function_tool, RunContext
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import openai
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://localhost:5050')
-
-def time_to_seconds(time_str):
-    if not time_str:
-        return 0
-    parts = time_str.split(':')
-    parts = [int(p) for p in parts]
-    if len(parts) == 3:
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    elif len(parts) == 2:
-        return parts[0] * 60 + parts[1]
-    return 0
 
 PINNED_STORY_CLIPS = {
     "becky_story": {
@@ -135,8 +124,8 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
                 "type": "server_vad",
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
-                "silence_duration_ms": 200,
-                "create_response": True,
+                "silence_duration_ms": 500,
+                "create_response": False,
                 "interrupt_response": True,
             },
             **kwargs
@@ -144,20 +133,21 @@ class FixedXAIRealtimeModel(openai.realtime.RealtimeModel):
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. Your job is to answer questions based on Pastor Bob Kopeny's sermon teachings.
 
-=== CRITICAL: YOU MUST USE THE search_pastor_bob_sermons TOOL ===
-For EVERY question about the Bible, theology, faith, Christian living, or anything Pastor Bob might have taught on, you MUST call the search_pastor_bob_sermons tool FIRST before answering. This tool searches through 34,000+ real sermon segments and returns Pastor Bob's actual words. After getting results, use them to answer warmly: "Pastor Bob teaches..."
+=== YOUR #1 JOB ===
+When sermon segments are provided in your instructions, you MUST read them and answer the user's question using that content. Say "Pastor Bob teaches..." and share what he says. The segments are his REAL words from REAL sermons. Always give a substantive answer.
 
 === BANNED PHRASES (NEVER SAY THESE) ===
 - "I'd need to check"
 - "I don't have a specific teaching"
 - "I'd have to look into"
 - "I'm not sure what Pastor Bob says about"
+- "Let me look into that"
 - Any variation of hedging, deflecting, or saying you lack information
 
-=== WHAT TO DO ===
-1. User asks a question -> Call search_pastor_bob_sermons tool with their question
-2. Tool returns sermon content -> Use it to answer: "Pastor Bob teaches..."
-3. Tool returns no results -> Give a solid biblical answer without mentioning the lack of results
+=== WHAT TO DO INSTEAD ===
+- Sermon segments provided? USE THEM. Read them, extract the answer, share it warmly.
+- No sermon segments provided? Give a solid biblical answer. Do NOT say "Pastor Bob doesn't have a teaching on this" - just answer the question from Scripture.
+- Personal questions about Pastor Bob? Use the VERIFIED FACTS below.
 
 === VERIFIED FACTS ABOUT PASTOR BOB (ONLY USE THESE) ===
 
@@ -194,85 +184,7 @@ TESTIMONY (HOW BOB WAS SAVED):
 3. Be warm, helpful, and conversational.
 4. NEVER mention clips, sidebar, or videos in your verbal response.
 5. Bible book names: Say "First John" NOT "one John". Say "Second Corinthians" NOT "two Corinthians". Always spell out First, Second, Third.
-6. ALWAYS call search_pastor_bob_sermons before answering theological or biblical questions.
 """
-
-_room_ref = {"room": None}
-_last_results = {"sermons": []}
-
-class APBAssistant(Agent):
-    def __init__(self):
-        super().__init__(
-            instructions=PASTOR_BOB_INSTRUCTIONS,
-            tools=[search_pastor_bob_sermons],
-        )
-
-
-@function_tool()
-async def search_pastor_bob_sermons(context: RunContext, query: str) -> str:
-    """Search Pastor Bob's 34,000+ sermon segments to find his actual teachings on any topic. Call this for ANY question about the Bible, theology, faith, Christian living, stories, or anything Pastor Bob might have taught on. Returns his real sermon content that you MUST use to answer the question."""
-    logger.info(f"TOOL CALLED: search_pastor_bob_sermons('{query[:80]}')")
-
-    sermons_raw, illustrations, website = await do_sermon_search(query, 8)
-    sermons = filter_results(sermons_raw)
-
-    story_matches = detect_personal_story(query)
-    if story_matches:
-        pinned = []
-        pinned_vids = set()
-        for sk in story_matches:
-            story = PINNED_STORY_CLIPS.get(sk)
-            if story:
-                for clip in story["clips"]:
-                    pinned.append(clip)
-                    pinned_vids.add(clip["video_id"])
-        sermons = [r for r in sermons if r.get("video_id") not in pinned_vids]
-        sermons = pinned + sermons
-
-    _last_results["sermons"] = sermons[:5]
-
-    room = _room_ref.get("room")
-    if room:
-        for r in sermons[:3]:
-            try:
-                payload = json.dumps({
-                    "type": "sermon_reference",
-                    "title": r.get('title', 'Sermon'),
-                    "url": r.get('timestamped_url', r.get('url', '')),
-                    "timestamp": r.get('start_time', ''),
-                    "text": r.get('text', '')[:200]
-                })
-                await room.local_participant.publish_data(payload.encode('utf-8'), reliable=True)
-            except Exception as e:
-                logger.error(f"Failed to send sermon ref: {e}")
-        for ill in illustrations[:3]:
-            try:
-                payload = json.dumps({
-                    "type": "illustration",
-                    "title": ill.get('illustration', ill.get('title', ill.get('summary', 'Illustration'))),
-                    "text": ill.get('text', '')[:300],
-                    "url": ill.get('video_url', ill.get('youtube_url', ill.get('url', ''))),
-                })
-                await room.local_participant.publish_data(payload.encode('utf-8'), reliable=True)
-            except Exception as e:
-                logger.error(f"Failed to send illustration: {e}")
-
-    if not sermons and not website:
-        return "No specific sermon segments found on this topic. Answer the question warmly from your biblical knowledge. Do NOT say you lack information."
-
-    result = "=== PASTOR BOB'S ACTUAL SERMON CONTENT ===\n\n"
-    for i, r in enumerate(sermons[:5]):
-        result += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
-        result += f'"{r.get("text", "")[:1200]}"\n\n'
-
-    if website:
-        result += "\n=== CHURCH WEBSITE INFO ===\n"
-        for wr in website[:2]:
-            result += f"[{wr.get('page', 'Church Info')}]: {wr.get('text', '')[:600]}\n"
-
-    result += "\nIMPORTANT: Use the content above to answer. Say 'Pastor Bob teaches...' and share what he says from these segments."
-    logger.info(f"Tool returning {len(sermons)} sermons, {len(illustrations)} illustrations")
-    return result
 
 
 async def send_data_message(room, message_type, data):
@@ -285,10 +197,13 @@ async def send_data_message(room, message_type, data):
     except Exception as e:
         logger.error(f"Failed to send data: {e}")
 
+
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
+    last_results = {"sermons": []}
+    search_lock = asyncio.Lock()
 
     def on_data_received(data_packet):
         try:
@@ -304,18 +219,74 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info(f"Connected to room: {ctx.room.name}")
 
-    _room_ref["room"] = ctx.room
-
     session = AgentSession(llm=FixedXAIRealtimeModel(voice="Aria"))
 
-    apb_agent = APBAssistant()
+    apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
+
+    async def handle_user_query(user_text):
+        async with search_lock:
+            logger.info(f"Searching for: '{user_text[:80]}'")
+
+            sermons_raw, illustrations, website = await do_sermon_search(user_text, 8)
+            sermons = filter_results(sermons_raw)
+
+            story_matches = detect_personal_story(user_text)
+            if story_matches:
+                pinned = []
+                pinned_vids = set()
+                for sk in story_matches:
+                    story = PINNED_STORY_CLIPS.get(sk)
+                    if story:
+                        for clip in story["clips"]:
+                            pinned.append(clip)
+                            pinned_vids.add(clip["video_id"])
+                sermons = [r for r in sermons if r.get("video_id") not in pinned_vids]
+                sermons = pinned + sermons
+
+            last_results["sermons"] = sermons[:5]
+
+            for r in sermons[:3]:
+                await send_data_message(ctx.room, "sermon_reference", {
+                    "title": r.get('title', 'Sermon'),
+                    "url": r.get('timestamped_url', r.get('url', '')),
+                    "timestamp": r.get('start_time', ''),
+                    "text": r.get('text', '')[:200]
+                })
+            for ill in illustrations[:3]:
+                await send_data_message(ctx.room, "illustration", {
+                    "title": ill.get('illustration', ill.get('title', ill.get('summary', 'Illustration'))),
+                    "text": ill.get('text', '')[:300],
+                    "url": ill.get('video_url', ill.get('youtube_url', ill.get('url', ''))),
+                })
+
+            instructions = f'The user asked: "{user_text}"\n\n'
+
+            if sermons:
+                instructions += "=== PASTOR BOB'S ACTUAL SERMON CONTENT (USE THIS TO ANSWER) ===\n\n"
+                for i, r in enumerate(sermons[:5]):
+                    instructions += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
+                    instructions += f'"{r.get("text", "")[:1200]}"\n\n'
+                instructions += "USE THE CONTENT ABOVE. Say 'Pastor Bob teaches...' and share what he says from these segments. Be warm and conversational.\n"
+            elif website:
+                instructions += "=== CHURCH WEBSITE INFO ===\n"
+                for wr in website[:2]:
+                    instructions += f"[{wr.get('page', 'Church Info')}]: {wr.get('text', '')[:600]}\n"
+                instructions += "Use this church info to answer the question.\n"
+            else:
+                instructions += "No specific sermon content found. Answer the question warmly from the Bible. Do NOT say you lack information or need to check. Just give a solid biblical answer.\n"
+
+            logger.info(f"Generating reply with {len(sermons)} sermons context")
+            await session.generate_reply(instructions=instructions)
 
     @session.on("user_input_transcribed")
     def on_user_transcript(event):
         if event.is_final and event.transcript:
-            user_text = event.transcript
+            user_text = event.transcript.strip()
+            if not user_text:
+                return
             logger.info(f"USER SAID: {user_text}")
             asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
+            asyncio.create_task(handle_user_query(user_text))
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):
@@ -342,7 +313,7 @@ async def entrypoint(ctx: JobContext):
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
                     response_with_links = text
-                    current_results = _last_results.get("sermons", [])
+                    current_results = last_results.get("sermons", [])
                     if current_results:
                         response_with_links += "\n\nRelated sermon videos:\n"
                         for r in current_results[:3]:
@@ -368,7 +339,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent Starting (Tool-Based Search)")
+    logger.info("APB Voice Agent Starting (generate_reply mode)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
