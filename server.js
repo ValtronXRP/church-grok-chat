@@ -675,13 +675,12 @@ app.post('/api/chat', async (req, res) => {
         const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults);
         console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
         
-        const systemMsgIndex = enhancedMessages.findIndex(m => m.role === 'system');
-        if (systemMsgIndex >= 0) {
-          enhancedMessages[systemMsgIndex] = {
-            ...enhancedMessages[systemMsgIndex],
-            content: enhancedMessages[systemMsgIndex].content + sermonContext
-          };
-        }
+        const lastIdx = enhancedMessages.length - 1;
+        const userMsg = enhancedMessages[lastIdx];
+        enhancedMessages[lastIdx] = {
+          role: 'user',
+          content: sermonContext + '\n\nUSER QUESTION: ' + userMsg.content
+        };
       } else {
         console.log('No relevant sermon segments found');
       }
