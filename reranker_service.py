@@ -375,6 +375,101 @@ def search_fast():
     })
 
 
+@app.route('/search/fast-all', methods=['POST'])
+def search_fast_all():
+    data = request.json
+    query = data.get('query', '')
+    n_sermons = data.get('n_sermons', 6)
+    n_illustrations = data.get('n_illustrations', 3)
+
+    if not query:
+        return jsonify({'error': 'No query provided'}), 400
+
+    start = time.time()
+    query_emb = embedder.encode([query], normalize_embeddings=True).tolist()
+
+    sermon_results = []
+    ill_results = []
+
+    pinned, pinned_vids = detect_pinned_stories(query)
+    if pinned:
+        sermon_results.extend(pinned)
+
+    if sermon_collection:
+        results = sermon_collection.query(
+            query_embeddings=query_emb,
+            n_results=n_sermons + 5,
+            include=['metadatas', 'documents', 'distances']
+        )
+        if results['ids'] and results['ids'][0]:
+            seen = set()
+            for i in range(len(results['ids'][0])):
+                text = results['documents'][0][i] or ''
+                key = text[:200]
+                if key in seen:
+                    continue
+                seen.add(key)
+                meta = results['metadatas'][0][i] or {}
+                dist = results['distances'][0][i] if results['distances'] else 1.0
+                title = meta.get('title', '')
+                if is_worship_content(text, title):
+                    continue
+                vid = meta.get('video_id', '')
+                if vid in pinned_vids:
+                    continue
+                sermon_results.append({
+                    'text': text,
+                    'title': title,
+                    'video_id': vid,
+                    'start_time': meta.get('start_time', ''),
+                    'url': meta.get('url', ''),
+                    'timestamped_url': meta.get('timestamped_url', meta.get('url', '')),
+                    'rerank_score': 1.0 - dist,
+                    'source': 'sermon',
+                })
+                if len(sermon_results) >= n_sermons + len(pinned):
+                    break
+
+    if illustration_collection:
+        results = illustration_collection.query(
+            query_embeddings=query_emb,
+            n_results=n_illustrations + 3,
+            include=['metadatas', 'documents', 'distances']
+        )
+        if results['ids'] and results['ids'][0]:
+            seen = set()
+            for i in range(len(results['ids'][0])):
+                text = results['documents'][0][i] or ''
+                key = text[:200]
+                if key in seen:
+                    continue
+                seen.add(key)
+                meta = results['metadatas'][0][i] or {}
+                title = meta.get('title', meta.get('summary', 'Illustration'))
+                if len(text) < 30:
+                    continue
+                ill_results.append({
+                    'text': text,
+                    'title': title,
+                    'topics': meta.get('topics', ''),
+                    'tone': meta.get('emotional_tone', ''),
+                    'url': meta.get('youtube_url', meta.get('url', '')),
+                    'timestamp': meta.get('start_time', ''),
+                    'source': 'illustration',
+                })
+                if len(ill_results) >= n_illustrations:
+                    break
+
+    elapsed = time.time() - start
+    return jsonify({
+        'query': query,
+        'sermons': sermon_results[:n_sermons + len(pinned)],
+        'illustrations': ill_results[:n_illustrations],
+        'timing_ms': round(elapsed * 1000),
+        'pinned_count': len(pinned)
+    })
+
+
 @app.route('/search/sermons', methods=['POST'])
 def search_sermons():
     data = request.json

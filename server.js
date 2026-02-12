@@ -608,26 +608,45 @@ app.post('/api/chat', async (req, res) => {
         }
       }
       
-      const useFastSearch = req.query.fast === '1';
-      const numResults = isMoreRequest ? 12 : 6;
+      const numSermons = isMoreRequest ? 12 : 6;
+      const numIllustrations = isMoreRequest ? 0 : 3;
       
-      if (useFastSearch) {
-        sermonResults = await searchFast(searchQuery, 5);
-        console.log(`Fast search: ${sermonResults.length} sermons`);
-      } else {
-        const hybridResults = await searchHybrid(searchQuery, numResults);
-        if (hybridResults) {
-          sermonResults = hybridResults.sermons || [];
-          illustrationResults = hybridResults.illustrations || [];
-          websiteResults = hybridResults.website || [];
-          console.log(`Hybrid search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations, ${websiteResults.length} website`);
-        } else {
-          try {
-            sermonResults = await searchSermons(searchQuery, numResults);
-          } catch (searchError) {
-            console.log('Sermon search skipped due to error:', searchError.message);
-            sermonResults = [];
-          }
+      try {
+        const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {
+          query: searchQuery,
+          n_sermons: numSermons,
+          n_illustrations: numIllustrations
+        }, { timeout: 10000 });
+        
+        if (fastResponse.data) {
+          sermonResults = (fastResponse.data.sermons || []).map(r => ({
+            text: r.text,
+            title: r.title || 'Sermon',
+            video_id: r.video_id || '',
+            start_time: r.start_time || '',
+            url: r.url || '',
+            timestamped_url: r.timestamped_url || r.url || '',
+            relevance_score: r.rerank_score || 0,
+            source: 'sermon'
+          }));
+          illustrationResults = (fastResponse.data.illustrations || []).map(r => ({
+            text: r.text,
+            title: r.title || 'Illustration',
+            topics: r.topics ? r.topics.split(',') : [],
+            tone: r.tone || '',
+            url: r.url || '',
+            timestamp: r.timestamp || '',
+            source: 'illustration'
+          }));
+          console.log(`Fast search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations (${fastResponse.data.timing_ms}ms)`);
+        }
+      } catch (err) {
+        console.log(`Fast search error: ${err.message}, falling back to direct search`);
+        try {
+          sermonResults = await searchSermons(searchQuery, numSermons);
+        } catch (searchError) {
+          console.log('Sermon search also failed:', searchError.message);
+          sermonResults = [];
         }
       }
       
@@ -696,30 +715,6 @@ app.post('/api/chat', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    // If hybrid search didn't provide illustrations, fall back to old illustration search
-    if ((!illustrationResults || illustrationResults.length === 0) && lastUserMessage && lastUserMessage.role === 'user' && !isMoreRequest && illustrationCollection) {
-      try {
-        const illResponse = await axios.post(`http://localhost:${PORT}/api/illustration/search`, {
-          query: lastUserMessage.content,
-          n_results: 3
-        }, { timeout: 5000 });
-        const oldIllResults = illResponse.data.results || [];
-        if (oldIllResults.length > 0) {
-          illustrationResults = oldIllResults.map(ill => ({
-            title: ill.illustration || 'Illustration',
-            text: ill.text || '',
-            topics: ill.topics || [],
-            tone: ill.tone || '',
-            url: ill.video_url || '',
-            timestamp: ill.timestamp || ''
-          }));
-          console.log(`Found ${illustrationResults.length} illustrations from fallback search`);
-        }
-      } catch (err) {
-        console.log('Illustration search error:', err.message);
-      }
-    }
     
     // Send illustrations as separate event
     if (illustrationResults && illustrationResults.length > 0) {
