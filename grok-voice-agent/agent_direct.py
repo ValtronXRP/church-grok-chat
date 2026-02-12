@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import json
+import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,8 +12,10 @@ logger = logging.getLogger("apb")
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins.xai.realtime import RealtimeModel, FileSearch
+from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
 XAI_COLLECTION_ID = os.environ.get("XAI_COLLECTION_ID", "")
+RERANKER_URL = os.environ.get('RERANKER_URL', 'http://localhost:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. Your job is to answer questions based on Pastor Bob Kopeny's sermon teachings.
 
@@ -61,6 +64,35 @@ async def send_data_message(room, message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
+async def search_for_sidebar(query, room):
+    try:
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(
+                f"{RERANKER_URL}/search/fast",
+                json={"query": query, "n_results": 5},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    results = data.get('results', [])
+                    logger.info(f"Sidebar search: {len(results)} results")
+                    for r in results[:3]:
+                        title = r.get('title', 'Sermon')
+                        if title.lower() in ['unknown sermon', 'unknown', '']:
+                            continue
+                        text = r.get('text', '')
+                        if len(text) < 50:
+                            continue
+                        await send_data_message(room, "sermon_reference", {
+                            "title": title,
+                            "url": r.get('timestamped_url', r.get('url', '')),
+                            "timestamp": r.get('start_time', ''),
+                            "text": text[:200]
+                        })
+    except Exception as e:
+        logger.warning(f"Sidebar search error: {e}")
+
+
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
@@ -77,12 +109,33 @@ async def entrypoint(ctx: JobContext):
     else:
         logger.warning("XAI_COLLECTION_ID not set - file_search disabled")
 
-    model = RealtimeModel(voice="Aria")
+    turn_detection = ServerVad(
+        type="server_vad",
+        threshold=0.5,
+        prefix_padding_ms=300,
+        silence_duration_ms=700,
+        create_response=True,
+        interrupt_response=True,
+    )
+
+    model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
     session = AgentSession(llm=model)
     apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS, tools=tools)
 
     await ctx.connect()
     logger.info(f"Connected to room: {ctx.room.name}")
+
+    @session.on("user_input_transcribed")
+    def on_user_input(event):
+        try:
+            text = getattr(event, 'text', '') or getattr(event, 'transcript', '') or ''
+            text = text.strip()
+            if text and len(text) > 3:
+                logger.info(f"User said: {text[:80]}")
+                asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": text}))
+                asyncio.create_task(search_for_sidebar(text, ctx.room))
+        except Exception as e:
+            logger.error(f"Error in user_input_transcribed: {e}")
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):
