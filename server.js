@@ -436,35 +436,27 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
     return context;
   }
   
-  let context = '\n\n=== PASTOR BOB\'S ACTUAL SERMON CONTENT (YOU MUST USE THIS) ===\n\n';
-  context += 'CRITICAL INSTRUCTION: The segments below ARE Pastor Bob\'s real teachings. You MUST:\n';
-  context += '1. READ the content carefully and EXTRACT the answer from it\n';
-  context += '2. Say "Pastor Bob teaches that..." and then SHARE the actual content\n';
-  context += '3. Quote or paraphrase what he says in the segments\n';
-  context += '4. If the segments are on a RELATED topic but don\'t directly answer the specific question, USE whatever is relevant AND supplement with solid biblical teaching\n';
-  context += '5. NEVER say the segments "don\'t directly address" or "don\'t specifically cover" anything. The user doesn\'t know about segments.\n';
-  context += '6. NEVER hedge or say you lack information. Just answer authoritatively.\n';
-  context += 'Do NOT mention clips, sidebar, or videos in your answer.\n\n';
+  let context = '\n\n=== PASTOR BOB\'S ACTUAL SERMON TRANSCRIPTS ===\n\n';
+  context += 'These are REAL transcripts from Pastor Bob\'s sermons. You MUST:\n';
+  context += '1. SYNTHESIZE across ALL segments below to build a COMPLETE, NUANCED answer\n';
+  context += '2. Identify the FULL theological framework Pastor Bob teaches — look for multi-part teachings, distinctions, stages, or nuances across segments\n';
+  context += '3. Say "Pastor Bob teaches..." and share his actual teaching with its full depth\n';
+  context += '4. If he makes distinctions (e.g., "there is X but there is also Y"), preserve those distinctions in your answer\n';
+  context += '5. Quote or closely paraphrase his actual words when they are powerful\n';
+  context += '6. NEVER flatten a nuanced teaching into a simple one-line answer\n';
+  context += '7. NEVER say you lack information — the transcripts below ARE your source\n';
+  context += 'Do NOT mention clips, sidebar, segments, transcripts, or videos in your answer.\n\n';
 
   if (hasSermons) {
-    const first3 = sermonResults.slice(0, 5);
+    const topResults = sermonResults.slice(0, 6);
 
-    const scriptures = [];
-    first3.forEach(result => {
-      const scriptureMatch = result.text.match(/([1-3]?\s?[A-Z][a-z]+)\s+(\d+):(\d+)/g);
-      if (scriptureMatch) scriptures.push(...scriptureMatch);
-    });
-    if (scriptures.length > 0) {
-      context += 'Scripture references: ' + scriptures.slice(0, 5).join(', ') + '\n\n';
-    }
-
-    context += 'SERMON SEGMENTS:\n\n';
-    first3.forEach((result, i) => {
-      context += `[Segment ${i + 1}] "${result.title || 'Sermon'}":\n`;
-      context += `"${result.text.substring(0, 1200)}"\n\n`;
+    context += 'SERMON TRANSCRIPTS:\n\n';
+    topResults.forEach((result, i) => {
+      context += `[${i + 1}] "${result.title || 'Sermon'}":\n`;
+      context += `"${result.text.substring(0, 1500)}"\n\n`;
     });
 
-    if (sermonResults.length > 3) {
+    if (sermonResults.length > 5) {
       context += 'If user wants more, say "Would you like me to share more of what Pastor Bob teaches on this?"\n\n';
     }
   }
