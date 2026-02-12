@@ -11,31 +11,19 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("apb")
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.plugins.xai.realtime import RealtimeModel, FileSearch
+from livekit.plugins.xai.realtime import RealtimeModel
 from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
-XAI_COLLECTION_ID = os.environ.get("XAI_COLLECTION_ID", "")
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://localhost:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. Your job is to answer questions based on Pastor Bob Kopeny's sermon teachings.
-
-=== YOUR #1 JOB ===
-You have access to a file_search tool containing thousands of Pastor Bob's sermon transcripts. For EVERY user question, you MUST search the sermon collection and answer based on what you find. Say "Pastor Bob teaches..." and share what he says from the search results.
 
 === BANNED PHRASES (NEVER SAY THESE) ===
 - "I don't have a specific teaching"
 - "I'd need to check"
 - "I don't have that in my materials"
 - "I don't have specific sermon transcripts"
-- "The sermon segments provided don't directly address"
 - Any variation of hedging or saying you lack information
-
-=== WHAT TO DO ===
-- ALWAYS use the file_search tool to find relevant sermon content before answering.
-- Found sermon content? Say "Pastor Bob teaches..." and share what he says.
-- Related but not exact match? USE whatever is relevant AND supplement with solid biblical teaching.
-- Nothing found? Give a solid biblical answer consistent with Pastor Bob's Calvary Chapel teaching. Do NOT mention that you didn't find anything.
-- The user does NOT know about the search tool. Just answer warmly and naturally.
 
 === VERIFIED FACTS ABOUT PASTOR BOB ===
 - Wife: Becky Kopeny
@@ -47,7 +35,7 @@ You have access to a file_search tool containing thousands of Pastor Bob's sermo
 === RULES ===
 1. NEVER invent stories or teachings Pastor Bob didn't actually give.
 2. Be warm, helpful, and conversational.
-3. NEVER mention clips, sidebar, videos, or the file search tool in your verbal response.
+3. NEVER mention clips, sidebar, videos, or search tools in your verbal response.
 4. Bible book names: Say "First John" NOT "one John". Always spell out First, Second, Third.
 5. Keep answers concise for voice - 2-4 sentences unless the user asks for more detail.
 """
@@ -64,66 +52,85 @@ async def send_data_message(room, message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-async def search_for_sidebar(query, room):
+async def fast_sermon_search(query):
     try:
         async with aiohttp.ClientSession() as http_session:
             async with http_session.post(
                 f"{RERANKER_URL}/search/fast",
                 json={"query": query, "n_results": 5},
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=8)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
                     results = data.get('results', [])
-                    logger.info(f"Sidebar search: {len(results)} results")
-                    for r in results[:3]:
-                        title = r.get('title', 'Sermon')
-                        if title.lower() in ['unknown sermon', 'unknown', '']:
-                            continue
-                        text = r.get('text', '')
-                        if len(text) < 50:
-                            continue
-                        await send_data_message(room, "sermon_reference", {
-                            "title": title,
-                            "url": r.get('timestamped_url', r.get('url', '')),
-                            "timestamp": r.get('start_time', ''),
-                            "text": text[:200]
-                        })
+                    timing = data.get('timing_ms', 0)
+                    logger.info(f"Fast search: {len(results)} results ({timing}ms)")
+                    return results
     except Exception as e:
-        logger.warning(f"Sidebar search error: {e}")
+        logger.warning(f"Fast search error: {e}")
+    return []
 
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
-
-    tools = []
-    if XAI_COLLECTION_ID:
-        file_search = FileSearch(
-            vector_store_ids=[XAI_COLLECTION_ID],
-            max_num_results=10
-        )
-        tools.append(file_search)
-        logger.info(f"FileSearch configured with collection: {XAI_COLLECTION_ID}")
-    else:
-        logger.warning("XAI_COLLECTION_ID not set - file_search disabled")
+    responding = asyncio.Lock()
 
     turn_detection = ServerVad(
         type="server_vad",
         threshold=0.5,
         prefix_padding_ms=300,
         silence_duration_ms=700,
-        create_response=True,
+        create_response=False,
         interrupt_response=True,
     )
 
     model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
     session = AgentSession(llm=model)
-    apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS, tools=tools)
+    apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
     await ctx.connect()
     logger.info(f"Connected to room: {ctx.room.name}")
+
+    async def handle_user_query(user_text):
+        async with responding:
+            logger.info(f"Processing query: '{user_text[:80]}'")
+
+            asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": user_text}))
+
+            sermons = await fast_sermon_search(user_text)
+
+            valid = []
+            for r in sermons:
+                title = (r.get('title') or '').lower()
+                text = r.get('text', '')
+                if title in ['unknown sermon', 'unknown', '']:
+                    continue
+                if len(text) < 50:
+                    continue
+                valid.append(r)
+
+            for r in valid[:3]:
+                await send_data_message(ctx.room, "sermon_reference", {
+                    "title": r.get('title', 'Sermon'),
+                    "url": r.get('timestamped_url', r.get('url', '')),
+                    "timestamp": r.get('start_time', ''),
+                    "text": r.get('text', '')[:200]
+                })
+
+            if valid:
+                context = f'The user asked: "{user_text}"\n\nHere are Pastor Bob\'s ACTUAL sermon segments on this topic. You MUST use these to answer. Say "Pastor Bob teaches..." and share what he says:\n\n'
+                for i, r in enumerate(valid[:5]):
+                    context += f'[Segment {i+1}] "{r.get("title", "Sermon")}":\n'
+                    context += f'"{r.get("text", "")[:600]}"\n\n'
+                context += "Now answer the user's question using the sermon content above. Be warm and conversational."
+            else:
+                context = f'The user asked: "{user_text}"\n\nGive a solid biblical answer consistent with Calvary Chapel teaching. Do NOT say you lack information. Just teach warmly.'
+
+            logger.info(f"Generating reply with {len(valid)} sermon segments")
+            await session.generate_reply(instructions=context)
+            logger.info("Reply generated")
 
     @session.on("user_input_transcribed")
     def on_user_input(event):
@@ -132,8 +139,7 @@ async def entrypoint(ctx: JobContext):
             text = text.strip()
             if text and len(text) > 3:
                 logger.info(f"User said: {text[:80]}")
-                asyncio.create_task(send_data_message(ctx.room, "user_transcript", {"text": text}))
-                asyncio.create_task(search_for_sidebar(text, ctx.room))
+                asyncio.create_task(handle_user_query(text))
         except Exception as e:
             logger.error(f"Error in user_input_transcribed: {e}")
 
@@ -169,7 +175,7 @@ async def entrypoint(ctx: JobContext):
             logger.error(f"Error in conversation_item_added: {e}")
 
     await session.start(room=ctx.room, agent=apb_agent)
-    logger.info("Session started with file_search tool")
+    logger.info("Session started")
 
     greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
     await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
@@ -184,7 +190,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent Starting (with xAI file_search)")
+    logger.info("APB Voice Agent Starting")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
