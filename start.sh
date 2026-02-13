@@ -36,7 +36,7 @@ sleep 5
 # Start the voice agent in the background
 echo "Starting voice agent..."
 cd grok-voice-agent
-python agent_direct.py start 2>/dev/null || python agent_direct.py 2>/dev/null &
+python agent_direct.py start 2>&1 || python agent_direct.py 2>&1 &
 AGENT_PID=$!
 cd ..
 
