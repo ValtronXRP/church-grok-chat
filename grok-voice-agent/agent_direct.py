@@ -15,6 +15,8 @@ from livekit.plugins.xai.realtime import RealtimeModel
 from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://localhost:5050')
+XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
+XAI_COLLECTION_ID = os.environ.get('XAI_COLLECTION_ID', '')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. Your job is to answer questions based on Pastor Bob Kopeny's sermon teachings.
 
@@ -59,6 +61,13 @@ async def send_data_message(room, message_type, data):
 
 
 async def search_sermons(query):
+    if XAI_API_KEY and XAI_COLLECTION_ID:
+        try:
+            results = await search_xai_native(query)
+            if results:
+                return results
+        except Exception as e:
+            logger.warning(f"xAI native search failed, falling back to ChromaDB: {e}")
     try:
         async with aiohttp.ClientSession() as http_session:
             async with http_session.post(
@@ -70,7 +79,45 @@ async def search_sermons(query):
                     data = await response.json()
                     return data.get('results', [])
     except Exception as e:
-        logger.warning(f"Sermon search error: {e}")
+        logger.warning(f"ChromaDB search error: {e}")
+    return []
+
+
+async def search_xai_native(query):
+    async with aiohttp.ClientSession() as http_session:
+        async with http_session.post(
+            "https://api.x.ai/v1/documents/search",
+            headers={"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "query": query,
+                "k": 10,
+                "source": {"type": "collection", "collection_ids": [XAI_COLLECTION_ID]}
+            },
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                matches = data.get('matches', [])
+                results = []
+                for m in matches:
+                    content = m.get('chunk_content', '')
+                    title = 'Sermon'
+                    if content.startswith('title: '):
+                        lines = content.split('\n', 1)
+                        title = lines[0].replace('title: ', '').strip()
+                        content = lines[1] if len(lines) > 1 else content
+                    results.append({
+                        'title': title,
+                        'text': content,
+                        'score': m.get('score', 0),
+                        'url': '',
+                        'start_time': ''
+                    })
+                logger.info(f"xAI native search returned {len(results)} results")
+                return results
+            else:
+                body = await response.text()
+                logger.warning(f"xAI search returned {response.status}: {body[:200]}")
     return []
 
 
@@ -212,7 +259,7 @@ Give a solid biblical answer consistent with Calvary Chapel teaching. Be warm an
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent Starting (ChromaDB sermon search)")
+    logger.info("APB Voice Agent Starting (xAI native + ChromaDB fallback)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
