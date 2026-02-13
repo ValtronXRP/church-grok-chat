@@ -154,9 +154,12 @@ async def search_pastor_bob_sermons(context: RunContext, query: str) -> str:
         text = r.get('text', '')
         if len(text) < 50:
             continue
+        url = r.get('timestamped_url', r.get('url', ''))
+        if not url:
+            url = f"https://www.youtube.com/results?search_query=pastor+bob+kopeny+{title.replace(' ', '+')[:40]}"
         asyncio.create_task(_send_data_message("sermon_reference", {
             "title": title,
-            "url": r.get('timestamped_url', r.get('url', '')),
+            "url": url,
             "timestamp": r.get('start_time', ''),
             "text": text[:200]
         }))
@@ -186,9 +189,9 @@ async def entrypoint(ctx: JobContext):
 
     turn_detection = ServerVad(
         type="server_vad",
-        threshold=0.5,
+        threshold=0.6,
         prefix_padding_ms=300,
-        silence_duration_ms=500,
+        silence_duration_ms=600,
         create_response=True,
         interrupt_response=True,
     )
