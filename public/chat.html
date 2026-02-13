@@ -1353,7 +1353,7 @@
         let silentConnection = false; // Track if connection was from text input
         let typingTimeout = null;
         let autoDisconnectTimer = null; // Timer for auto-disconnect after response
-        const AUTO_DISCONNECT_DELAY = 20000; // 20 seconds after agent finishes speaking
+        const AUTO_DISCONNECT_DELAY = 120000; // 2 minutes of inactivity before disconnect
         let conversationHistory = [
             {
                 role: 'system',
@@ -2258,13 +2258,6 @@ TESTIMONY (HOW BOB WAS SAVED):
                             if (autoDisconnectTimer) {
                                 clearTimeout(autoDisconnectTimer);
                             }
-                            autoDisconnectTimer = setTimeout(() => {
-                                if (isConnected) {
-                                    log('Auto-disconnecting after inactivity', 'info');
-                                    addMessage('Voice session ended due to inactivity', 'system');
-                                    disconnect();
-                                }
-                            }, AUTO_DISCONNECT_DELAY);
                         }
                     } else if (message.type === 'sermon_reference') {
                         log('Received sermon reference', 'info');
@@ -2281,18 +2274,17 @@ TESTIMONY (HOW BOB WAS SAVED):
                             ''
                         );
                     } else if (message.type === 'speech_complete') {
-                        // Agent finished speaking
                         log('Agent finished speaking', 'info');
-                        
-                        // Auto-disconnect after a short delay if this was a silent connection
-                        if (silentConnection) {
-                            setTimeout(() => {
-                                if (isConnected && silentConnection) {
-                                    log('Auto-disconnecting after speech complete', 'info');
-                                    disconnect();
-                                }
-                            }, 2000); // 2 second delay after speech completes
+                        if (autoDisconnectTimer) {
+                            clearTimeout(autoDisconnectTimer);
                         }
+                        autoDisconnectTimer = setTimeout(() => {
+                            if (isConnected) {
+                                log('Auto-disconnecting after inactivity', 'info');
+                                addMessage('Voice session ended due to inactivity', 'system');
+                                disconnect();
+                            }
+                        }, AUTO_DISCONNECT_DELAY);
                     }
                 } catch (error) {
                     console.error('Error parsing data message:', error);
