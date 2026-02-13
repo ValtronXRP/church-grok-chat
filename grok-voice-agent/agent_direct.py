@@ -193,7 +193,7 @@ async def entrypoint(ctx: JobContext):
         prefix_padding_ms=300,
         silence_duration_ms=600,
         create_response=True,
-        interrupt_response=True,
+        interrupt_response=False,
     )
 
     model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
