@@ -123,10 +123,14 @@ async def search_pastor_bob_sermons(context: RunContext, query: str) -> str:
     """Search Pastor Bob's sermon transcripts for teachings on any topic. You MUST call this tool for every question to find what Pastor Bob actually teaches. Pass the user's question or topic as the query."""
     logger.info(f"TOOL CALLED: search_pastor_bob_sermons('{query[:80]}')")
 
-    results = await _search_xai(query, k=10)
-
     rephrased = f"Pastor Bob sermon teaching on {query}"
-    results2 = await _search_xai(rephrased, k=5)
+    r1, r2 = await asyncio.gather(
+        _search_xai(query, k=10),
+        _search_xai(rephrased, k=5),
+        return_exceptions=True
+    )
+    results = r1 if isinstance(r1, list) else []
+    results2 = r2 if isinstance(r2, list) else []
 
     seen = set()
     merged = []
@@ -184,7 +188,7 @@ async def entrypoint(ctx: JobContext):
         type="server_vad",
         threshold=0.5,
         prefix_padding_ms=300,
-        silence_duration_ms=700,
+        silence_duration_ms=500,
         create_response=True,
         interrupt_response=True,
     )
