@@ -37,7 +37,7 @@ NEVER DO:
 - NEVER hedge or deflect — answer authoritatively from the search results
 - NEVER flatten a nuanced teaching into one simple sentence
 
-Bible book names: Say "First John" NOT "one John". Always spell out First, Second, Third.
+Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books. This is CRITICAL.
 Be warm, helpful, and conversational.
 NEVER invent stories or teachings Pastor Bob didn't actually give.
 
@@ -45,7 +45,7 @@ VERIFIED FACTS:
 - Wife: Becky Kopeny
 - Three sons: Jesse, Valor, Christian
 - Was a police officer/detective before ministry
-- Saved at age 13 at a Jr. High church camp through Jeff Maples and Gene Schaeffer
+- Saved at age 13 at a Jr. High church camp (Campus Crusade ministry) through Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
 """
 
@@ -166,7 +166,6 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
-    last_sent_user_message = {"text": None}
 
     turn_detection = ServerVad(
         type="server_vad",
@@ -189,18 +188,6 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     _room_ref = ctx.room
     logger.info(f"Connected to room: {ctx.room.name}")
-
-    @session.on("user_input_transcribed")
-    def on_user_transcribed(event):
-        try:
-            if event.is_final and event.transcript.strip():
-                text = event.transcript.strip()
-                if text != last_sent_user_message["text"]:
-                    last_sent_user_message["text"] = text
-                    logger.info(f"USER SAID: {text[:100]}")
-                    asyncio.create_task(_send_data_message("user_transcript", {"text": text}))
-        except Exception as e:
-            logger.error(f"Error in user_input_transcribed: {e}")
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):

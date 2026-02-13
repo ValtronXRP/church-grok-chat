@@ -1401,8 +1401,8 @@ CAREER BEFORE MINISTRY:
 TESTIMONY (HOW BOB WAS SAVED):
 - Raised Lutheran, parents brought him to church every Sunday
 - Saved in 8th GRADE (age 13) at a JR. HIGH CHURCH CAMP that his friend FRED invited him to attend
-- Fred brought Bob to his church and to the camp
-- Two men - JEFF MAPLES and GENE SCHAEFFER (in their 30s) - shared Christ with him one night for about five minutes and asked if he would receive Christ. He said yes.
+- Fred brought Bob to his church (Campus Crusade ministry) and to the camp
+- Two men - JEFF MAPLES and GENE SCHAEFFER (in their 30s, with Campus Crusade) - shared Christ with him one night for about five minutes and asked if he would receive Christ. He said yes.
 - Did NOT have a dramatic experience when saved - didn't feel different
 - By 9th grade, still saved but "you wouldn't have known it" - wasn't living it out
 - Later prayed a "surrendering prayer" for full surrender to God
@@ -1412,7 +1412,8 @@ TESTIMONY (HOW BOB WAS SAVED):
 2. Spell his name correctly: KOPENY (not Copeny).
 3. Be warm, helpful, and conversational.
 4. Video clips appear in the sidebar automatically - don't list URLs in your response.
-5. Bible book names: Say "First John" NOT "1 John" or "one John". Say "Second Corinthians" NOT "2 Corinthians" or "two Corinthians". Always spell out First, Second, Third.`
+5. Bible book names: ALWAYS say "First John" NOT "1 John" or "one John". ALWAYS say "Second Corinthians" NOT "2 Corinthians" or "two Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books. This is CRITICAL.
+6. The camp ministry was Campus Crusade — NEVER say "Kemp's" or any other name.`
             }
         ];
 
@@ -2206,12 +2207,21 @@ TESTIMONY (HOW BOB WAS SAVED):
                 log(`Your ${pub.kind} track published`, 'success');
             });
 
-            // Transcription events - only log, don't display (use DataReceived instead to avoid duplicates)
             room.on(LivekitClient.RoomEvent.TranscriptionReceived, (segments, participant) => {
+                const isFinal = segments.every(s => s.final);
                 const text = segments.map(s => s.text).join(' ').trim();
                 if (!text) return;
-                // Just log for debugging - actual display handled by DataReceived events
-                log(`Transcription (${participant.identity}): "${text.substring(0, 50)}..."`, 'info');
+                const isAgent = participant && participant.identity && participant.identity !== room.localParticipant.identity;
+                if (!isAgent && isFinal && text.length > 2) {
+                    if (text !== lastVoiceUserMessage) {
+                        lastVoiceUserMessage = text;
+                        addMessage(text, 'user');
+                        conversationHistory.push({ role: 'user', content: text });
+                        showTyping();
+                        fetchClipsForVoiceQuery(text);
+                    }
+                }
+                log(`Transcription (${participant?.identity}): "${text.substring(0, 50)}..." final=${isFinal}`, 'info');
             });
 
             // Track last messages to avoid duplicates
@@ -2370,6 +2380,7 @@ TESTIMONY (HOW BOB WAS SAVED):
         }
 
         let browserRecognition = null;
+        let lastVoiceUserMessage = '';
         
         function startBrowserSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2420,16 +2431,50 @@ TESTIMONY (HOW BOB WAS SAVED):
         }
         
         async function handleVoiceQuery(transcript) {
-            log('Voice query (sending to agent): ' + transcript, 'info');
-            if (isConnected && room && room.localParticipant) {
-                try {
-                    const encoder = new TextEncoder();
-                    const queryData = encoder.encode(JSON.stringify({ type: 'user_query', text: transcript }));
-                    await room.localParticipant.publishData(queryData, { reliable: true });
-                    log('Sent user query to voice agent', 'success');
-                } catch (e) {
-                    log('Failed to send query: ' + e, 'warning');
+            log('Voice query (browser STT): ' + transcript, 'info');
+        }
+
+        async function fetchClipsForVoiceQuery(query) {
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'system', content: 'Return empty response.' },
+                            { role: 'user', content: query }
+                        ],
+                        model: 'grok-3',
+                        temperature: 0.7,
+                        max_tokens: 1
+                    })
+                });
+                if (!res.ok) return;
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.sermon_videos) {
+                                    parsed.sermon_videos.forEach(v => addVideoToSidebar(v.title, v.url, v.timestamp, v.text));
+                                }
+                                if (parsed.illustrations) {
+                                    parsed.illustrations.forEach(ill => addIllustrationToSidebar(ill.title, ill.text, ill.tone, ill.url, ill.timestamp));
+                                }
+                            } catch(e) {}
+                        }
+                    }
                 }
+            } catch(e) {
+                log('Clip fetch error: ' + e.message, 'warning');
             }
         }
 
