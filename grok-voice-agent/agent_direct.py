@@ -166,6 +166,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
+    last_sent_user_message = {"text": None}
 
     turn_detection = ServerVad(
         type="server_vad",
@@ -188,6 +189,18 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     _room_ref = ctx.room
     logger.info(f"Connected to room: {ctx.room.name}")
+
+    @session.on("user_input_transcribed")
+    def on_user_transcribed(event):
+        try:
+            if event.is_final and event.transcript.strip():
+                text = event.transcript.strip()
+                if text != last_sent_user_message["text"]:
+                    last_sent_user_message["text"] = text
+                    logger.info(f"USER SAID: {text[:100]}")
+                    asyncio.create_task(_send_data_message("user_transcript", {"text": text}))
+        except Exception as e:
+            logger.error(f"Error in user_input_transcribed: {e}")
 
     @session.on("conversation_item_added")
     def on_conversation_item(event):

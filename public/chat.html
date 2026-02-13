@@ -1456,74 +1456,69 @@ TESTIMONY (HOW BOB WAS SAVED):
             const videoCount = document.getElementById('videoCount');
             const emptyState = document.getElementById('videoEmptyState');
             
-            // Extract video ID and start time from URL
             const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
-            if (!videoIdMatch) {
-                console.log('Could not extract video ID from URL:', url);
-                return;
-            }
-            const videoId = videoIdMatch[1];
+            const isEmbeddable = !!videoIdMatch;
+            const videoId = videoIdMatch ? videoIdMatch[1] : null;
             
-            // Extract start time (seconds) for deduplication key
             let startSeconds = 0;
             const timeMatch = url.match(/[&?]t=(\d+)/);
             if (timeMatch) {
                 startSeconds = parseInt(timeMatch[1]);
             }
             
-            // Create unique key to prevent duplicates
-            const videoKey = `${videoId}-${startSeconds}`;
+            const videoKey = isEmbeddable ? `${videoId}-${startSeconds}` : `link-${title}-${url.substring(0, 60)}`;
             if (addedVideoKeys.has(videoKey)) {
-                console.log('Duplicate video skipped:', videoKey);
                 return;
             }
             
-            // Limit to MAX_SIDEBAR_VIDEOS
             if (sidebarVideoCount >= MAX_SIDEBAR_VIDEOS) {
-                console.log('Max videos reached (' + MAX_SIDEBAR_VIDEOS + '), not adding:', url);
                 return;
             }
             
-            // Mark as added (both local and global for cross-section dedup)
             addedVideoKeys.add(videoKey);
-            globalVideoIds.add(videoId);
+            if (videoId) globalVideoIds.add(videoId);
             
-            // Hide empty state
             if (emptyState) {
                 emptyState.style.display = 'none';
             }
             
-            // Create embed URL with start parameter (correct format for iframe embed)
-            const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
-            
-            // Create video item
             const videoItem = document.createElement('div');
             videoItem.className = 'sidebar-video-item';
-            videoItem.innerHTML = `
-                <iframe 
-                    src="${embedUrl}"
-                    title="${title || 'Sermon Clip'}"
-                    frameborder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowfullscreen
-                    playsinline
-                    webkit-playsinline
-                    loading="lazy">
-                </iframe>
-                <div class="sidebar-video-info">
-                    <div class="video-title">${title || 'Sermon Clip'}</div>
-                    <div class="video-timestamp">${timestamp || formatSecondsToTimestamp(startSeconds)}</div>
-                </div>
-            `;
+
+            if (isEmbeddable) {
+                const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
+                videoItem.innerHTML = `
+                    <iframe 
+                        src="${embedUrl}"
+                        title="${title || 'Sermon Clip'}"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                        playsinline
+                        webkit-playsinline
+                        loading="lazy">
+                    </iframe>
+                    <div class="sidebar-video-info">
+                        <div class="video-title">${title || 'Sermon Clip'}</div>
+                        <div class="video-timestamp">${timestamp || formatSecondsToTimestamp(startSeconds)}</div>
+                    </div>
+                `;
+            } else {
+                const snippet = text ? text.substring(0, 120) + (text.length > 120 ? '...' : '') : '';
+                videoItem.innerHTML = `
+                    <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:block;">
+                        <div class="sidebar-video-info" style="padding:12px;">
+                            <div class="video-title" style="margin-bottom:6px;">${title || 'Sermon Reference'}</div>
+                            ${snippet ? `<div style="font-size:12px;color:#aaa;line-height:1.4;">${snippet}</div>` : ''}
+                            <div style="font-size:11px;color:#6366f1;margin-top:6px;">Search on YouTube &rarr;</div>
+                        </div>
+                    </a>
+                `;
+            }
             
-            // Add to the beginning of the list
             videoList.insertBefore(videoItem, videoList.firstChild);
-            
-            // Update count
             sidebarVideoCount++;
             videoCount.textContent = sidebarVideoCount;
-            
-            console.log('Added video to sidebar:', videoId, 'at', startSeconds, 'seconds');
         }
         
         function clearVideoSidebar() {
