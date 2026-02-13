@@ -13,30 +13,29 @@ logger = logging.getLogger("apb")
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, function_tool, RunContext
 from livekit.plugins.xai.realtime import RealtimeModel
-from livekit.plugins.xai import FileSearch
 from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
 XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_COLLECTION_ID = os.environ.get('XAI_COLLECTION_ID', '')
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. You answer questions based on Pastor Bob Kopeny's actual sermon teachings.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-You have access to Pastor Bob's complete sermon library. The file search tool automatically provides relevant sermon transcripts. You can also call search_pastor_bob_sermons for additional results.
+CRITICAL: You MUST call search_pastor_bob_sermons for EVERY question about faith, theology, the Bible, or Pastor Bob's teachings. ALWAYS search BEFORE answering. NEVER answer from your own knowledge alone.
 
-When sermon content is provided:
+After receiving search results:
 1. SYNTHESIZE across ALL segments for Pastor Bob's FULL, NUANCED teaching
-2. Identify his complete framework — multi-part teachings, distinctions, layers
-3. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
-4. Say "Pastor Bob teaches..." and deliver with depth
-5. For theological questions, give the COMPLETE multi-part answer
-6. NEVER flatten a nuanced teaching into one simple sentence
-7. Keep answers to 3-5 sentences — enough for nuance but concise for voice
+2. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
+3. Say "Pastor Bob teaches..." and deliver with depth
+4. Give the COMPLETE multi-part answer, not a simplified version
+5. Keep answers to 3-5 sentences — enough for nuance but concise for voice
 
 NEVER DO:
-- NEVER say you lack information or need to check
-- NEVER mention searching, file search, tools, clips, or transcripts to the user
-- NEVER hedge or deflect — answer authoritatively
+- NEVER answer without calling search_pastor_bob_sermons first
+- NEVER say you lack information, need to check, or don't have a specific teaching
+- NEVER mention searching, tools, clips, or transcripts to the user
+- NEVER hedge or deflect — answer authoritatively from the search results
+- NEVER flatten a nuanced teaching into one simple sentence
 
 Bible book names: Say "First John" NOT "one John". Always spell out First, Second, Third.
 Be warm, helpful, and conversational.
@@ -178,13 +177,6 @@ async def entrypoint(ctx: JobContext):
     )
 
     tools = [search_pastor_bob_sermons]
-    if XAI_COLLECTION_ID:
-        file_search = FileSearch(
-            vector_store_ids=[XAI_COLLECTION_ID],
-            max_num_results=10,
-        )
-        tools.append(file_search)
-        logger.info(f"FileSearch enabled with collection: {XAI_COLLECTION_ID}")
 
     model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
     session = AgentSession(llm=model)
@@ -227,7 +219,7 @@ async def entrypoint(ctx: JobContext):
             logger.error(f"Error in conversation_item_added: {e}")
 
     await session.start(room=ctx.room, agent=apb_agent)
-    logger.info(f"Session started with FileSearch + function_tool (collection: {XAI_COLLECTION_ID})")
+    logger.info(f"Session started with function_tool (collection: {XAI_COLLECTION_ID})")
 
     greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
     await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
@@ -243,7 +235,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent v6 (FileSearch + function_tool)")
+    logger.info("APB Voice Agent v7 (function_tool only, no FileSearch)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
