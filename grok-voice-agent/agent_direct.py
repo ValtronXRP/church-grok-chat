@@ -169,9 +169,9 @@ async def entrypoint(ctx: JobContext):
 
     turn_detection = ServerVad(
         type="server_vad",
-        threshold=0.6,
-        prefix_padding_ms=300,
-        silence_duration_ms=600,
+        threshold=0.8,
+        prefix_padding_ms=500,
+        silence_duration_ms=800,
         create_response=True,
         interrupt_response=False,
     )
