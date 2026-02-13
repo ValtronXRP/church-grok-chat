@@ -11,7 +11,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("apb")
 
-from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, llm
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, function_tool, RunContext
 from livekit.plugins.xai.realtime import RealtimeModel
 from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
@@ -19,22 +19,27 @@ XAI_API_KEY = os.environ.get('XAI_API_KEY', '')
 XAI_COLLECTION_ID = os.environ.get('XAI_COLLECTION_ID', '')
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
-PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim. You answer questions based on Pastor Bob Kopeny's actual sermon teachings.
+PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-RULES:
-1. When sermon content is provided, SYNTHESIZE across ALL segments for Pastor Bob's FULL, NUANCED teaching
-2. Identify his complete framework — multi-part teachings, distinctions, layers
-3. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
-4. Say "Pastor Bob teaches..." and deliver with depth
-5. For theological questions, give the COMPLETE multi-part answer
-6. NEVER flatten a nuanced teaching into one simple sentence
-7. NEVER say you lack information or need to check
-8. NEVER mention searching, clips, transcripts, or tools
-9. NEVER hedge or deflect — answer authoritatively
-10. Keep answers to 3-5 sentences — enough for nuance but concise for voice
-11. Bible book names: Say "First John" NOT "one John"
-12. NEVER invent stories or teachings Pastor Bob didn't actually give
-13. Be warm, helpful, and conversational
+CRITICAL: You MUST call the search_pastor_bob_sermons tool for EVERY question before answering. NEVER answer without searching first.
+
+After searching, SYNTHESIZE across ALL returned sermon segments to give Pastor Bob's FULL, NUANCED teaching:
+- Identify his complete framework — multi-part teachings, distinctions, layers
+- Preserve key distinctions (e.g., "there is X but there is ALSO Y")
+- Say "Pastor Bob teaches..." and deliver with depth
+- For theological questions, give the COMPLETE multi-part answer
+- NEVER flatten a nuanced teaching into one simple sentence
+- Keep answers to 3-5 sentences — enough for nuance but concise for voice
+
+NEVER DO:
+- NEVER answer without calling search_pastor_bob_sermons first
+- NEVER say you lack information or need to check
+- NEVER mention searching, tools, clips, or transcripts to the user
+- NEVER hedge or deflect — answer authoritatively
+
+Bible book names: Say "First John" NOT "one John". Always spell out First, Second, Third.
+Be warm, helpful, and conversational.
+NEVER invent stories or teachings Pastor Bob didn't actually give.
 
 VERIFIED FACTS:
 - Wife: Becky Kopeny
@@ -45,7 +50,7 @@ VERIFIED FACTS:
 """
 
 
-async def search_xai(query, k=10):
+async def _search_xai(query, k=10):
     if not XAI_API_KEY or not XAI_COLLECTION_ID:
         return []
     try:
@@ -71,11 +76,7 @@ async def search_xai(query, k=10):
                             lines = content.split('\n', 1)
                             title = unescape(lines[0].replace('title: ', '').strip())
                             content = lines[1] if len(lines) > 1 else content
-                        results.append({
-                            'title': title,
-                            'text': content.strip(),
-                            'score': m.get('score', 0),
-                        })
+                        results.append({'title': title, 'text': content.strip(), 'score': m.get('score', 0)})
                     return results
                 else:
                     body = await response.text()
@@ -85,7 +86,7 @@ async def search_xai(query, k=10):
     return []
 
 
-async def search_chromadb(query, n=5):
+async def _search_chromadb(query, n=5):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -101,103 +102,80 @@ async def search_chromadb(query, n=5):
     return []
 
 
-async def multi_query_search(user_query):
-    search_tasks = [search_xai(user_query, k=10)]
-
-    rephrased = f"Pastor Bob sermon teaching on {user_query}"
-    search_tasks.append(search_xai(rephrased, k=5))
-
-    all_results = await asyncio.gather(*search_tasks, return_exceptions=True)
-
-    seen_texts = set()
-    merged = []
-    for result_set in all_results:
-        if isinstance(result_set, Exception):
-            logger.warning(f"Search query failed: {result_set}")
-            continue
-        for r in result_set:
-            text_key = r.get('text', '')[:100]
-            if text_key not in seen_texts and len(r.get('text', '')) > 50:
-                seen_texts.add(text_key)
-                merged.append(r)
-
-    merged.sort(key=lambda x: x.get('score', 0), reverse=True)
-
-    if not merged:
-        logger.info("xAI returned no results, falling back to ChromaDB")
-        merged = await search_chromadb(user_query, n=8)
-
-    logger.info(f"Multi-query search returned {len(merged)} unique results for: {user_query[:60]}")
-    return merged[:12]
+_room_ref = None
 
 
-async def send_data_message(room, message_type, data):
+async def _send_data_message(message_type, data):
+    if not _room_ref:
+        return
     try:
         payload = {k: v for k, v in data.items() if k != "type"}
         payload["type"] = message_type
         message = json.dumps(payload)
-        await room.local_participant.publish_data(message.encode('utf-8'), reliable=True)
+        await _room_ref.local_participant.publish_data(message.encode('utf-8'), reliable=True)
         logger.info(f"Sent {message_type}")
     except Exception as e:
         logger.error(f"Failed to send data: {e}")
 
 
-class PastorBobAgent(Agent):
-    def __init__(self, room):
-        super().__init__(instructions=PASTOR_BOB_INSTRUCTIONS)
-        self._room = room
+@function_tool
+async def search_pastor_bob_sermons(context: RunContext, query: str) -> str:
+    """Search Pastor Bob's sermon transcripts for teachings on any topic. You MUST call this tool for every question to find what Pastor Bob actually teaches. Pass the user's question or topic as the query."""
+    logger.info(f"TOOL CALLED: search_pastor_bob_sermons('{query[:80]}')")
 
-    async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
-        user_text = new_message.text_content or ''
-        user_text = user_text.strip()
-        if not user_text or len(user_text) < 4:
-            return
+    results = await _search_xai(query, k=10)
 
-        logger.info(f"User turn completed: {user_text[:80]}")
-        asyncio.create_task(send_data_message(self._room, "user_transcript", {"text": user_text}))
+    rephrased = f"Pastor Bob sermon teaching on {query}"
+    results2 = await _search_xai(rephrased, k=5)
 
-        results = await multi_query_search(user_text)
+    seen = set()
+    merged = []
+    for r in results + results2:
+        key = r.get('text', '')[:100]
+        if key not in seen and len(r.get('text', '')) > 50:
+            seen.add(key)
+            merged.append(r)
+    merged.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-        for r in results[:3]:
-            title = r.get('title', 'Sermon')
-            if title.lower() in ['unknown sermon', 'unknown', '']:
-                continue
-            text = r.get('text', '')
-            if len(text) < 50:
-                continue
-            asyncio.create_task(send_data_message(self._room, "sermon_reference", {
-                "title": title,
-                "url": r.get('timestamped_url', r.get('url', '')),
-                "timestamp": r.get('start_time', ''),
-                "text": text[:200]
-            }))
+    if not merged:
+        logger.info("xAI returned no results, trying ChromaDB")
+        merged = await _search_chromadb(query, n=8)
 
-        if results:
-            context_parts = []
-            for i, r in enumerate(results[:8]):
-                title = r.get('title', 'Sermon')
-                text = r.get('text', '')
-                if text and len(text) > 50:
-                    context_parts.append(f"[{i+1}] \"{title}\":\n{text}")
+    logger.info(f"Search returned {len(merged)} results for: {query[:60]}")
 
-            sermon_context = "\n\n".join(context_parts)
+    for r in merged[:3]:
+        title = r.get('title', 'Sermon')
+        if title.lower() in ['unknown sermon', 'unknown', '']:
+            continue
+        text = r.get('text', '')
+        if len(text) < 50:
+            continue
+        asyncio.create_task(_send_data_message("sermon_reference", {
+            "title": title,
+            "url": r.get('timestamped_url', r.get('url', '')),
+            "timestamp": r.get('start_time', ''),
+            "text": text[:200]
+        }))
 
-            turn_ctx.add_message(
-                role="assistant",
-                content=f"""I found Pastor Bob's actual sermon transcripts on this topic. I will now synthesize his FULL teaching from these segments:
+    if not merged:
+        return "No sermon transcripts found on this topic. Give a solid biblical answer consistent with Calvary Chapel teaching."
 
-{sermon_context}
+    parts = []
+    for i, r in enumerate(merged[:8]):
+        title = r.get('title', 'Sermon')
+        text = r.get('text', '')
+        if text and len(text) > 50:
+            parts.append(f"[{i+1}] \"{title}\":\n{text}")
 
-CRITICAL: I must SYNTHESIZE across ALL segments above. I must identify Pastor Bob's complete framework — if he teaches multiple parts, stages, or makes distinctions, I MUST include ALL of them. I must NOT flatten his teaching into a simple one-liner. I will say "Pastor Bob teaches..." and deliver his full, nuanced teaching in 3-5 sentences."""
-            )
-        else:
-            turn_ctx.add_message(
-                role="assistant",
-                content="I will give a solid biblical answer consistent with Calvary Chapel teaching. I will be warm and conversational in 3-5 sentences. I will NOT say I lack information."
-            )
+    return f"""Here are Pastor Bob's ACTUAL sermon transcripts on this topic:
+
+{chr(10).join(parts)}
+
+INSTRUCTIONS: SYNTHESIZE across ALL transcripts above. Identify Pastor Bob's complete framework — if he teaches multiple parts, stages, or makes distinctions, include ALL of them. Say "Pastor Bob teaches..." and deliver his full, nuanced teaching in 3-5 sentences. Do NOT flatten his teaching into a simple answer."""
 
 
 async def entrypoint(ctx: JobContext):
+    global _room_ref
     logger.info(f"Agent dispatched to room: {ctx.room.name}")
 
     last_sent_message = {"text": None}
@@ -213,9 +191,13 @@ async def entrypoint(ctx: JobContext):
 
     model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
     session = AgentSession(llm=model)
-    apb_agent = PastorBobAgent(room=ctx.room)
+    apb_agent = Agent(
+        instructions=PASTOR_BOB_INSTRUCTIONS,
+        tools=[search_pastor_bob_sermons],
+    )
 
     await ctx.connect()
+    _room_ref = ctx.room
     logger.info(f"Connected to room: {ctx.room.name}")
 
     @session.on("conversation_item_added")
@@ -243,12 +225,12 @@ async def entrypoint(ctx: JobContext):
                 if text and text != last_sent_message["text"]:
                     last_sent_message["text"] = text
                     logger.info(f"AGENT SAID: {text[:100]}...")
-                    asyncio.create_task(send_data_message(ctx.room, "agent_transcript", {"text": text}))
+                    asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
         except Exception as e:
             logger.error(f"Error in conversation_item_added: {e}")
 
     await session.start(room=ctx.room, agent=apb_agent)
-    logger.info("Session started with on_user_turn_completed RAG")
+    logger.info("Session started with function_tool RAG")
 
     greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
     await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
@@ -264,7 +246,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent v3 (on_user_turn_completed RAG)")
+    logger.info("APB Voice Agent v4 (function_tool RAG)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
