@@ -283,7 +283,60 @@ def chunk_segments(segments: list, video_id: str, youtube_url: str,
             "word_count": current_words,
         })
 
+    for chunk in chunks:
+        chunk["text"] = clean_chunk_start(chunk["text"])
+
     return chunks
+
+
+def clean_chunk_start(text: str) -> str:
+    text = text.strip()
+    if not text:
+        return text
+    
+    mid_sentence_starters = (
+        "and ", "but ", "so ", "or ", "because ", "that ", "which ", "when ",
+        "if ", "as ", "then ", "than ", "while ", "where ", "who ", "whom ",
+        "whose ", "what ", "how ", "why ", "for ", "to ", "with ", "into ",
+        "from ", "about ", "like ", "just ", "also ", "even ", "still ",
+        "yet ", "though ", "although ", "however ", "therefore ", "thus ",
+        "hence ", "since ", "before ", "after ", "until ", "unless ",
+        "whether ", "either ", "neither ", "both ", "all ", "any ", "some ",
+        "many ", "much ", "more ", "most ", "less ", "few ", "other ",
+        "another ", "such ", "same ", "different ", "certain ", "various ",
+        "several ", "own ", "only ", "very ", "really ", "actually ",
+        "basically ", "essentially ", "simply ", "merely ", "perhaps ",
+        "maybe ", "probably ", "possibly ", "certainly ", "definitely ",
+        "obviously ", "clearly ", "apparently ", "evidently ", "supposedly ",
+    )
+    
+    lower = text.lower()
+    
+    if lower.startswith(mid_sentence_starters):
+        first_period = text.find('. ')
+        first_question = text.find('? ')
+        first_exclaim = text.find('! ')
+        
+        ends = [e for e in [first_period, first_question, first_exclaim] if e > 0]
+        
+        if ends:
+            first_end = min(ends) + 2
+            if first_end < len(text) * 0.4:
+                text = text[first_end:].strip()
+    
+    if text and text[0].islower():
+        first_period = text.find('. ')
+        first_question = text.find('? ')
+        first_exclaim = text.find('! ')
+        
+        ends = [e for e in [first_period, first_question, first_exclaim] if e > 0]
+        
+        if ends:
+            first_end = min(ends) + 2
+            if first_end < len(text) * 0.35:
+                text = text[first_end:].strip()
+    
+    return text
 
 
 def _char_to_time(char_pos: int, time_map: list) -> float:
@@ -522,7 +575,7 @@ def answer_question(query: str, top_k: int = 5, threshold: float = 0.68,
             f"\"{clips[0]['title'] or 'a sermon'}\"."
         )
     else:
-        answer_text = "I don't have a specific teaching from Pastor Bob on that exact topic."
+        answer_text = "Here's what the Bible teaches on this topic."
 
     return {"answer_text": answer_text, "clips": clips}
 

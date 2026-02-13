@@ -163,74 +163,82 @@ SYNTHESIZE across ALL transcripts above. Say "Pastor Bob teaches..." and deliver
 
 async def entrypoint(ctx: JobContext):
     global _room_ref
-    logger.info(f"Agent dispatched to room: {ctx.room.name}")
+    try:
+        logger.info(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-    last_sent_message = {"text": None}
+        last_sent_message = {"text": None}
 
-    turn_detection = ServerVad(
-        type="server_vad",
-        threshold=0.8,
-        prefix_padding_ms=500,
-        silence_duration_ms=800,
-        create_response=True,
-        interrupt_response=False,
-    )
+        turn_detection = ServerVad(
+            type="server_vad",
+            threshold=0.8,
+            prefix_padding_ms=500,
+            silence_duration_ms=800,
+            create_response=True,
+            interrupt_response=False,
+        )
 
-    tools = [search_pastor_bob_sermons]
+        tools = [search_pastor_bob_sermons]
 
-    model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
-    session = AgentSession(llm=model)
-    apb_agent = Agent(
-        instructions=PASTOR_BOB_INSTRUCTIONS,
-        tools=tools,
-    )
+        model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
+        session = AgentSession(llm=model)
+        apb_agent = Agent(
+            instructions=PASTOR_BOB_INSTRUCTIONS,
+            tools=tools,
+        )
 
-    await ctx.connect()
-    _room_ref = ctx.room
-    logger.info(f"Connected to room: {ctx.room.name}")
+        logger.info("Connecting to room...")
+        await ctx.connect()
+        _room_ref = ctx.room
+        logger.info(f"Connected to room: {ctx.room.name}")
 
-    @session.on("conversation_item_added")
-    def on_conversation_item(event):
-        try:
-            item = event.item
-            role = getattr(item, 'role', None)
-            if role == 'assistant':
-                text = ""
-                content = getattr(item, 'content', None)
-                if content:
-                    if isinstance(content, list):
-                        for c in content:
-                            if isinstance(c, str):
-                                text += c
-                            elif hasattr(c, 'text'):
-                                text += (c.text or '')
-                            elif hasattr(c, 'transcript'):
-                                text += (c.transcript or '')
-                    elif isinstance(content, str):
-                        text = content
-                if not text and hasattr(item, 'text'):
-                    text = item.text or ''
-                text = text.strip()
-                if text and text != last_sent_message["text"]:
-                    last_sent_message["text"] = text
-                    logger.info(f"AGENT SAID: {text[:100]}...")
-                    asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
-        except Exception as e:
-            logger.error(f"Error in conversation_item_added: {e}")
+        @session.on("conversation_item_added")
+        def on_conversation_item(event):
+            try:
+                item = event.item
+                role = getattr(item, 'role', None)
+                if role == 'assistant':
+                    text = ""
+                    content = getattr(item, 'content', None)
+                    if content:
+                        if isinstance(content, list):
+                            for c in content:
+                                if isinstance(c, str):
+                                    text += c
+                                elif hasattr(c, 'text'):
+                                    text += (c.text or '')
+                                elif hasattr(c, 'transcript'):
+                                    text += (c.transcript or '')
+                        elif isinstance(content, str):
+                            text = content
+                    if not text and hasattr(item, 'text'):
+                        text = item.text or ''
+                    text = text.strip()
+                    if text and text != last_sent_message["text"]:
+                        last_sent_message["text"] = text
+                        logger.info(f"AGENT SAID: {text[:100]}...")
+                        asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
+            except Exception as e:
+                logger.error(f"Error in conversation_item_added: {e}")
 
-    await session.start(room=ctx.room, agent=apb_agent)
-    logger.info(f"Session started with function_tool (collection: {XAI_COLLECTION_ID})")
+        logger.info("Starting session...")
+        await session.start(room=ctx.room, agent=apb_agent)
+        logger.info(f"Session started with function_tool (collection: {XAI_COLLECTION_ID})")
 
-    greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
-    await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
-    logger.info("Greeting sent - LISTENING")
+        greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
+        await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
+        logger.info("Greeting sent - LISTENING")
 
-    shutdown_event = asyncio.Event()
-    async def _on_shutdown():
-        shutdown_event.set()
-    ctx.add_shutdown_callback(_on_shutdown)
-    await shutdown_event.wait()
-    logger.info("Session shutdown")
+        shutdown_event = asyncio.Event()
+        async def _on_shutdown():
+            shutdown_event.set()
+        ctx.add_shutdown_callback(_on_shutdown)
+        await shutdown_event.wait()
+        logger.info("Session shutdown")
+    except Exception as e:
+        logger.error(f"[ENTRYPOINT CRASH] {type(e).__name__}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
 
 
 if __name__ == "__main__":

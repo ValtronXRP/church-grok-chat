@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.reranker"
+  },
+  "deploy": {
+    "startCommand": "gunicorn --bind 0.0.0.0:$PORT --timeout 600 --graceful-timeout 600 --workers 1 --threads 2 reranker_service:app",
+    "healthcheckPath": "/ping",
+    "healthcheckTimeout": 600,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
