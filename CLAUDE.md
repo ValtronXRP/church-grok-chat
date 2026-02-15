@@ -55,27 +55,25 @@ CHROMA_DATABASE=APB
 - Main app: https://web-production-b652a.up.railway.app/
 - Reranker: bundled in main container (port 5050 internal)
 
-### Voice Agent - WORKING CONFIG (2026-02-13) — DO NOT CHANGE ANSWER LOGIC
-The voice agent is confirmed working with 3 consecutive correct answers.
-
-**Critical: Do NOT modify these components:**
-- `grok-voice-agent/agent_direct.py` — answer generation logic, instructions, tool, search
-- `RealtimeModel(voice="Aria")` with `ServerVad(threshold=0.8, silence_duration_ms=800, create_response=True, interrupt_response=False)`
-- `@function_tool search_pastor_bob_sermons` — dual parallel xAI search, 8 results returned
-- `Agent(instructions=PASTOR_BOB_INSTRUCTIONS, tools=[search_pastor_bob_sermons])` — function_tool ONLY, no FileSearch
+### Voice Agent v8 - FORCED SEARCH (2026-02-15)
+v7 relied on xAI model to call `function_tool` — model was unreliable about using it.
+v8 removes tool reliance entirely. Every question ALWAYS gets searched.
 
 **Architecture:**
 ```
-User speaks → xAI Realtime VAD → model calls search_pastor_bob_sermons → 
-  xAI Documents Search API (collection_27b3cd99) → 16 results merged → 
-  model synthesizes → speaks response
+User speaks → xAI Realtime VAD (create_response=False) → 
+  user_input_transcribed event fires → agent runs _do_search() → 
+  xAI Documents Search API (collection_27b3cd99) → results merged → 
+  session.generate_reply(instructions=search_results) → model speaks answer
 ```
 
-**Key settings that make it work:**
-- `function_tool` only (no FileSearch — it caused `unknown AI function 'collections_search'` errors)
+**Key settings:**
+- `create_response=False` — model does NOT auto-respond; we control when it speaks
 - `interrupt_response=False` — prevents agent from being cut off
-- `create_response=True` — model auto-responds after VAD detects silence
-- Instructions: "CRITICAL: You MUST call search_pastor_bob_sermons for EVERY question"
+- `user_input_transcribed` event with `is_final=True` triggers search
+- `_do_search()` runs dual parallel xAI search (k=10 + k=5 rephrased)
+- `session.generate_reply(instructions=...)` feeds search results directly to model
+- No `function_tool` needed — search happens in our code, not model's decision
 - Frontend: no auto-disconnect on `agent_transcript`, only on `speech_complete` with 2-minute timeout
 
 ### Remaining Tasks
