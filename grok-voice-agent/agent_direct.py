@@ -199,6 +199,23 @@ async def entrypoint(ctx: JobContext):
                 merged = await _do_search(query)
                 logger.info(f"Search returned {len(merged)} results for: {query[:60]}")
 
+                for r in merged[:3]:
+                    title = r.get('title', 'Sermon')
+                    if title.lower() in ['unknown sermon', 'unknown', '']:
+                        continue
+                    text = r.get('text', '')
+                    if len(text) < 50:
+                        continue
+                    url = r.get('timestamped_url', r.get('url', ''))
+                    if not url:
+                        url = f"https://www.youtube.com/results?search_query=pastor+bob+kopeny+{title.replace(' ', '+')[:40]}"
+                    asyncio.create_task(_send_data_message("sermon_reference", {
+                        "title": title,
+                        "url": url,
+                        "timestamp": r.get('start_time', ''),
+                        "text": text[:200]
+                    }))
+
                 parts = []
                 for i, r in enumerate(merged[:8]):
                     title = r.get('title', 'Sermon')

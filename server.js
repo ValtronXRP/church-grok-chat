@@ -999,26 +999,13 @@ app.post('/api/clips', async (req, res) => {
 
     const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {
       query,
-      n_sermons: 6,
-      n_illustrations: 3
+      n_sermons: 0,
+      n_illustrations: 5
     }, { timeout: 15000 });
 
-    const sermons = [];
     const illustrations = [];
 
     if (fastResponse.data) {
-      for (const r of (fastResponse.data.sermons || [])) {
-        const url = r.timestamped_url || r.url || '';
-        const vidMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
-        if (vidMatch) {
-          sermons.push({
-            title: r.title || 'Sermon Clip',
-            url,
-            timestamp: r.start_time || '',
-            text: (r.text || '').substring(0, 150)
-          });
-        }
-      }
       for (const r of (fastResponse.data.illustrations || [])) {
         const url = r.url || '';
         const vidMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
@@ -1034,8 +1021,8 @@ app.post('/api/clips', async (req, res) => {
       }
     }
 
-    console.log(`Clips API: ${sermons.length} sermon clips, ${illustrations.length} illustration clips for "${query.substring(0, 60)}"`);
-    res.json({ sermon_videos: sermons, illustrations });
+    console.log(`Clips API: ${illustrations.length} illustration clips for "${query.substring(0, 60)}"`);
+    res.json({ sermon_videos: [], illustrations });
   } catch (error) {
     console.error('Clips API error:', error.message);
     res.json({ sermon_videos: [], illustrations: [] });
