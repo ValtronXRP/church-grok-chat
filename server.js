@@ -992,6 +992,56 @@ app.post('/api/illustration/search', async (req, res) => {
   }
 });
 
+app.post('/api/clips', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query required' });
+
+    const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {
+      query,
+      n_sermons: 6,
+      n_illustrations: 3
+    }, { timeout: 15000 });
+
+    const sermons = [];
+    const illustrations = [];
+
+    if (fastResponse.data) {
+      for (const r of (fastResponse.data.sermons || [])) {
+        const url = r.timestamped_url || r.url || '';
+        const vidMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
+        if (vidMatch) {
+          sermons.push({
+            title: r.title || 'Sermon Clip',
+            url,
+            timestamp: r.start_time || '',
+            text: (r.text || '').substring(0, 150)
+          });
+        }
+      }
+      for (const r of (fastResponse.data.illustrations || [])) {
+        const url = r.url || '';
+        const vidMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
+        if (vidMatch) {
+          illustrations.push({
+            title: r.title || 'Illustration',
+            url,
+            text: (r.text || '').substring(0, 150),
+            tone: r.tone || '',
+            timestamp: r.timestamp || ''
+          });
+        }
+      }
+    }
+
+    console.log(`Clips API: ${sermons.length} sermon clips, ${illustrations.length} illustration clips for "${query.substring(0, 60)}"`);
+    res.json({ sermon_videos: sermons, illustrations });
+  } catch (error) {
+    console.error('Clips API error:', error.message);
+    res.json({ sermon_videos: [], illustrations: [] });
+  }
+});
+
 app.get('/api/sermon/health', async (req, res) => {
   let rerankerStatus = 'unknown';
   let rerankerError = null;
