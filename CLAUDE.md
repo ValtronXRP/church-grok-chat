@@ -1,6 +1,6 @@
 # Ask Pastor Bob - Development Notes
 
-## Current State (2026-02-10)
+## Current State (2026-02-17)
 
 ### Data Sources
 - **JSON3 Folders 1-3**: 594 sermon files
@@ -11,7 +11,7 @@
 ### ChromaDB Collections (APB database) - CURRENT
 | Collection | Records | Embedding Dim | Status |
 |------------|---------|---------------|--------|
-| sermon_segments_v2 | 34,553 | 768 (mpnet) | ACTIVE - high quality semantic search |
+| sermon_segments_v2 | 34,553 | 768 (mpnet) | ACTIVE - ENRICHED with proper titles + timestamps |
 | illustrations_v5 | 23,559 | 768 (mpnet) | ACTIVE - all illustrations loaded |
 | church_website | 10 | 768 (mpnet) | ACTIVE |
 
@@ -40,9 +40,12 @@ User Query → server.js → reranker_service.py → ChromaDB
 
 ### Key Files
 - `reranker_service.py` - Flask service with 768-dim embeddings + reranking
-- `rebuild_embeddings.py` - Script to rebuild collections (uses illustrations_v4_all.json)
-- `server.js` - Main backend, calls reranker service
-- `grok-voice-agent/agent_direct.py` - Voice agent
+- `rebuild_embeddings.py` - Original script to rebuild collections
+- `rebuild_enriched.py` - Enriched rebuild with proper titles from video_title_map.json
+- `upload_to_xai_collection.py` - Upload enriched segments to xAI collection
+- `video_title_map.json` - 728 sermon titles (batch files + YouTube oEmbed)
+- `server.js` - Main backend, calls reranker service, /api/clips endpoint
+- `grok-voice-agent/agent_direct.py` - Voice agent (DO NOT MODIFY)
 
 ### Chroma Cloud Credentials
 ```
@@ -63,7 +66,7 @@ v8 removes tool reliance entirely. Every question ALWAYS gets searched.
 ```
 User speaks → xAI Realtime VAD (create_response=False) → 
   user_input_transcribed event fires → agent runs _do_search() → 
-  xAI Documents Search API (collection_27b3cd99) → results merged → 
+  xAI Documents Search API (enriched collection) → results merged → 
   session.generate_reply(instructions=search_results) → model speaks answer
 ```
 
@@ -75,6 +78,14 @@ User speaks → xAI Realtime VAD (create_response=False) →
 - `session.generate_reply(instructions=...)` feeds search results directly to model
 - No `function_tool` needed — search happens in our code, not model's decision
 - Frontend: no auto-disconnect on `agent_transcript`, only on `speech_complete` with 2-minute timeout
+
+### Enriched Sermon Data (2026-02-17)
+- All 34,553 segments now have proper sermon titles (100% coverage)
+- Titles sourced from: 400 batch files + 328 YouTube oEmbed API
+- video_title_map.json contains 728 video_id → title mappings
+- ChromaDB metadata: title, video_id, url, timestamped_url, start_time, start_sec, end_sec
+- xAI collection: `collection_85397a22-d7bc-4a91-8548-0bc4e7635117` (pastor_bob_sermons_enriched)
+- Old xAI collection (deleted): `collection_27b3cd99-d589-4546-8099-802d547b9dce`
 
 ### Remaining Tasks
 1. **Optimize reranker speed** - first query ~60s due to CPU warmup, consider caching or warming

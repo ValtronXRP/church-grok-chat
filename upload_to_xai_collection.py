@@ -21,13 +21,10 @@ BATCH_SIZE = 100
 MAX_RETRIES = 3
 
 def get_chroma_segments():
-    client = chromadb.HttpClient(
-        host="api.trychroma.com",
-        port=443,
-        ssl=True,
+    client = chromadb.CloudClient(
+        api_key=CHROMA_API_KEY,
         tenant=CHROMA_TENANT,
-        database=CHROMA_DATABASE,
-        headers={"x-chroma-token": CHROMA_API_KEY}
+        database=CHROMA_DATABASE
     )
     collection = client.get_collection("sermon_segments_v2")
     total = collection.count()
@@ -61,8 +58,9 @@ def get_chroma_segments():
 def upload_segment(seg, idx):
     for attempt in range(MAX_RETRIES):
         try:
+            doc_text = f"title: {seg['title']}\n{seg['text']}" if seg.get('title') else seg['text']
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                f.write(seg["text"])
+                f.write(doc_text)
                 tmp_path = f.name
 
             fields_json = json.dumps({
