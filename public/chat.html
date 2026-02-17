@@ -2241,17 +2241,11 @@ TESTIMONY (HOW BOB WAS SAVED):
                     if (message.type === 'context_update') {
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
-                        // Display user's spoken text in chat (with deduplication)
-                        if (message.text && message.text !== lastUserMessage) {
-                            lastUserMessage = message.text;
-                            addMessage(message.text, 'user');
-                            conversationHistory.push({ role: 'user', content: message.text });
-                            setTimeout(showTyping, 500);
-                            if (autoDisconnectTimer) {
-                                clearTimeout(autoDisconnectTimer);
-                                autoDisconnectTimer = null;
-                                log('Auto-disconnect cancelled - user speaking', 'info');
-                            }
+                        log(`User transcript (data msg, dedup skip): ${message.text?.substring(0, 50)}`, 'info');
+                        if (autoDisconnectTimer) {
+                            clearTimeout(autoDisconnectTimer);
+                            autoDisconnectTimer = null;
+                            log('Auto-disconnect cancelled - user speaking', 'info');
                         }
                     } else if (message.type === 'agent_transcript') {
                         // Display agent's spoken text in chat (with deduplication)

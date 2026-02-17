@@ -1015,6 +1015,8 @@ app.post('/api/clips', async (req, res) => {
         const vid = vidMatch[1];
         const title = r.title || '';
         if (!title || title.toLowerCase() === 'sermon' || title.toLowerCase() === 'unknown sermon') continue;
+        const tLower = title.toLowerCase();
+        if (tLower.startsWith('sunday morning live') || tLower.startsWith('wednesday night live') || tLower.startsWith('sunday night live')) continue;
         const text = (r.text || '').substring(0, 150);
         if (text.length < 50) continue;
         const clipKey = `${vid}_${r.start_time || ''}`;
