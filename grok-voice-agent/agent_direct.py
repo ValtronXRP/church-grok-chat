@@ -180,7 +180,7 @@ async def entrypoint(ctx: JobContext):
             if not event.is_final:
                 return
             transcript = event.transcript.strip()
-            if not transcript or len(transcript) < 3:
+            if not transcript or len(transcript) < 10:
                 return
             if is_searching["active"]:
                 logger.info(f"Already searching, skipping: {transcript[:60]}")
@@ -197,25 +197,21 @@ async def entrypoint(ctx: JobContext):
                 log(f"Search returned {len(merged)} results for: {query[:60]}")
 
                 parts = []
-                for i, r in enumerate(merged[:5]):
+                for i, r in enumerate(merged[:3]):
                     title = r.get('title', 'Sermon')
                     text = r.get('text', '')
                     if text and len(text) > 50:
-                        parts.append(f"[{i+1}] \"{title}\":\n{text[:600]}")
+                        parts.append(f"{title}: {text[:300]}")
 
                 if parts:
                     search_context = chr(10).join(parts)
-                    reply_instructions = f"""The user asked: "{query}"
-
-Here are Pastor Bob's ACTUAL sermon transcripts on this topic:
-
+                    reply_instructions = f"""User asked: "{query}"
+Pastor Bob's sermon excerpts:
 {search_context}
-
-SYNTHESIZE across ALL transcripts above. Say "Pastor Bob teaches..." and deliver his full, nuanced teaching in 3-5 sentences. Be warm and conversational."""
+Synthesize into 3-5 warm sentences starting with "Pastor Bob teaches...""""
                 else:
-                    reply_instructions = f"""The user asked: "{query}"
-
-No specific sermon transcripts were found on this exact topic. Give a warm, helpful answer based on general Calvary Chapel biblical teaching. Say "Based on biblical teaching..." and give a solid 3-5 sentence answer. NEVER say you don't have information or need to check."""
+                    reply_instructions = f"""User asked: "{query}"
+Give a warm 3-5 sentence answer based on biblical teaching. Start with "Based on biblical teaching..." Never say you lack information."""
 
                 log(f"Generating reply with {len(parts)} transcript segments ({len(reply_instructions)} chars)")
                 try:
