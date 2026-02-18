@@ -1,7 +1,7 @@
 # Reranker service
 flask==3.0.0
 gunicorn==21.2.0
-chromadb>=1.0.0
+chromadb==1.0.21
 sentence-transformers==3.3.1
 transformers==4.46.3
 huggingface-hub==0.26.5

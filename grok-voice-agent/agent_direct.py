@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sys
 import json
 import aiohttp
 from dotenv import load_dotenv
@@ -8,8 +9,16 @@ from html import unescape
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', stream=sys.stdout, force=True)
 logger = logging.getLogger("apb")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+logger.addHandler(handler)
+
+def log(msg):
+    print(f"[APB] {msg}", flush=True)
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, RunContext
 from livekit.plugins.xai.realtime import RealtimeModel
@@ -111,6 +120,7 @@ async def _send_data_message(message_type, data):
 async def entrypoint(ctx: JobContext):
     global _room_ref
     try:
+        log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
         logger.info(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
         last_sent_message = {"text": None}
@@ -131,10 +141,10 @@ async def entrypoint(ctx: JobContext):
             instructions=PASTOR_BOB_INSTRUCTIONS,
         )
 
-        logger.info("Connecting to room...")
+        log("Connecting to room...")
         await ctx.connect()
         _room_ref = ctx.room
-        logger.info(f"Connected to room: {ctx.room.name}")
+        log(f"Connected to room: {ctx.room.name}")
 
         @session.on("conversation_item_added")
         def on_conversation_item(event):
@@ -175,16 +185,16 @@ async def entrypoint(ctx: JobContext):
             if is_searching["active"]:
                 logger.info(f"Already searching, skipping: {transcript[:60]}")
                 return
-            logger.info(f"USER SAID: {transcript[:80]}")
+            log(f"USER SAID: {transcript[:80]}")
             asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
             asyncio.create_task(_search_and_reply(session, transcript, is_searching))
 
         async def _search_and_reply(session, query, is_searching):
             is_searching["active"] = True
             try:
-                logger.info(f"SEARCHING for: {query[:60]}")
+                log(f"SEARCHING for: {query[:60]}")
                 merged = await _do_search(query)
-                logger.info(f"Search returned {len(merged)} results for: {query[:60]}")
+                log(f"Search returned {len(merged)} results for: {query[:60]}")
 
                 parts = []
                 for i, r in enumerate(merged[:8]):
@@ -207,7 +217,7 @@ SYNTHESIZE across ALL transcripts above. Say "Pastor Bob teaches..." and deliver
 
 No specific sermon transcripts were found on this exact topic. Give a warm, helpful answer based on general Calvary Chapel biblical teaching. Say "Based on biblical teaching..." and give a solid 3-5 sentence answer. NEVER say you don't have information or need to check."""
 
-                logger.info(f"Generating reply with {len(parts)} transcript segments")
+                log(f"Generating reply with {len(parts)} transcript segments")
                 try:
                     await asyncio.wait_for(
                         session.generate_reply(instructions=reply_instructions),
@@ -222,7 +232,7 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
                         )
                     except Exception:
                         logger.error("Retry also failed")
-                logger.info("Reply generation started")
+                log("Reply generation started")
 
             except Exception as e:
                 logger.error(f"Search/reply error: {e}")
@@ -240,9 +250,9 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
             finally:
                 is_searching["active"] = False
 
-        logger.info("Starting session...")
+        log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
-        logger.info(f"Session started (reranker: {RERANKER_URL})")
+        log(f"Session started (reranker: {RERANKER_URL})")
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
@@ -250,20 +260,20 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
                 session.generate_reply(instructions=f"Say exactly: '{greeting}'"),
                 timeout=15
             )
-            logger.info("Greeting sent - LISTENING")
+            log("Greeting sent - LISTENING")
         except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Greeting timeout/error: {e} - continuing anyway")
+            log(f"Greeting timeout/error: {e} - continuing anyway")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
             shutdown_event.set()
         ctx.add_shutdown_callback(_on_shutdown)
         await shutdown_event.wait()
-        logger.info("Session shutdown")
+        log("Session shutdown")
     except Exception as e:
-        logger.error(f"[ENTRYPOINT CRASH] {type(e).__name__}: {e}")
+        log(f"[ENTRYPOINT CRASH] {type(e).__name__}: {e}")
         import traceback
-        logger.error(traceback.format_exc())
+        log(traceback.format_exc())
         raise
 
 
