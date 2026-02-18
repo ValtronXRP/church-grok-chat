@@ -33,12 +33,25 @@ cd ..
 # Wait for services to start
 sleep 5
 
-# Start the voice agent in the background
+# Start the voice agent in the background with crash detection
 echo "Starting voice agent..."
-cd grok-voice-agent
-python agent_direct.py start 2>&1 || python agent_direct.py 2>&1 &
+(
+  cd grok-voice-agent
+  while true; do
+    echo "[start.sh] Launching voice agent..."
+    python agent_direct.py start 2>&1
+    EXIT_CODE=$?
+    echo "[start.sh] Voice agent exited with code $EXIT_CODE"
+    if [ $EXIT_CODE -ne 0 ]; then
+      echo "[start.sh] Voice agent crashed! Restarting in 5 seconds..."
+      sleep 5
+    else
+      echo "[start.sh] Voice agent exited cleanly"
+      break
+    fi
+  done
+) &
 AGENT_PID=$!
-cd ..
 
 # Start the Node.js server on Railway's PORT
 echo "Starting web server on port $MAIN_PORT..."

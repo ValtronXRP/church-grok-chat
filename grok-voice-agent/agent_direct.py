@@ -205,13 +205,18 @@ async def entrypoint(ctx: JobContext):
 
                 if parts:
                     search_context = chr(10).join(parts)
-                    reply_instructions = f"""User asked: "{query}"
-Pastor Bob's sermon excerpts:
-{search_context}
-Synthesize into 3-5 warm sentences starting with "Pastor Bob teaches...""""
+                    reply_instructions = (
+                        f'User asked: "{query}"\n'
+                        f'Pastor Bob\'s sermon excerpts:\n'
+                        f'{search_context}\n'
+                        f'Synthesize into 3-5 warm sentences starting with "Pastor Bob teaches..."'
+                    )
                 else:
-                    reply_instructions = f"""User asked: "{query}"
-Give a warm 3-5 sentence answer based on biblical teaching. Start with "Based on biblical teaching..." Never say you lack information."""
+                    reply_instructions = (
+                        f'User asked: "{query}"\n'
+                        f'Give a warm 3-5 sentence answer based on biblical teaching. '
+                        f'Start with "Based on biblical teaching..." Never say you lack information.'
+                    )
 
                 log(f"Generating reply with {len(parts)} transcript segments ({len(reply_instructions)} chars)")
                 try:

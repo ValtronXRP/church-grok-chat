@@ -83,9 +83,10 @@ User speaks → xAI Realtime VAD (create_response=False) →
 - `_search_reranker()` calls local reranker at `127.0.0.1:5050/search/fast-all`
 - `session.generate_reply(instructions=...)` feeds search results directly to model
 - No `function_tool` needed — search happens in our code, not model's decision
-- All `generate_reply()` calls wrapped in `asyncio.wait_for()` with timeouts (15s greeting, 30s replies)
-- Retry logic on timeout — retries once before giving up
+- `generate_reply()` has internal 10s timeout (NOT configurable) — context kept small (~1100 chars)
+- No `asyncio.wait_for` wrappers (they made timeouts worse by triggering retries)
 - Greeting failure does NOT crash the session — continues listening
+- `start.sh` auto-restarts voice agent on crash with 5s delay
 - Frontend: auto-disconnect after 10 seconds of inactivity (`AUTO_DISCONNECT_DELAY = 10000`)
 
 **Verified Facts in Agent Instructions:**
