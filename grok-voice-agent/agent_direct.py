@@ -197,11 +197,11 @@ async def entrypoint(ctx: JobContext):
                 log(f"Search returned {len(merged)} results for: {query[:60]}")
 
                 parts = []
-                for i, r in enumerate(merged[:8]):
+                for i, r in enumerate(merged[:5]):
                     title = r.get('title', 'Sermon')
                     text = r.get('text', '')
                     if text and len(text) > 50:
-                        parts.append(f"[{i+1}] \"{title}\":\n{text}")
+                        parts.append(f"[{i+1}] \"{title}\":\n{text[:600]}")
 
                 if parts:
                     search_context = chr(10).join(parts)
@@ -217,33 +217,20 @@ SYNTHESIZE across ALL transcripts above. Say "Pastor Bob teaches..." and deliver
 
 No specific sermon transcripts were found on this exact topic. Give a warm, helpful answer based on general Calvary Chapel biblical teaching. Say "Based on biblical teaching..." and give a solid 3-5 sentence answer. NEVER say you don't have information or need to check."""
 
-                log(f"Generating reply with {len(parts)} transcript segments")
+                log(f"Generating reply with {len(parts)} transcript segments ({len(reply_instructions)} chars)")
                 try:
-                    await asyncio.wait_for(
-                        session.generate_reply(instructions=reply_instructions),
-                        timeout=30
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("generate_reply timed out, retrying...")
-                    try:
-                        await asyncio.wait_for(
-                            session.generate_reply(instructions=reply_instructions),
-                            timeout=30
-                        )
-                    except Exception:
-                        logger.error("Retry also failed")
-                log("Reply generation started")
+                    await session.generate_reply(instructions=reply_instructions)
+                    log("Reply generation started")
+                except Exception as gen_err:
+                    log(f"generate_reply error: {gen_err}")
 
             except Exception as e:
-                logger.error(f"Search/reply error: {e}")
+                log(f"Search/reply error: {e}")
                 import traceback
-                logger.error(traceback.format_exc())
+                log(traceback.format_exc())
                 try:
-                    await asyncio.wait_for(
-                        session.generate_reply(
-                            instructions=f'The user asked: "{query}". Give a warm, helpful answer based on general Calvary Chapel biblical teaching in 3-5 sentences.'
-                        ),
-                        timeout=20
+                    await session.generate_reply(
+                        instructions=f'The user asked: "{query}". Give a warm, helpful answer based on general Calvary Chapel biblical teaching in 3-5 sentences.'
                     )
                 except Exception:
                     pass
@@ -256,13 +243,10 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await asyncio.wait_for(
-                session.generate_reply(instructions=f"Say exactly: '{greeting}'"),
-                timeout=15
-            )
+            await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
             log("Greeting sent - LISTENING")
-        except (asyncio.TimeoutError, Exception) as e:
-            log(f"Greeting timeout/error: {e} - continuing anyway")
+        except Exception as e:
+            log(f"Greeting error: {e} - continuing anyway")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
