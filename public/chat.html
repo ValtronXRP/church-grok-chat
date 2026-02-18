@@ -1353,7 +1353,7 @@
         let silentConnection = false; // Track if connection was from text input
         let typingTimeout = null;
         let autoDisconnectTimer = null; // Timer for auto-disconnect after response
-        const AUTO_DISCONNECT_DELAY = 120000; // 2 minutes of inactivity before disconnect
+        const AUTO_DISCONNECT_DELAY = 10000; // 10 seconds of inactivity before disconnect
         let conversationHistory = [
             {
                 role: 'system',

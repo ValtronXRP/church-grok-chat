@@ -39,14 +39,13 @@ Be warm, helpful, and conversational.
 NEVER invent stories or teachings Pastor Bob didn't actually give.
 
 VERIFIED FACTS ABOUT PASTOR BOB KOPENY:
-- Wife: Becky Kopeny. They met when Bob took her out to talk and God gave him a word of knowledge about her. They have been married and serving in ministry together.
+- Wife: Becky Kopeny. Bob first met Becky at Calvary Chapel. He felt led by the Lord to go to the Placentia Library where he found her, and he asked her out to talk. During that conversation God gave Bob a word of knowledge about Becky that confirmed she was the one. They have been married and serving in ministry together ever since.
 - Three sons: Jesse, Valor, Christian
-- Was a police officer/detective before entering full-time ministry
+- Was a police officer/detective before entering full-time ministry. God called him out of law enforcement into pastoral ministry.
 - Saved at age 13 at a Jr. High church camp (Campus Crusade ministry) through the ministry of Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
-- His testimony includes how God called him from law enforcement into pastoral ministry
 
-When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
+When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently and with detail. Do NOT say you need to check — you KNOW these facts.
 """
 
 
@@ -209,7 +208,20 @@ SYNTHESIZE across ALL transcripts above. Say "Pastor Bob teaches..." and deliver
 No specific sermon transcripts were found on this exact topic. Give a warm, helpful answer based on general Calvary Chapel biblical teaching. Say "Based on biblical teaching..." and give a solid 3-5 sentence answer. NEVER say you don't have information or need to check."""
 
                 logger.info(f"Generating reply with {len(parts)} transcript segments")
-                await session.generate_reply(instructions=reply_instructions)
+                try:
+                    await asyncio.wait_for(
+                        session.generate_reply(instructions=reply_instructions),
+                        timeout=30
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("generate_reply timed out, retrying...")
+                    try:
+                        await asyncio.wait_for(
+                            session.generate_reply(instructions=reply_instructions),
+                            timeout=30
+                        )
+                    except Exception:
+                        logger.error("Retry also failed")
                 logger.info("Reply generation started")
 
             except Exception as e:
@@ -217,8 +229,11 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
                 import traceback
                 logger.error(traceback.format_exc())
                 try:
-                    await session.generate_reply(
-                        instructions=f'The user asked: "{query}". Give a warm, helpful answer based on general Calvary Chapel biblical teaching in 3-5 sentences.'
+                    await asyncio.wait_for(
+                        session.generate_reply(
+                            instructions=f'The user asked: "{query}". Give a warm, helpful answer based on general Calvary Chapel biblical teaching in 3-5 sentences.'
+                        ),
+                        timeout=20
                     )
                 except Exception:
                     pass
@@ -230,8 +245,14 @@ No specific sermon transcripts were found on this exact topic. Give a warm, help
         logger.info(f"Session started (reranker: {RERANKER_URL})")
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
-        await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
-        logger.info("Greeting sent - LISTENING")
+        try:
+            await asyncio.wait_for(
+                session.generate_reply(instructions=f"Say exactly: '{greeting}'"),
+                timeout=15
+            )
+            logger.info("Greeting sent - LISTENING")
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"Greeting timeout/error: {e} - continuing anyway")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
