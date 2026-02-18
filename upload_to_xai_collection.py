@@ -58,7 +58,7 @@ def get_chroma_segments():
 def upload_segment(seg, idx):
     for attempt in range(MAX_RETRIES):
         try:
-            doc_text = f"title: {seg['title']}\n{seg['text']}" if seg.get('title') else seg['text']
+            doc_text = seg['text']
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
                 f.write(doc_text)
                 tmp_path = f.name

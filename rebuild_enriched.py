@@ -40,6 +40,34 @@ SKIP_PATTERNS = re.compile(
     re.IGNORECASE
 )
 
+WORSHIP_INDICATORS = re.compile(
+    r'\b(hallelujah|praise the lord|worship with us|let\'?s worship|'
+    r'sing with us|worship team|let\'?s stand|stand together|'
+    r'♪|🎵|🎶)\b',
+    re.IGNORECASE
+)
+INTRO_INDICATORS = re.compile(
+    r'\b(welcome to calvary|good morning everyone|announcements|'
+    r'livestream|going live|countdown|we\'?re live|'
+    r'welcome to sunday|welcome to wednesday|'
+    r'turn in your bibles?|open your bibles?)\b',
+    re.IGNORECASE
+)
+SERMON_START_INDICATORS = re.compile(
+    r'\b(turn in your bibles?|open your bibles?|'
+    r'let\'?s pray|father god|heavenly father|'
+    r'lord we come|chapter \d|verse \d|'
+    r'genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|'
+    r'samuel|kings|chronicles|ezra|nehemiah|esther|job|psalm|proverbs|'
+    r'ecclesiastes|song of solomon|isaiah|jeremiah|lamentations|ezekiel|'
+    r'daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|'
+    r'zephaniah|haggai|zechariah|malachi|'
+    r'matthew|mark|luke|john|acts|romans|corinthians|galatians|'
+    r'ephesians|philippians|colossians|thessalonians|timothy|titus|'
+    r'philemon|hebrews|james|peter|jude|revelation)\b',
+    re.IGNORECASE
+)
+
 def get_client():
     return chromadb.CloudClient(
         api_key=CHROMA_API_KEY,
@@ -139,16 +167,43 @@ def parse_batch_sermon(item, batch_file):
         'segments': segments
     }
 
+def find_sermon_start(segments):
+    for i, seg in enumerate(segments):
+        if seg['start_sec'] < 30:
+            continue
+        window_text = ' '.join(s['text'] for s in segments[max(0,i-2):i+3])
+        if SERMON_START_INDICATORS.search(window_text):
+            return max(0, i - 2)
+    for i, seg in enumerate(segments):
+        if seg['start_sec'] >= 120:
+            return i
+    return 0
+
+def is_worship_or_intro(text):
+    words = text.split()
+    if len(words) < 20:
+        return True
+    worship_count = len(WORSHIP_INDICATORS.findall(text))
+    if worship_count >= 3:
+        return True
+    return False
+
 def chunk_segments(segments, video_id, youtube_url, title, source_file, target_words=400, overlap_words=50):
+    sermon_start_idx = find_sermon_start(segments)
+    if sermon_start_idx > 0:
+        segments = segments[sermon_start_idx:]
+
     chunks = []
     current_texts = []
     current_word_count = 0
     current_start_sec = 0
+    next_start_sec = None
 
     for seg in segments:
         words = seg['text'].split()
         if not current_texts:
-            current_start_sec = seg['start_sec']
+            current_start_sec = next_start_sec if next_start_sec is not None else seg['start_sec']
+            next_start_sec = None
         current_texts.append(seg['text'])
         current_word_count += len(words)
 
@@ -165,14 +220,9 @@ def chunk_segments(segments, video_id, youtube_url, title, source_file, target_w
                 'end_sec': end_sec,
                 'word_count': len(chunk_text.split())
             })
-            overlap_text = ' '.join(current_texts[-2:]) if len(current_texts) >= 2 else ''
-            overlap_wc = len(overlap_text.split()) if overlap_text else 0
-            if overlap_wc > 0:
-                current_texts = [overlap_text]
-                current_word_count = overlap_wc
-            else:
-                current_texts = []
-                current_word_count = 0
+            next_start_sec = seg['start_sec']
+            current_texts = []
+            current_word_count = 0
 
     if current_texts and current_word_count >= 50:
         chunk_text = ' '.join(current_texts)
