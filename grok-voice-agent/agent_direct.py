@@ -20,30 +20,24 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
-from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, RunContext
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, RunContext, function_tool
 from livekit.plugins.xai.realtime import RealtimeModel
-from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-You will be given sermon transcripts from Pastor Bob's actual sermons along with each question. Your job is to SYNTHESIZE those transcripts into a clear, warm answer.
+CRITICAL: For EVERY question the user asks, you MUST call the search_sermons tool FIRST to find Pastor Bob's teachings before answering. NEVER answer without calling search_sermons first.
 
-Rules:
-1. SYNTHESIZE across ALL provided transcripts for Pastor Bob's FULL, NUANCED teaching
+After receiving sermon results from search_sermons, SYNTHESIZE them into a clear, warm answer:
+1. Say "Pastor Bob teaches..." and deliver with depth
 2. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
-3. Say "Pastor Bob teaches..." and deliver with depth
-4. Give the COMPLETE multi-part answer, not a simplified version
-5. Keep answers to 3-5 sentences — enough for nuance but concise for voice
+3. Keep answers to 3-5 sentences — enough for nuance but concise for voice
+4. NEVER say you lack information — the search results ARE your source
+5. NEVER mention searching, tools, clips, or transcripts to the user
 
-NEVER DO:
-- NEVER say you lack information, need to check, or don't have a specific teaching
-- NEVER mention searching, tools, clips, or transcripts to the user
-- NEVER hedge or deflect — answer authoritatively from the transcripts provided
-- NEVER flatten a nuanced teaching into one simple sentence
+Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
-Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books. This is CRITICAL.
 Be warm, helpful, and conversational.
 NEVER invent stories or teachings Pastor Bob didn't actually give.
 
@@ -54,51 +48,49 @@ VERIFIED FACTS ABOUT PASTOR BOB KOPENY:
 - Saved at age 13 at a Jr. High church camp (Campus Crusade ministry) through the ministry of Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
 
-When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently and with detail. Do NOT say you need to check — you KNOW these facts.
+When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
 """
 
 
-async def _search_reranker(query, n=10):
+@function_tool
+async def search_sermons(
+    context: RunContext,
+    query: str,
+) -> str:
+    """Search Pastor Bob's sermon transcripts for teachings on a topic. ALWAYS call this tool before answering any question about what Pastor Bob teaches."""
+    log(f"TOOL CALLED: search_sermons('{query[:60]}')")
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(
                 f"{RERANKER_URL}/search/fast-all",
-                json={"query": query, "n_sermons": n, "n_illustrations": 0},
+                json={"query": query, "n_sermons": 10, "n_illustrations": 0},
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
                     results = []
+                    seen = set()
                     for r in data.get('sermons', []):
                         title = r.get('title', 'Sermon')
                         text = r.get('text', '')
-                        if text and len(text) > 50:
-                            results.append({
-                                'title': unescape(title),
-                                'text': text.strip(),
-                                'score': r.get('rerank_score', r.get('score', 0)),
-                                'url': r.get('timestamped_url', r.get('url', '')),
-                                'start_time': r.get('start_time', '')
-                            })
-                    return results
+                        key = text[:100]
+                        if text and len(text) > 50 and key not in seen:
+                            seen.add(key)
+                            results.append(f"{unescape(title)}: {text[:400]}")
+                    if results:
+                        context_text = "\n\n".join(results[:5])
+                        log(f"Search returned {len(results)} results, sending top 5")
+                        return f"Pastor Bob's sermon excerpts on this topic:\n\n{context_text}\n\nSynthesize these into a warm 3-5 sentence answer starting with 'Pastor Bob teaches...'"
+                    else:
+                        log("Search returned 0 results")
+                        return "No specific sermon transcripts found. Give a warm answer based on general Calvary Chapel biblical teaching."
                 else:
                     body = await response.text()
-                    logger.warning(f"Reranker search {response.status}: {body[:200]}")
+                    log(f"Reranker error {response.status}: {body[:200]}")
+                    return "Search temporarily unavailable. Give a warm answer based on biblical teaching."
     except Exception as e:
-        logger.warning(f"Reranker search error: {e}")
-    return []
-
-
-async def _do_search(query):
-    results = await _search_reranker(query, n=10)
-    seen = set()
-    merged = []
-    for r in results:
-        key = r.get('text', '')[:100]
-        if key not in seen and len(r.get('text', '')) > 50:
-            seen.add(key)
-            merged.append(r)
-    return merged
+        log(f"Search error: {e}")
+        return "Search temporarily unavailable. Give a warm answer based on biblical teaching."
 
 
 _room_ref = None
@@ -126,24 +118,14 @@ async def entrypoint(ctx: JobContext):
     global _room_ref
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
-        logger.info(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
         last_sent_message = {"text": None}
-        is_searching = {"active": False}
 
-        turn_detection = ServerVad(
-            type="server_vad",
-            threshold=0.8,
-            prefix_padding_ms=500,
-            silence_duration_ms=800,
-            create_response=False,
-            interrupt_response=False,
-        )
-
-        model = RealtimeModel(voice="Aria", turn_detection=turn_detection)
+        model = RealtimeModel(voice="Aria")
         session = AgentSession(llm=model)
         apb_agent = Agent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
+            tools=[search_sermons],
         )
 
         log("Connecting to room...")
@@ -186,63 +168,10 @@ async def entrypoint(ctx: JobContext):
             if not event.is_final:
                 return
             transcript = event.transcript.strip()
-            if not transcript or len(transcript) < 10:
-                return
-            if is_searching["active"]:
-                logger.info(f"Already searching, skipping: {transcript[:60]}")
+            if not transcript or len(transcript) < 3:
                 return
             log(f"USER SAID: {transcript[:80]}")
             asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
-            asyncio.create_task(_search_and_reply(session, transcript, is_searching))
-
-        async def _search_and_reply(session, query, is_searching):
-            is_searching["active"] = True
-            try:
-                log(f"SEARCHING for: {query[:60]}")
-                merged = await _do_search(query)
-                log(f"Search returned {len(merged)} results for: {query[:60]}")
-
-                parts = []
-                for i, r in enumerate(merged[:3]):
-                    title = r.get('title', 'Sermon')
-                    text = r.get('text', '')
-                    if text and len(text) > 50:
-                        parts.append(f"{title}: {text[:300]}")
-
-                if parts:
-                    search_context = chr(10).join(parts)
-                    reply_instructions = (
-                        f'User asked: "{query}"\n'
-                        f'Pastor Bob\'s sermon excerpts:\n'
-                        f'{search_context}\n'
-                        f'Synthesize into 3-5 warm sentences starting with "Pastor Bob teaches..."'
-                    )
-                else:
-                    reply_instructions = (
-                        f'User asked: "{query}"\n'
-                        f'Give a warm 3-5 sentence answer based on biblical teaching. '
-                        f'Start with "Based on biblical teaching..." Never say you lack information.'
-                    )
-
-                log(f"Generating reply with {len(parts)} transcript segments ({len(reply_instructions)} chars)")
-                try:
-                    await session.generate_reply(instructions=reply_instructions)
-                    log("Reply generation started")
-                except Exception as gen_err:
-                    log(f"generate_reply error: {gen_err}")
-
-            except Exception as e:
-                log(f"Search/reply error: {e}")
-                import traceback
-                log(traceback.format_exc())
-                try:
-                    await session.generate_reply(
-                        instructions=f'The user asked: "{query}". Give a warm, helpful answer based on general Calvary Chapel biblical teaching in 3-5 sentences.'
-                    )
-                except Exception:
-                    pass
-            finally:
-                is_searching["active"] = False
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
@@ -270,7 +199,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent v9 (reranker search, no xAI collection)")
+    logger.info("APB Voice Agent v10 (function_tool RAG)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
