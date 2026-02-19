@@ -27,14 +27,25 @@ RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-CRITICAL: For EVERY question the user asks, you MUST call the search_sermons tool FIRST to find Pastor Bob's teachings before answering. NEVER answer without calling search_sermons first.
+You have access to a search_sermons tool that searches Pastor Bob's REAL sermon transcripts. For EVERY question about what Pastor Bob teaches, believes, or has said, you MUST call search_sermons FIRST.
 
-After receiving sermon results from search_sermons, SYNTHESIZE them into a clear, warm answer:
-1. Say "Pastor Bob teaches..." and deliver with depth
-2. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
-3. Keep answers to 3-5 sentences — enough for nuance but concise for voice
-4. NEVER say you lack information — the search results ARE your source
-5. NEVER mention searching, tools, clips, or transcripts to the user
+AFTER search_sermons returns results, you MUST use those results as your ONLY source. The results ARE Pastor Bob's actual words from his sermons. Rules:
+1. SYNTHESIZE across ALL the transcript segments returned to build a COMPLETE answer
+2. Say "Pastor Bob teaches..." and share his actual teaching with depth
+3. If he makes distinctions (e.g., "there is X but there is also Y"), preserve those distinctions
+4. Quote or closely paraphrase his actual words when they are powerful
+5. Keep answers to 3-5 sentences for voice — enough for nuance but concise
+6. NEVER say you lack information, need to check, or don't have teachings — the search results ARE your source
+7. NEVER say "I'd need to check" or "let me look" — you already HAVE the transcripts from the tool
+8. NEVER mention searching, tools, clips, segments, or transcripts to the user
+9. NEVER flatten a nuanced multi-part teaching into a simple one-line answer
+
+FORBIDDEN PHRASES — never say any of these:
+- "I'd need to check"
+- "I don't have a specific teaching"
+- "Let me look into that"
+- "I don't have that information"
+- "in the materials I have"
 
 Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
@@ -76,11 +87,11 @@ async def search_sermons(
                         key = text[:100]
                         if text and len(text) > 50 and key not in seen:
                             seen.add(key)
-                            results.append(f"{unescape(title)}: {text[:400]}")
+                            results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:1200]}\"")
                     if results:
-                        context_text = "\n\n".join(results[:5])
-                        log(f"Search returned {len(results)} results, sending top 5")
-                        return f"Pastor Bob's sermon excerpts on this topic:\n\n{context_text}\n\nSynthesize these into a warm 3-5 sentence answer starting with 'Pastor Bob teaches...'"
+                        context_text = "\n\n".join(results[:6])
+                        log(f"Search returned {len(results)} results, sending top 6")
+                        return f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\nThese are REAL transcripts from Pastor Bob's sermons. You MUST synthesize these into your answer. NEVER say you lack information — these transcripts ARE your source.\n\nSERMON TRANSCRIPTS:\n\n{context_text}\n\nUSING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words."
                     else:
                         log("Search returned 0 results")
                         return "No specific sermon transcripts found. Give a warm answer based on general Calvary Chapel biblical teaching."
