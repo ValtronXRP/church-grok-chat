@@ -19,6 +19,8 @@ logger.addHandler(handler)
 
 def log(msg):
     print(f"[APB] {msg}", flush=True)
+    sys.stderr.write(f"[APB] {msg}\n")
+    sys.stderr.flush()
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, RunContext
 from livekit.plugins.xai.realtime import RealtimeModel
@@ -117,6 +119,11 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
+async def _delayed_speech_complete(delay_seconds):
+    await asyncio.sleep(delay_seconds)
+    await _send_data_message("speech_complete", {})
+
+
 async def entrypoint(ctx: JobContext):
     global _room_ref
     try:
@@ -172,15 +179,9 @@ async def entrypoint(ctx: JobContext):
                         last_sent_message["text"] = text
                         logger.info(f"AGENT SAID: {text[:100]}...")
                         asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
+                        asyncio.create_task(_delayed_speech_complete(5))
             except Exception as e:
                 logger.error(f"Error in conversation_item_added: {e}")
-
-        @session.on("agent_state_changed")
-        def on_agent_state(event):
-            state = getattr(event, 'state', str(event))
-            log(f"Agent state: {state}")
-            if str(state) == "listening":
-                asyncio.create_task(_send_data_message("speech_complete", {}))
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
