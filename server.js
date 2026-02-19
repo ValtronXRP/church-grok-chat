@@ -666,6 +666,9 @@ app.post('/api/chat', async (req, res) => {
         
         const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults);
         console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
+        if (sermonResults.length > 0) {
+          console.log(`Top sermon: "${(sermonResults[0].title || '').substring(0, 60)}" text: "${(sermonResults[0].text || '').substring(0, 200)}"`);
+        }
         
         const lastIdx = enhancedMessages.length - 1;
         const userMsg = enhancedMessages[lastIdx];
