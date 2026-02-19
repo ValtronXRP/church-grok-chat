@@ -175,6 +175,13 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.error(f"Error in conversation_item_added: {e}")
 
+        @session.on("agent_state_changed")
+        def on_agent_state(event):
+            state = getattr(event, 'state', str(event))
+            log(f"Agent state: {state}")
+            if str(state) == "listening":
+                asyncio.create_task(_send_data_message("speech_complete", {}))
+
         @session.on("user_input_transcribed")
         def on_user_input(event):
             if not event.is_final:
