@@ -656,6 +656,26 @@
             font-weight: 500;
         }
 
+        #countdownTimer {
+            display: none;
+            margin-top: 12px;
+            font-size: 28px;
+            font-weight: 700;
+            color: #ff6b6b;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+        }
+
+        #countdownTimer.active {
+            display: block;
+            animation: countdown-pulse 1s infinite;
+        }
+
+        @keyframes countdown-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .agent-status {
             margin-top: 16px;
             padding: 10px 24px;
@@ -1258,6 +1278,7 @@
                 </svg>
             </button>
             <p class="voice-status" id="voiceStatus">Tap to connect</p>
+            <div id="countdownTimer"></div>
             
             <div class="agent-status" id="agentStatus">🤖 Agent Connected</div>
             
@@ -1352,8 +1373,41 @@
         let voiceResponseEnabled = true; // Track voice response preference
         let silentConnection = false; // Track if connection was from text input
         let typingTimeout = null;
-        let autoDisconnectTimer = null; // Timer for auto-disconnect after response
-        const AUTO_DISCONNECT_DELAY = 10000; // 10 seconds of inactivity before disconnect
+        let autoDisconnectTimer = null;
+        let countdownInterval = null;
+        let countdownSeconds = 0;
+        const AUTO_DISCONNECT_DELAY = 10000;
+
+        function startCountdown() {
+            stopCountdown();
+            countdownSeconds = 10;
+            const el = document.getElementById('countdownTimer');
+            el.textContent = countdownSeconds;
+            el.classList.add('active');
+            countdownInterval = setInterval(() => {
+                countdownSeconds--;
+                if (countdownSeconds <= 0) {
+                    stopCountdown();
+                    if (isConnected) {
+                        log('Countdown reached 0 - disconnecting', 'info');
+                        addMessage('Voice session ended (timeout)', 'system');
+                        disconnect();
+                    }
+                } else {
+                    el.textContent = countdownSeconds;
+                }
+            }, 1000);
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            const el = document.getElementById('countdownTimer');
+            el.classList.remove('active');
+            el.textContent = '';
+        }
         let conversationHistory = [
             {
                 role: 'system',
@@ -2212,13 +2266,16 @@ TESTIMONY (HOW BOB WAS SAVED):
                 const text = segments.map(s => s.text).join(' ').trim();
                 if (!text) return;
                 const isAgent = participant && participant.identity && participant.identity !== room.localParticipant.identity;
-                if (!isAgent && isFinal && text.length > 2) {
-                    if (text !== lastVoiceUserMessage) {
-                        lastVoiceUserMessage = text;
-                        addMessage(text, 'user');
-                        conversationHistory.push({ role: 'user', content: text });
-                        showTyping();
-                        fetchClipsForVoiceQuery(text);
+                if (!isAgent && text.length > 2) {
+                    stopCountdown();
+                    if (isFinal) {
+                        if (text !== lastVoiceUserMessage) {
+                            lastVoiceUserMessage = text;
+                            addMessage(text, 'user');
+                            conversationHistory.push({ role: 'user', content: text });
+                            showTyping();
+                            fetchClipsForVoiceQuery(text);
+                        }
                     }
                 }
                 log(`Transcription (${participant?.identity}): "${text.substring(0, 50)}..." final=${isFinal}`, 'info');
@@ -2242,21 +2299,26 @@ TESTIMONY (HOW BOB WAS SAVED):
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
                         log(`User transcript (data msg, dedup skip): ${message.text?.substring(0, 50)}`, 'info');
+                        stopCountdown();
                         if (autoDisconnectTimer) {
                             clearTimeout(autoDisconnectTimer);
                             autoDisconnectTimer = null;
                             log('Auto-disconnect cancelled - user speaking', 'info');
                         }
                     } else if (message.type === 'agent_transcript') {
-                        // Display agent's spoken text in chat (with deduplication)
+                        stopCountdown();
                         if (message.text && message.text !== lastAgentMessage) {
                             lastAgentMessage = message.text;
                             hideTyping();
                             addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
-                            if (autoDisconnectTimer) {
-                                clearTimeout(autoDisconnectTimer);
-                            }
+                            if (autoDisconnectTimer) clearTimeout(autoDisconnectTimer);
+                            autoDisconnectTimer = setTimeout(() => {
+                                if (isConnected && !countdownInterval) {
+                                    log('Fallback: starting countdown from agent_transcript', 'info');
+                                    startCountdown();
+                                }
+                            }, 15000);
                         }
                     } else if (message.type === 'sermon_reference') {
                         log('Received sermon reference', 'info');
@@ -2273,17 +2335,8 @@ TESTIMONY (HOW BOB WAS SAVED):
                             ''
                         );
                     } else if (message.type === 'speech_complete') {
-                        log('Agent finished speaking', 'info');
-                        if (autoDisconnectTimer) {
-                            clearTimeout(autoDisconnectTimer);
-                        }
-                        autoDisconnectTimer = setTimeout(() => {
-                            if (isConnected) {
-                                log('Auto-disconnecting after inactivity', 'info');
-                                addMessage('Voice session ended due to inactivity', 'system');
-                                disconnect();
-                            }
-                        }, AUTO_DISCONNECT_DELAY);
+                        log('Agent finished speaking - starting countdown', 'info');
+                        startCountdown();
                     }
                 } catch (error) {
                     console.error('Error parsing data message:', error);
@@ -2462,7 +2515,7 @@ TESTIMONY (HOW BOB WAS SAVED):
         function disconnect() {
             log('Disconnecting...', 'info');
             
-            // Clear auto-disconnect timer
+            stopCountdown();
             if (autoDisconnectTimer) {
                 clearTimeout(autoDisconnectTimer);
                 autoDisconnectTimer = null;
