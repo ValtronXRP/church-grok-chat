@@ -159,7 +159,6 @@ async def entrypoint(ctx: JobContext):
                         last_sent_message["text"] = text
                         logger.info(f"AGENT SAID: {text[:100]}...")
                         asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
-                        asyncio.create_task(_delayed_speech_complete(5))
             except Exception as e:
                 logger.error(f"Error in conversation_item_added: {e}")
 

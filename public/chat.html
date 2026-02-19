@@ -2249,6 +2249,24 @@ TESTIMONY (HOW BOB WAS SAVED):
                 }
             });
 
+            // Detect when agent stops speaking to start countdown
+            let agentIsSpeaking = false;
+            room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+                const agentSpeaking = speakers.some(p => p.identity !== room.localParticipant.identity);
+                if (agentIsSpeaking && !agentSpeaking) {
+                    log('Agent stopped speaking - starting countdown', 'info');
+                    setTimeout(() => {
+                        if (isConnected && !agentIsSpeaking) {
+                            startCountdown();
+                        }
+                    }, 2000);
+                }
+                agentIsSpeaking = agentSpeaking;
+                if (agentSpeaking) {
+                    stopCountdown();
+                }
+            });
+
             // Track unsubscribed
             room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
                 log(`Track unsubscribed: ${track.kind}`, 'info');
@@ -2312,13 +2330,6 @@ TESTIMONY (HOW BOB WAS SAVED):
                             hideTyping();
                             addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
-                            if (autoDisconnectTimer) clearTimeout(autoDisconnectTimer);
-                            autoDisconnectTimer = setTimeout(() => {
-                                if (isConnected && !countdownInterval) {
-                                    log('Fallback: starting countdown from agent_transcript', 'info');
-                                    startCountdown();
-                                }
-                            }, 15000);
                         }
                     } else if (message.type === 'sermon_reference') {
                         log('Received sermon reference', 'info');
@@ -2335,8 +2346,7 @@ TESTIMONY (HOW BOB WAS SAVED):
                             ''
                         );
                     } else if (message.type === 'speech_complete') {
-                        log('Agent finished speaking - starting countdown', 'info');
-                        startCountdown();
+                        log('Agent speech_complete received (backup)', 'info');
                     }
                 } catch (error) {
                     console.error('Error parsing data message:', error);
