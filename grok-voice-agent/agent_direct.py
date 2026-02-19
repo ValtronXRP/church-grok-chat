@@ -20,25 +20,28 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
-from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, RunContext, function_tool
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, llm
 from livekit.plugins.xai.realtime import RealtimeModel
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-You have access to a search_sermons tool that searches Pastor Bob's REAL sermon transcripts. For EVERY question about what Pastor Bob teaches, believes, or has said, you MUST call search_sermons FIRST.
+You will receive sermon transcripts from Pastor Bob's actual sermons injected into the conversation before you respond. Your job is to SYNTHESIZE those transcripts into a clear, warm answer.
 
-AFTER search_sermons returns results, you MUST use those results as your ONLY source. The results ARE Pastor Bob's actual words from his sermons. Rules:
-1. SYNTHESIZE across ALL the transcript segments returned to build a COMPLETE answer
-2. Say "Pastor Bob teaches..." and share his actual teaching with depth
-3. If he makes distinctions (e.g., "there is X but there is also Y"), preserve those distinctions
-4. Quote or closely paraphrase his actual words when they are powerful
-5. Keep answers to 3-5 sentences for voice — enough for nuance but concise
-6. NEVER say you lack information, need to check, or don't have teachings — the search results ARE your source
-7. NEVER say "I'd need to check" or "let me look" — you already HAVE the transcripts from the tool
-8. NEVER mention searching, tools, clips, segments, or transcripts to the user
-9. NEVER flatten a nuanced multi-part teaching into a simple one-line answer
+Rules:
+1. SYNTHESIZE across ALL provided transcripts for Pastor Bob's FULL, NUANCED teaching
+2. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
+3. Say "Pastor Bob teaches..." and deliver with depth
+4. Give the COMPLETE multi-part answer, not a simplified version
+5. Keep answers to 3-5 sentences — enough for nuance but concise for voice
+6. Quote or closely paraphrase his actual words when they are powerful
+
+NEVER DO:
+- NEVER say you lack information, need to check, or don't have a specific teaching
+- NEVER mention searching, tools, clips, or transcripts to the user
+- NEVER hedge or deflect — answer authoritatively from the transcripts provided
+- NEVER flatten a nuanced teaching into one simple sentence
 
 FORBIDDEN PHRASES — never say any of these:
 - "I'd need to check"
@@ -63,18 +66,12 @@ When asked about Pastor Bob's personal life, family, testimony, or background, u
 """
 
 
-@function_tool
-async def search_sermons(
-    context: RunContext,
-    query: str,
-) -> str:
-    """Search Pastor Bob's sermon transcripts for teachings on a topic. ALWAYS call this tool before answering any question about what Pastor Bob teaches."""
-    log(f"TOOL CALLED: search_sermons('{query[:60]}')")
+async def _search_reranker(query, n=10):
     try:
-        async with aiohttp.ClientSession() as http_session:
-            async with http_session.post(
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
                 f"{RERANKER_URL}/search/fast-all",
-                json={"query": query, "n_sermons": 10, "n_illustrations": 0},
+                json={"query": query, "n_sermons": n, "n_illustrations": 0},
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
                 if response.status == 200:
@@ -88,20 +85,40 @@ async def search_sermons(
                         if text and len(text) > 50 and key not in seen:
                             seen.add(key)
                             results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:1200]}\"")
-                    if results:
-                        context_text = "\n\n".join(results[:6])
-                        log(f"Search returned {len(results)} results, sending top 6")
-                        return f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\nThese are REAL transcripts from Pastor Bob's sermons. You MUST synthesize these into your answer. NEVER say you lack information — these transcripts ARE your source.\n\nSERMON TRANSCRIPTS:\n\n{context_text}\n\nUSING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words."
-                    else:
-                        log("Search returned 0 results")
-                        return "No specific sermon transcripts found. Give a warm answer based on general Calvary Chapel biblical teaching."
+                    return results
                 else:
                     body = await response.text()
                     log(f"Reranker error {response.status}: {body[:200]}")
-                    return "Search temporarily unavailable. Give a warm answer based on biblical teaching."
+                    return []
     except Exception as e:
         log(f"Search error: {e}")
-        return "Search temporarily unavailable. Give a warm answer based on biblical teaching."
+        return []
+
+
+class APBAgent(Agent):
+    async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
+        user_text = new_message.text_content or ""
+        if len(user_text.strip()) < 3:
+            return
+
+        log(f"RAG SEARCH for: {user_text[:80]}")
+        results = await _search_reranker(user_text)
+
+        if results:
+            context_text = "\n\n".join(results[:6])
+            log(f"RAG: {len(results)} results, injecting top 6 into context")
+            rag_message = (
+                f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\n"
+                f"These are REAL transcripts from Pastor Bob's sermons. "
+                f"You MUST synthesize these into your answer. "
+                f"NEVER say you lack information — these transcripts ARE your source.\n\n"
+                f"SERMON TRANSCRIPTS:\n\n{context_text}\n\n"
+                f"USING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer "
+                f"starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words."
+            )
+            turn_ctx.add_message(role="assistant", content=rag_message)
+        else:
+            log("RAG: 0 results")
 
 
 _room_ref = None
@@ -120,11 +137,6 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-async def _delayed_speech_complete(delay_seconds):
-    await asyncio.sleep(delay_seconds)
-    await _send_data_message("speech_complete", {})
-
-
 async def entrypoint(ctx: JobContext):
     global _room_ref
     try:
@@ -132,11 +144,13 @@ async def entrypoint(ctx: JobContext):
 
         last_sent_message = {"text": None}
 
-        model = RealtimeModel(voice="Aria")
+        model = RealtimeModel(
+            voice="Aria",
+            turn_detection=None,
+        )
         session = AgentSession(llm=model)
-        apb_agent = Agent(
+        apb_agent = APBAgent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
-            tools=[search_sermons],
         )
 
         log("Connecting to room...")
@@ -209,7 +223,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent v10 (function_tool RAG)")
+    logger.info("APB Voice Agent v11 (on_user_turn_completed RAG)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
