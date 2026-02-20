@@ -2039,6 +2039,10 @@ TESTIMONY (HOW BOB WAS SAVED):
             btn.disabled = true;
             status.textContent = 'Connecting...';
             
+            if (room) {
+                try { room.disconnect(); } catch(e) {}
+                await new Promise(r => setTimeout(r, 1000));
+            }
             log('Starting connection...', 'info');
             addMessage('Connecting to voice assistant...', 'system');
 
@@ -2570,6 +2574,9 @@ TESTIMONY (HOW BOB WAS SAVED):
         // PAGE EVENTS
         // ============================================
         window.addEventListener('beforeunload', () => {
+            if (room) room.disconnect();
+        });
+        window.addEventListener('pagehide', () => {
             if (room) room.disconnect();
         });
 
