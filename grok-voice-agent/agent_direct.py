@@ -244,6 +244,7 @@ if __name__ == "__main__":
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
         agent_name="apb-voice-assistant",
-        num_idle_processes=2,
-        job_memory_warn_mb=1500,
+        num_idle_processes=3,
+        job_memory_warn_mb=2000,
+        load_threshold=1.0,
     ))
