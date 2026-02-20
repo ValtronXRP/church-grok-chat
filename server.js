@@ -825,41 +825,7 @@ app.post('/token', async (req, res) => {
     });
     const token = await at.toJwt();
 
-    // Create a separate token for agent dispatch API call
-    const dispatchAt = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-      identity: 'server-dispatch'
-    });
-    dispatchAt.addGrant({
-      roomAdmin: true,
-      room: roomName
-    });
-    const dispatchToken = await dispatchAt.toJwt();
-
-    // Try to dispatch agent to the room
-    const httpUrl = LIVEKIT_URL.replace('wss://', 'https://');
-    
-    setTimeout(async () => {
-      try {
-        const dispatchResponse = await axios.post(
-          `${httpUrl}/twirp/livekit.AgentDispatchService/CreateDispatch`,
-          {
-            room: roomName,
-            agent_name: 'apb-voice-assistant'
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${dispatchToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log(`Agent dispatched to room ${roomName}`);
-      } catch (dispatchError) {
-        console.error('Agent dispatch failed:', dispatchError.response?.data || dispatchError.message);
-      }
-    }, 1000); // Delay to ensure room exists
-    
-    console.log(`Room ${roomName} created, dispatching agent...`);
+    console.log(`Token created for room ${roomName} (auto-dispatch)`);
 
     res.json({ 
       token, 
