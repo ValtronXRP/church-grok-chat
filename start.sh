@@ -39,7 +39,7 @@ echo "Starting voice agent..."
   cd grok-voice-agent
   while true; do
     echo "[start.sh] Launching voice agent..."
-    python agent_direct.py start 2>&1
+    python agent_direct.py dev 2>&1
     EXIT_CODE=$?
     echo "[start.sh] Voice agent exited with code $EXIT_CODE"
     if [ $EXIT_CODE -ne 0 ]; then
