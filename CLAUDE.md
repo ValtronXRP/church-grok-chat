@@ -60,41 +60,59 @@ Frontend (chat.html) ─┬─ Text Chat ──→ server.js ──→ reranker_
 - `upload_to_xai_collection.py` - Upload enriched segments to xAI collection (NOT currently used)
 - `video_title_map.json` - 728 sermon titles (batch files + YouTube oEmbed)
 - `server.js` - Main backend, calls reranker service, /api/clips endpoint
-- `grok-voice-agent/agent_direct.py` - Voice agent v9 (reranker search, timeout handling)
+- `grok-voice-agent/agent_direct.py` - Voice agent v12 (generate_reply with full context)
 - `public/chat.html` - Frontend with voice, text chat, sermon clips, illustration clips
 
-### Voice Agent v9 - RERANKER SEARCH + TIMEOUT HANDLING (2026-02-18)
+### Voice Agent v12 - generate_reply with full context (2026-02-20)
 
-v8 used xAI Documents Search API which hit quota limits and had 0 indexed documents.
-v9 switches to local reranker service (same ChromaDB data, reliable).
+**Failed approaches (DO NOT USE):**
+- v9: `create_response=False` + manual `generate_reply()` — race condition, model auto-responds before search
+- v10: `@function_tool` — tool executes and returns results but xAI RealtimeModel silently ignores them (known bug: LiveKit Issue #2383)
+- v11: `on_user_turn_completed` hook — never fires with xAI RealtimeModel (hooks/nodes don't work with realtime models)
+
+**v12 (WORKING):** `user_input_transcribed` event → search → `generate_reply(instructions=full_context)` which REPLACES the model's instructions for realtime models, forcing the response to use sermon transcripts.
 
 **Architecture:**
 ```
-User speaks → xAI Realtime VAD (create_response=False) → 
-  user_input_transcribed event fires → agent runs _search_reranker() → 
-  reranker_service.py (localhost:5050/search/fast-all) → ChromaDB → results merged → 
-  session.generate_reply(instructions=search_results) → model speaks answer
+User speaks → xAI Realtime Model (native VAD, auto turn detection) →
+  user_input_transcribed event fires (is_final=True) →
+  _handle_user_question() called →
+  _search_reranker(transcript) → reranker_service.py (localhost:5050/search/fast-all) → ChromaDB →
+  Returns top 6 sermon excerpts (1200 chars each) →
+  session.generate_reply(instructions=FULL_SYSTEM_PROMPT + SERMON_TRANSCRIPTS) →
+  generate_reply REPLACES instructions and CANCELS any auto-response →
+  Model speaks answer using the provided transcripts
 ```
 
 **Key settings:**
-- `create_response=False` — model does NOT auto-respond; we control when it speaks
-- `interrupt_response=False` — prevents agent from being cut off
 - `user_input_transcribed` event with `is_final=True` triggers search
-- `_search_reranker()` calls local reranker at `127.0.0.1:5050/search/fast-all`
-- `session.generate_reply(instructions=...)` feeds search results directly to model
-- No `function_tool` needed — search happens in our code, not model's decision
-- `generate_reply()` has internal 10s timeout (NOT configurable) — context kept small (~1100 chars)
-- No `asyncio.wait_for` wrappers (they made timeouts worse by triggering retries)
-- Greeting failure does NOT crash the session — continues listening
+- `_search_reranker()` calls reranker at `127.0.0.1:5050/search/fast-all`
+- `session.generate_reply(instructions=...)` REPLACES instructions for realtime models (not append)
+- Full system prompt + sermon transcripts sent together as instructions
+- `_searching` flag prevents concurrent searches from overlapping
+- `generate_reply()` has internal 10s timeout (NOT configurable) — produces timeout error after agent finishes speaking but this is harmless
+- Greeting uses `session.generate_reply(instructions=...)` (one-time)
+- `conversation_item_added` event sends transcript to frontend
 - `start.sh` auto-restarts voice agent on crash with 5s delay
-- Frontend: auto-disconnect after 10 seconds of inactivity (`AUTO_DISCONNECT_DELAY = 10000`)
+- Frontend: visible countdown timer starts when agent stops speaking (ActiveSpeakersChanged event)
+- `num_idle_processes=2` and `job_memory_warn_mb=1500` to prevent capacity issues
 
-**Verified Facts in Agent Instructions:**
-- Wife: Becky Kopeny (met at Calvary Chapel, Placentia Library, word of knowledge)
+**Verified Facts in Agent Instructions (KEEP UPDATED):**
+- Wife: Becky Kopeny. Bob first met Becky at Calvary Church (NOT Calvary Chapel). He felt led by the Lord to go to the Placentia Library where he found her and asked her out to talk. Later, when he asked her to go have coffee, God gave Bob a word of knowledge about Becky that confirmed she was the one.
 - Three sons: Jesse, Valor, Christian
 - Former police officer/detective, called into ministry
-- Saved at age 13 at Jr. High camp (Campus Crusade)
+- Saved at age 13 at Jr. High camp (Campus Crusade ministry) through Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
+
+**Voice Agent Rules (KEEP IN SYNC with agent_direct.py):**
+- Bible book names: ALWAYS say "First John" NOT "one John" or "1 John", "Second Corinthians" NOT "two Corinthians"
+- ALWAYS spell out First, Second, Third for ALL numbered Bible books
+- Say "Pastor Bob teaches..." and deliver with depth
+- Keep answers to 3-5 sentences for voice
+- NEVER say "I'd need to check", "I don't have a specific teaching", "Let me look into that"
+- NEVER mention searching, tools, clips, segments, or transcripts
+- NEVER invent stories or teachings Pastor Bob didn't actually give
+- NEVER flatten a nuanced teaching into one simple sentence
 
 ### Sermon Clips (Left Sidebar) - WORKING
 - Populated independently from voice agent
@@ -149,7 +167,9 @@ CHROMA_DATABASE=APB
 
 ### Remaining Tasks
 1. **Optimize reranker speed** - first query ~60s due to CPU warmup, consider caching or warming
-2. **Monitor voice agent reliability** - verify timeout fixes prevent the revert-to-generic issue
+2. **Monitor voice agent v12** - verify generate_reply approach consistently returns sermon context
+3. **Re-enable user interruption** - once core RAG is stable, test interrupt_response=True
+4. **Handle generate_reply 10s timeout** - harmless error after agent speaks, but should be caught cleanly
 
 ### Deployment Notes
 - Reranker bundled into main container via `start.sh` (not separate Railway service)
