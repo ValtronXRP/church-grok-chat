@@ -20,14 +20,14 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
-from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli, llm
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins.xai.realtime import RealtimeModel
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
 PASTOR_BOB_INSTRUCTIONS = """You are APB (Ask Pastor Bob), a warm and knowledgeable voice assistant for Calvary Chapel East Anaheim.
 
-You will receive sermon transcripts from Pastor Bob's actual sermons injected into the conversation before you respond. Your job is to SYNTHESIZE those transcripts into a clear, warm answer.
+You will receive sermon transcripts from Pastor Bob's actual sermons along with each question. Your job is to SYNTHESIZE those transcripts into a clear, warm answer.
 
 Rules:
 1. SYNTHESIZE across ALL provided transcripts for Pastor Bob's FULL, NUANCED teaching
@@ -95,33 +95,9 @@ async def _search_reranker(query, n=10):
         return []
 
 
-class APBAgent(Agent):
-    async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
-        user_text = new_message.text_content or ""
-        if len(user_text.strip()) < 3:
-            return
-
-        log(f"RAG SEARCH for: {user_text[:80]}")
-        results = await _search_reranker(user_text)
-
-        if results:
-            context_text = "\n\n".join(results[:6])
-            log(f"RAG: {len(results)} results, injecting top 6 into context")
-            rag_message = (
-                f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\n"
-                f"These are REAL transcripts from Pastor Bob's sermons. "
-                f"You MUST synthesize these into your answer. "
-                f"NEVER say you lack information — these transcripts ARE your source.\n\n"
-                f"SERMON TRANSCRIPTS:\n\n{context_text}\n\n"
-                f"USING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer "
-                f"starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words."
-            )
-            turn_ctx.add_message(role="assistant", content=rag_message)
-        else:
-            log("RAG: 0 results")
-
-
 _room_ref = None
+_session_ref = None
+_searching = False
 
 
 async def _send_data_message(message_type, data):
@@ -137,19 +113,57 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
+async def _handle_user_question(transcript):
+    global _searching
+    if _searching:
+        log(f"Already searching, skipping: {transcript[:40]}")
+        return
+    _searching = True
+    try:
+        log(f"SEARCHING for: {transcript[:80]}")
+        results = await _search_reranker(transcript)
+
+        if results:
+            context_text = "\n\n".join(results[:6])
+            log(f"Search returned {len(results)} results, generating reply with top 6")
+
+            reply_instructions = (
+                f"{PASTOR_BOB_INSTRUCTIONS}\n\n"
+                f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\n"
+                f"The user asked: \"{transcript}\"\n\n"
+                f"These are REAL transcripts from Pastor Bob's sermons. "
+                f"You MUST synthesize these into your answer. "
+                f"NEVER say you lack information — these transcripts ARE your source.\n\n"
+                f"SERMON TRANSCRIPTS:\n\n{context_text}\n\n"
+                f"USING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer "
+                f"starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words. "
+                f"Do NOT say you need to check or don't have information."
+            )
+
+            try:
+                await _session_ref.generate_reply(instructions=reply_instructions)
+                log("Reply generated with sermon context")
+            except Exception as e:
+                log(f"generate_reply error: {e}")
+        else:
+            log("Search returned 0 results")
+    except Exception as e:
+        log(f"Handle question error: {e}")
+    finally:
+        _searching = False
+
+
 async def entrypoint(ctx: JobContext):
-    global _room_ref
+    global _room_ref, _session_ref
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
         last_sent_message = {"text": None}
 
-        model = RealtimeModel(
-            voice="Aria",
-            turn_detection=None,
-        )
+        model = RealtimeModel(voice="Aria")
         session = AgentSession(llm=model)
-        apb_agent = APBAgent(
+        _session_ref = session
+        apb_agent = Agent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
         )
 
@@ -196,6 +210,7 @@ async def entrypoint(ctx: JobContext):
                 return
             log(f"USER SAID: {transcript[:80]}")
             asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
+            asyncio.create_task(_handle_user_question(transcript))
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
@@ -223,7 +238,7 @@ async def entrypoint(ctx: JobContext):
 
 if __name__ == "__main__":
     logger.info("=" * 50)
-    logger.info("APB Voice Agent v11 (on_user_turn_completed RAG)")
+    logger.info("APB Voice Agent v12 (generate_reply with full context)")
     logger.info("=" * 50)
 
     cli.run_app(WorkerOptions(
