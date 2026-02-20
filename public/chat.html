@@ -2059,10 +2059,14 @@ TESTIMONY (HOW BOB WAS SAVED):
                 log('Microphone access granted', 'success');
                 stream.getTracks().forEach(t => t.stop()); // Release for now
 
-                // Step 2: Get token with unique room name and context
+                // Step 2: Get token — reuse room name within same tab to avoid exhausting idle processes
                 log('Fetching token from server...', 'info');
-                // Use the fixed room name that the agent is listening to
-                const roomName = 'apb-voice-room';
+                let roomName = sessionStorage.getItem('apb-room-name');
+                if (!roomName) {
+                    const sid = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+                    roomName = `apb-session-${sid}`;
+                    sessionStorage.setItem('apb-room-name', roomName);
+                }
                 
                 // Pass conversation context to voice agent
                 const contextMessages = getConversationContext();
@@ -2528,6 +2532,7 @@ TESTIMONY (HOW BOB WAS SAVED):
         // ============================================
         function disconnect() {
             log('Disconnecting...', 'info');
+            sessionStorage.removeItem('apb-room-name');
             
             stopCountdown();
             if (autoDisconnectTimer) {

@@ -803,9 +803,9 @@ app.post('/api/chat', async (req, res) => {
 // ============================================
 app.post('/token', async (req, res) => {
   try {
-    // Generate unique room name for each user session (private conversations)
+    const clientRoom = req.body.roomName;
     const sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const roomName = `apb-session-${sessionId}`;
+    const roomName = clientRoom && clientRoom.startsWith('apb-session-') ? clientRoom : `apb-session-${sessionId}`;
     const participantName = `user_${sessionId}`;
     const context = req.body.context || [];
 
