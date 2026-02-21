@@ -1,6 +1,6 @@
 # Ask Pastor Bob - Development Notes
 
-## Current State (2026-02-18)
+## Current State (2026-02-21)
 
 ### Data Sources
 - **JSON3 Folders 1-3**: 594 sermon files
@@ -63,14 +63,16 @@ Frontend (chat.html) ─┬─ Text Chat ──→ server.js ──→ reranker_
 - `grok-voice-agent/agent_direct.py` - Voice agent v12 (generate_reply with full context)
 - `public/chat.html` - Frontend with voice, text chat, sermon clips, illustration clips
 
-### Voice Agent v12 - generate_reply with full context (2026-02-20)
+### Voice Agent v12 - WORKING (2026-02-21)
 
 **Failed approaches (DO NOT USE):**
 - v9: `create_response=False` + manual `generate_reply()` — race condition, model auto-responds before search
 - v10: `@function_tool` — tool executes and returns results but xAI RealtimeModel silently ignores them (known bug: LiveKit Issue #2383)
 - v11: `on_user_turn_completed` hook — never fires with xAI RealtimeModel (hooks/nodes don't work with realtime models)
+- Explicit dispatch (`CreateDispatch` API + `agent_name`) — stale workers from previous deploys intercept dispatches, causing sessions with no entrypoint
+- Large context payload (6 results × 1200 chars + full system prompt) — exceeds `generate_reply` 10s internal timeout, model generates text but audio never plays
 
-**v12 (WORKING):** `user_input_transcribed` event → search → `generate_reply(instructions=full_context)` which REPLACES the model's instructions for realtime models, forcing the response to use sermon transcripts.
+**v12 (WORKING):** `user_input_transcribed` event → search → `generate_reply(instructions=compact_context)` which REPLACES the model's instructions for realtime models, forcing the response to use sermon transcripts.
 
 **Architecture:**
 ```
@@ -78,24 +80,46 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
   user_input_transcribed event fires (is_final=True) →
   _handle_user_question() called →
   _search_reranker(transcript) → reranker_service.py (localhost:5050/search/fast-all) → ChromaDB →
-  Returns top 6 sermon excerpts (1200 chars each) →
-  session.generate_reply(instructions=FULL_SYSTEM_PROMPT + SERMON_TRANSCRIPTS) →
+  Returns top 3 sermon excerpts (600 chars each) →
+  session.generate_reply(instructions=COMPACT_PROMPT + SERMON_TRANSCRIPTS) →
   generate_reply REPLACES instructions and CANCELS any auto-response →
   Model speaks answer using the provided transcripts
 ```
+
+**Dispatch: Automatic (NO agent_name, NO CreateDispatch API)**
+- `WorkerOptions` has NO `agent_name` — worker registers as unnamed
+- Server `/token` endpoint creates room + returns token (NO explicit dispatch call)
+- LiveKit auto-dispatches agent when participant joins any room
+- This avoids stale worker routing that caused 50%+ session failures with explicit dispatch
+
+**Context Payload (CRITICAL — DO NOT INCREASE):**
+- Top 3 results at 600 chars each (~1800 chars of transcripts)
+- Compact instructions (~200 chars) instead of full system prompt (~2000 chars)
+- Total payload ~2KB — fits within `generate_reply` 10s internal timeout
+- PREVIOUSLY: 6 results × 1200 chars + full system prompt = ~10KB → timed out, audio never played
+- If payload is too large, the model generates text (visible in chat) but voice audio is killed by timeout
+
+**Room Name Reuse (sessionStorage):**
+- Frontend generates room name `apb-session-{timestamp}-{random}` and stores in `sessionStorage`
+- Same tab reuses the same room name across refreshes (prevents idle process exhaustion)
+- Room name cleared on explicit disconnect (button click or countdown timer)
+- Server accepts client-provided room name if it starts with `apb-session-`
 
 **Key settings:**
 - `user_input_transcribed` event with `is_final=True` triggers search
 - `_search_reranker()` calls reranker at `127.0.0.1:5050/search/fast-all`
 - `session.generate_reply(instructions=...)` REPLACES instructions for realtime models (not append)
-- Full system prompt + sermon transcripts sent together as instructions
+- Compact prompt + top 3 sermon transcripts (600 chars each) sent as instructions
 - `_searching` flag prevents concurrent searches from overlapping
 - `generate_reply()` has internal 10s timeout (NOT configurable) — produces timeout error after agent finishes speaking but this is harmless
 - Greeting uses `session.generate_reply(instructions=...)` (one-time)
-- `conversation_item_added` event sends transcript to frontend
+- `conversation_item_added` event sends transcript to frontend via data message
+- `start.sh` runs `python agent_direct.py dev` (dev mode = `load_threshold=inf`, never rejects jobs)
 - `start.sh` auto-restarts voice agent on crash with 5s delay
 - Frontend: visible countdown timer starts when agent stops speaking (ActiveSpeakersChanged event)
-- `num_idle_processes=2` and `job_memory_warn_mb=1500` to prevent capacity issues
+- `num_idle_processes=5` and `job_memory_warn_mb=2000`
+- `pagehide` event on frontend calls `room.disconnect()` for cleanup
+- Frontend calls `room.disconnect()` before creating new connection
 
 **Verified Facts in Agent Instructions (KEEP UPDATED):**
 - Wife: Becky Kopeny. Bob first met Becky at Calvary Church (NOT Calvary Chapel). He felt led by the Lord to go to the Placentia Library where he found her and asked her out to talk. Later, when he asked her to go have coffee, God gave Bob a word of knowledge about Becky that confirmed she was the one.
@@ -165,15 +189,22 @@ CHROMA_DATABASE=APB
 5. **Voice agent revert after refresh**: `generate_reply` timeouts caused silent failures. Added `asyncio.wait_for()` with retry.
 6. **Auto-disconnect too long**: Changed from 120s to 10s.
 
+### Bugs Fixed (2026-02-21)
+7. **Voice agent not receiving dispatches**: Stale workers from previous deploys intercepted explicit `CreateDispatch` calls. Switched to automatic dispatch (no `agent_name`).
+8. **Voice audio not playing (text only)**: Context payload (6×1200 chars + full prompt = ~10KB) exceeded `generate_reply` 10s timeout. Reduced to 3×600 chars + compact prompt = ~2KB.
+9. **Idle process exhaustion on refresh**: Each refresh created new unique room, consuming idle processes. Added `sessionStorage` room name reuse per tab.
+
 ### Remaining Tasks
 1. **Optimize reranker speed** - first query ~60s due to CPU warmup, consider caching or warming
-2. **Monitor voice agent v12** - verify generate_reply approach consistently returns sermon context
-3. **Re-enable user interruption** - once core RAG is stable, test interrupt_response=True
-4. **Handle generate_reply 10s timeout** - harmless error after agent speaks, but should be caught cleanly
+2. **Re-enable user interruption** - once core RAG is stable, test interrupt_response=True
+3. **generate_reply 10s timeout** - harmless error after agent speaks, log shows `Error in _realtime_reply_task` but audio plays fine
 
 ### Deployment Notes
 - Reranker bundled into main container via `start.sh` (not separate Railway service)
 - `start.sh` manages port allocation: Node.js on $PORT (8080), ChromaDB API on 5001, Reranker on 5050
+- `start.sh` runs voice agent in dev mode: `python agent_direct.py dev` (load_threshold=inf)
 - `combined_requirements.txt` used to resolve Python dependency conflicts (numpy/scipy)
 - IPv4 (127.0.0.1) used for internal service communication (not localhost, which resolves to IPv6)
 - Voice agent RERANKER_URL env var must point to reranker service (default: http://127.0.0.1:5050)
+- NO `agent_name` on WorkerOptions — automatic dispatch, no `CreateDispatch` API call
+- Server `/token` endpoint accepts client room name, only generates new if not provided
