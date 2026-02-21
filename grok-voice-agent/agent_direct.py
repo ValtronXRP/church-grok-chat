@@ -84,7 +84,7 @@ async def _search_reranker(query, n=10):
                         key = text[:100]
                         if text and len(text) > 50 and key not in seen:
                             seen.add(key)
-                            results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:1200]}\"")
+                            results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:600]}\"")
                     return results
                 else:
                     body = await response.text()
@@ -124,20 +124,17 @@ async def _handle_user_question(transcript):
         results = await _search_reranker(transcript)
 
         if results:
-            context_text = "\n\n".join(results[:6])
-            log(f"Search returned {len(results)} results, generating reply with top 6")
+            context_text = "\n\n".join(results[:3])
+            log(f"Search returned {len(results)} results, generating reply with top 3")
 
             reply_instructions = (
-                f"{PASTOR_BOB_INSTRUCTIONS}\n\n"
-                f"=== PASTOR BOB'S ACTUAL SERMON TRANSCRIPTS ===\n\n"
-                f"The user asked: \"{transcript}\"\n\n"
-                f"These are REAL transcripts from Pastor Bob's sermons. "
-                f"You MUST synthesize these into your answer. "
-                f"NEVER say you lack information — these transcripts ARE your source.\n\n"
-                f"SERMON TRANSCRIPTS:\n\n{context_text}\n\n"
-                f"USING THE ABOVE TRANSCRIPTS, give a warm 3-5 sentence answer "
-                f"starting with 'Pastor Bob teaches...'. Quote or closely paraphrase his actual words. "
-                f"Do NOT say you need to check or don't have information."
+                f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
+                f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
+                f"Say 'Pastor Bob teaches...' and quote his words. "
+                f"NEVER say you lack info or need to check.\n\n"
+                f"Question: \"{transcript}\"\n\n"
+                f"TRANSCRIPTS:\n{context_text}\n\n"
+                f"Answer warmly from the transcripts above."
             )
 
             try:
