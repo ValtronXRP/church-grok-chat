@@ -313,7 +313,8 @@
         /* Chat Window */
         .chat-window {
             width: 100%;
-            height: 620px;
+            height: 200px;
+            transition: height 0.3s ease;
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 20px;
@@ -1433,8 +1434,16 @@ TESTIMONY (HOW BOB WAS SAVED):
         // ============================================
         // CHAT FUNCTIONS
         // ============================================
+        function expandChatWindow() {
+            const cw = document.getElementById('chatWindow');
+            if (cw && cw.style.height !== '620px') {
+                cw.style.height = '620px';
+            }
+        }
+
         function addMessage(text, sender) {
             const chatMessages = document.getElementById('chatMessages');
+            if (sender === 'user' || sender === 'assistant') expandChatWindow();
             
             // Remove typing indicator if it exists
             const existingTyping = chatMessages.querySelector('.typing');
@@ -1741,9 +1750,7 @@ TESTIMONY (HOW BOB WAS SAVED):
         // TEXT INPUT FUNCTIONS
         // ============================================
         async function handleTextInputFocus() {
-            // Don't auto-connect on focus - only connect when actually needed for voice response
-            // This avoids the greeting problem entirely
-            log('Text input focused - voice will connect if needed for response', 'info');
+            expandChatWindow();
         }
         
         function handleKeyPress(event) {
@@ -1988,6 +1995,7 @@ TESTIMONY (HOW BOB WAS SAVED):
         // CONNECT
         // ============================================
         async function connect(showGreeting = true) {
+            expandChatWindow();
             const btn = document.getElementById('voiceBtn');
             const status = document.getElementById('voiceStatus');
             
