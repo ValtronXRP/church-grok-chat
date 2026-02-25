@@ -122,7 +122,7 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
 - Frontend calls `room.disconnect()` before creating new connection
 
 **Verified Facts in Agent Instructions (KEEP UPDATED):**
-- Wife: Becky Kopeny. Bob first met Becky at Calvary Church (NOT Calvary Chapel) at the intersection of Chapman and Kramer in Placentia. He noticed her there but they didn't really talk. Later, he felt led by the Lord to go to the Placentia Library where he found her studying (she attended Cal State Fullerton). He asked her out to talk. When he later asked her to go have coffee, God gave Bob a word of knowledge about Becky — he told her something about an engagement that only she would know, which confirmed she was the one God had for him. They had a 3.5 month courtship and got married when Bob was about 25.
+- Wife: Becky Kopeny. Bob first met Becky at Calvary Church on Chapman and Madison in Placentia. He noticed her there but they didn't really talk. Later, he felt led by the Lord to go to the Placentia Library (on Chapman and Kraemer) where he found her studying (she attended Cal State Fullerton). He asked her out to talk. When he later asked her to go have coffee, God gave Bob a word of knowledge about Becky — he told her something about an engagement that only she would know, which confirmed she was the one God had for him. They had a 3.5 month courtship and got married when Bob was about 25.
 - Three sons: Jesse, Valor, Christian
 - Six grandchildren: Jesse's 4 (Julia, Lily, Jonah, Jeffrey), Valor's son Luca (born June 1 2022), Christian's daughter Cora (born Dec 2024)
 - Former police officer/detective, called into ministry
