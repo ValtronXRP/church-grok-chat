@@ -1818,6 +1818,8 @@ TESTIMONY (HOW BOB WAS SAVED):
                 const decoder = new TextDecoder();
                 let fullResponse = '';
                 let currentMessage = null;
+                let sermonGroup = null;
+                let illGroup = null;
 
                 hideTyping();
 
@@ -1836,21 +1838,39 @@ TESTIMONY (HOW BOB WAS SAVED):
                             try {
                                 const parsed = JSON.parse(data);
                                 
-                                // Handle sermon_videos event from server (real URLs from ChromaDB)
-                                if (parsed.sermon_videos) {
-                                    console.log('📺 Received sermon videos from server:', parsed.sermon_videos.length);
-                                    parsed.sermon_videos.forEach(video => {
-                                        addVideoToSidebar(video.title, video.url, video.timestamp, video.text);
+                                if (parsed.sermon_videos && parsed.sermon_videos.length) {
+                                    const videoList = document.getElementById('videoList');
+                                    const emptyState = document.getElementById('videoEmptyState');
+                                    if (emptyState) emptyState.style.display = 'none';
+                                    if (!sermonGroup) {
+                                        sermonGroup = document.createElement('div');
+                                        sermonGroup.className = 'clip-group';
+                                        sermonGroup.innerHTML = `<div class="clip-group-label">${text}</div>`;
+                                        videoList.insertBefore(sermonGroup, videoList.firstChild);
+                                    }
+                                    parsed.sermon_videos.forEach(v => {
+                                        const item = createVideoItem(v.title, v.url, v.timestamp, v.text);
+                                        if (item) { sermonGroup.appendChild(item); sidebarVideoCount++; }
                                     });
+                                    document.getElementById('videoCount').textContent = sidebarVideoCount;
                                     continue;
                                 }
                                 
-                                // Handle illustrations event from server
-                                if (parsed.illustrations) {
-                                    console.log('💡 Received illustrations from server:', parsed.illustrations.length);
+                                if (parsed.illustrations && parsed.illustrations.length) {
+                                    const illList = document.getElementById('illustrationList');
+                                    const emptyState = document.getElementById('illustrationEmptyState');
+                                    if (emptyState) emptyState.style.display = 'none';
+                                    if (!illGroup) {
+                                        illGroup = document.createElement('div');
+                                        illGroup.className = 'ill-clip-group';
+                                        illGroup.innerHTML = `<div class="ill-clip-group-label">${text}</div>`;
+                                        illList.insertBefore(illGroup, illList.firstChild);
+                                    }
                                     parsed.illustrations.forEach(ill => {
-                                        addIllustrationToSidebar(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
+                                        const item = createIllustrationItem(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
+                                        if (item) { illGroup.appendChild(item); illustrationCount++; }
                                     });
+                                    document.getElementById('illustrationCount').textContent = illustrationCount;
                                     continue;
                                 }
                                 
