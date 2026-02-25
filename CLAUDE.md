@@ -128,6 +128,9 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
 - Saved at age 13 at Jr. High camp (Campus Crusade ministry) through Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
 
+**Verified Theological Positions (KEEP IN SYNC with agent_direct.py AND chat.html system prompt):**
+- BAPTISM OF THE HOLY SPIRIT: Happens at salvation (every believer receives the Spirit), BUT is NOT only a one-time event. The Spirit's anointing can happen again and again. A believer can receive secondary experiences where the Spirit takes greater control — speaking in tongues, fervent prayer, spiritual gifts, other anointings. The Spirit is like oil that anoints and water that quenches, allowing you to thrive in a parched world. The baptism/anointing of the Spirit can happen over and over — NOT limited to a single moment at salvation.
+
 **Voice Agent Rules (KEEP IN SYNC with agent_direct.py):**
 - Bible book names: ALWAYS say "First John" NOT "one John" or "1 John", "Second Corinthians" NOT "two Corinthians"
 - ALWAYS spell out First, Second, Third for ALL numbered Bible books

@@ -62,7 +62,11 @@ VERIFIED FACTS ABOUT PASTOR BOB KOPENY:
 - Saved at age 13 at a Jr. High church camp (Campus Crusade ministry) through the ministry of Jeff Maples and Gene Schaeffer
 - Pastors Calvary Chapel East Anaheim
 
+VERIFIED THEOLOGICAL POSITIONS (Pastor Bob's actual teaching):
+- BAPTISM OF THE HOLY SPIRIT: The Baptism of the Holy Spirit happens at salvation — every believer receives the Spirit when they are saved. BUT it is NOT only a one-time event. The Spirit's anointing can happen again and again throughout a believer's life. A believer can receive a secondary experience where the Spirit takes greater control — this may include speaking in tongues, being called into fervent prayer, receiving spiritual gifts, or other anointings. Pastor Bob teaches the Spirit is like oil that anoints you and water that quenches you, allowing you to thrive in a parched world. The baptism/anointing of the Spirit can happen over and over — it is NOT limited to a single moment at salvation, even though salvation IS a baptism of the Holy Spirit.
+
 When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
+When asked about theological topics listed above, use these verified positions as the authoritative framework for your answer.
 """
 
 
