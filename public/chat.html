@@ -248,6 +248,38 @@
             border-radius: 2px;
         }
         
+        .clip-ref {
+            background: rgba(99, 102, 241, 0.15);
+            border-bottom: 1px dashed rgba(99, 102, 241, 0.5);
+            cursor: pointer;
+            padding: 0 2px;
+            border-radius: 3px;
+            transition: background 0.2s;
+        }
+
+        .clip-ref:hover {
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        .clip-ref.ill-ref {
+            background: rgba(255, 200, 100, 0.15);
+            border-bottom-color: rgba(255, 200, 100, 0.5);
+        }
+
+        .clip-ref.ill-ref:hover {
+            background: rgba(255, 200, 100, 0.3);
+        }
+
+        .clip-pulse {
+            animation: clipPulse 1.5s ease-out;
+        }
+
+        @keyframes clipPulse {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6); }
+            50% { box-shadow: 0 0 12px 4px rgba(99, 102, 241, 0.4); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
         .clip-group {
             border: 1px solid rgba(99, 102, 241, 0.35);
             border-radius: 14px;
@@ -1511,6 +1543,7 @@ When asked about theological topics listed above, use these verified positions a
             
             // Auto scroll
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            return msg;
         }
         
         // ============================================
@@ -1518,6 +1551,8 @@ When asked about theological topics listed above, use these verified positions a
         // ============================================
         let sidebarVideoCount = 0;
         const addedVideoKeys = new Set();
+        let clipIdCounter = 0;
+        const clipRegistry = [];
         
         const MAX_SIDEBAR_VIDEOS = 20;  // Allow accumulating videos across questions
         
@@ -1540,6 +1575,9 @@ When asked about theological topics listed above, use these verified positions a
             const videoItem = document.createElement('div');
             videoItem.className = 'sidebar-video-item';
             videoItem.style.marginBottom = '8px';
+            const clipId = clipIdCounter++;
+            videoItem.dataset.clipId = clipId;
+            clipRegistry.push({ id: clipId, element: videoItem, text: text || '', title: title || '', type: 'sermon' });
 
             if (isEmbeddable) {
                 const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
@@ -1616,6 +1654,9 @@ When asked about theological topics listed above, use these verified positions a
             const item = document.createElement('div');
             item.className = 'sidebar-illustration-item';
             item.style.marginBottom = '8px';
+            const clipId = clipIdCounter++;
+            item.dataset.clipId = clipId;
+            clipRegistry.push({ id: clipId, element: item, text: text || '', title: title || '', type: 'illustration' });
             
             let videoHtml = '';
             if (url && url.includes('youtube.com')) {
@@ -1717,6 +1758,127 @@ When asked about theological topics listed above, use these verified positions a
             return formatMessageText(text);
         }
         
+        function extractNgrams(text, minWords, maxWords) {
+            const words = text.split(/\s+/).filter(w => w.length > 0);
+            const ngrams = [];
+            for (let size = maxWords; size >= minWords; size--) {
+                for (let i = 0; i <= words.length - size; i++) {
+                    ngrams.push(words.slice(i, i + size).join(' '));
+                }
+            }
+            return ngrams;
+        }
+
+        function normalizeText(t) {
+            return t.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function highlightClipReferences(messageEl) {
+            if (!messageEl || clipRegistry.length === 0) return;
+            const recentClips = clipRegistry.slice(-20);
+            const msgHtml = messageEl.innerHTML;
+            const msgText = messageEl.textContent || '';
+            if (msgText.length < 20) return;
+
+            const matches = [];
+            const normMsg = normalizeText(msgText);
+
+            for (const clip of recentClips) {
+                const clipText = normalizeText(clip.text);
+                if (clipText.length < 10) continue;
+
+                const clipNgrams = extractNgrams(clipText, 4, 8);
+                let bestPhrase = '';
+                let bestLen = 0;
+
+                for (const ngram of clipNgrams) {
+                    if (ngram.length > bestLen && normMsg.includes(ngram)) {
+                        bestPhrase = ngram;
+                        bestLen = ngram.length;
+                    }
+                }
+
+                if (bestLen < 15) {
+                    const clipWords = clipText.split(/\s+/);
+                    const msgWords = normMsg.split(/\s+/);
+                    let longestRun = '';
+                    for (let i = 0; i < clipWords.length; i++) {
+                        for (let len = Math.min(6, clipWords.length - i); len >= 3; len--) {
+                            const run = clipWords.slice(i, i + len).join(' ');
+                            if (run.length > longestRun.length && msgWords.join(' ').includes(run)) {
+                                longestRun = run;
+                            }
+                        }
+                    }
+                    if (longestRun.length > bestLen) {
+                        bestPhrase = longestRun;
+                        bestLen = longestRun.length;
+                    }
+                }
+
+                if (bestLen >= 12) {
+                    matches.push({ clipId: clip.id, phrase: bestPhrase, type: clip.type, len: bestLen });
+                }
+            }
+
+            matches.sort((a, b) => b.len - a.len);
+
+            const usedRanges = [];
+            const validMatches = [];
+            for (const m of matches) {
+                const idx = normMsg.indexOf(m.phrase);
+                if (idx === -1) continue;
+                const end = idx + m.phrase.length;
+                const overlaps = usedRanges.some(r => idx < r.end && end > r.start);
+                if (!overlaps) {
+                    usedRanges.push({ start: idx, end });
+                    validMatches.push(m);
+                }
+            }
+
+            if (validMatches.length === 0) return;
+
+            let newHtml = msgHtml;
+            const plainText = messageEl.textContent || '';
+
+            for (const m of validMatches) {
+                const phraseWords = m.phrase.split(/\s+/);
+                const pattern = phraseWords.map(w =>
+                    w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                ).join('[\\s,;:.!?]*\\s*');
+                const regex = new RegExp('(' + pattern + ')', 'gi');
+                const cssClass = m.type === 'illustration' ? 'clip-ref ill-ref' : 'clip-ref';
+                const replacement = `<span class="${cssClass}" data-clip-id="${m.clipId}" title="Click to see source clip">$1</span>`;
+                newHtml = newHtml.replace(regex, replacement);
+            }
+
+            if (newHtml !== msgHtml) {
+                messageEl.innerHTML = newHtml;
+                messageEl.querySelectorAll('.clip-ref').forEach(span => {
+                    span.addEventListener('click', handleClipRefClick);
+                });
+            }
+        }
+
+        function handleClipRefClick(e) {
+            const clipId = parseInt(e.target.dataset.clipId);
+            const clip = clipRegistry.find(c => c.id === clipId);
+            if (!clip || !clip.element) return;
+
+            const container = clip.type === 'illustration'
+                ? document.getElementById('illustrationList')
+                : document.getElementById('videoList');
+
+            if (container) {
+                clip.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            clip.element.classList.remove('clip-pulse');
+            void clip.element.offsetWidth;
+            clip.element.classList.add('clip-pulse');
+            setTimeout(() => clip.element.classList.remove('clip-pulse'), 1600);
+        }
+
         function formatSecondsToTime(seconds) {
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
@@ -1899,6 +2061,10 @@ When asked about theological topics listed above, use these verified positions a
                             }
                         }
                     }
+                }
+
+                if (currentMessage) {
+                    setTimeout(() => highlightClipReferences(currentMessage), 100);
                 }
 
                 // Add to conversation history
@@ -2332,8 +2498,11 @@ When asked about theological topics listed above, use these verified positions a
                         if (message.text && message.text !== lastAgentMessage) {
                             lastAgentMessage = message.text;
                             hideTyping();
-                            addMessage(message.text, 'agent');
+                            const agentMsg = addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
+                            if (agentMsg) {
+                                setTimeout(() => highlightClipReferences(agentMsg), 3000);
+                            }
                         }
                     } else if (message.type === 'sermon_reference') {
                         log('Received sermon reference', 'info');
