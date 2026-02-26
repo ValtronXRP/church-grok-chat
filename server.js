@@ -506,11 +506,13 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
       context += `[${result.page || 'Church Info'}] (${result.url}):\n`;
       context += `${result.text.substring(0, 800)}\n\n`;
     });
-    context += 'ANSWER THIS QUESTION using the church website info above. Give detailed, specific information.\n';
-    context += 'Do NOT say "Pastor Bob teaches" for church info questions — just answer directly with the details.\n';
-    context += 'Do NOT share phone numbers. Do NOT tell the user to "call the office".\n';
-    context += 'ALWAYS include the relevant cc-ea.org page URL so the user can visit for full details.\n';
-    context += 'Format: "You can find more details at https://cc-ea.org/registrations"\n\n';
+    context += 'CRITICAL INSTRUCTIONS FOR CHURCH INFO QUESTIONS:\n';
+    context += '1. Extract and list EVERY specific item from the data above (event names, dates, times, costs, locations, descriptions).\n';
+    context += '2. Do NOT give generic answers like "there are lots of events" or "check the website" — LIST the actual events with details.\n';
+    context += '3. Do NOT say "Pastor Bob teaches" — just answer directly.\n';
+    context += '4. Do NOT share phone numbers or tell the user to call the office.\n';
+    context += '5. At the end, include the relevant cc-ea.org page URL for registration or more info.\n';
+    context += '6. Be thorough — the user wants to know WHAT is happening, WHEN, WHERE, and HOW MUCH.\n\n';
   }
 
   return context;
@@ -645,7 +647,7 @@ app.post('/api/chat', async (req, res) => {
       
       const numSermons = isMoreRequest ? 12 : 6;
       const numIllustrations = isMoreRequest ? 0 : 3;
-      const numWebsite = isChurchInfoQuery(searchQuery) ? 4 : 0;
+      const numWebsite = isChurchInfoQuery(searchQuery) ? 10 : 0;
       
       try {
         const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {

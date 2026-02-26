@@ -140,7 +140,7 @@ def is_church_info_query(query):
 
 
 async def _search_reranker(query, n=10):
-    n_website = 4 if is_church_info_query(query) else 0
+    n_website = 10 if is_church_info_query(query) else 0
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -212,22 +212,23 @@ async def _handle_user_question(transcript):
             if website_results:
                 reply_instructions = (
                     f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                    f"Answer this question using ONLY the church website info below. Give detailed, specific information. "
-                    f"Do NOT say 'Pastor Bob teaches' — just answer the question directly with the actual details from the website data. "
-                    f"Do NOT tell the user to 'call the office' or 'check the website' — YOU have the info, so share it. "
-                    f"Do NOT share any phone numbers. "
-                    f"ALWAYS include the relevant cc-ea.org page URL so the user can visit for full details. "
-                    f"Be warm and helpful.\n\n"
+                    f"You MUST answer this question by extracting and listing the SPECIFIC details from the church website data below. "
+                    f"DO NOT give generic answers like 'there are lots of events' or 'check the website'. "
+                    f"DO NOT say 'Pastor Bob teaches'. "
+                    f"DO NOT share phone numbers or tell the user to call the office. "
+                    f"Instead, LIST each item by name with its date, time, location, cost, and description as found in the data. "
+                    f"For example: 'Here are the upcoming events at CCEA: First, there's the Men's Breakfast on Saturday February 28th at 8am with guest speaker Mark Spence...' "
+                    f"Be thorough — name every event, study, or item you find in the data. The user wants DETAILS, not a summary. "
+                    f"At the end, mention the relevant cc-ea.org URL for registration or more info.\n\n"
                     f"Question: \"{transcript}\"\n\n"
                 )
                 if website_text:
-                    reply_instructions += f"CHURCH WEBSITE INFO:\n{website_text}\n\n"
+                    reply_instructions += f"CHURCH WEBSITE DATA (extract ALL details from this):\n{website_text}\n\n"
                 if context_text:
                     reply_instructions += f"ADDITIONAL CONTEXT:\n{context_text}\n\n"
                 reply_instructions += (
-                    "Answer with SPECIFIC details from the church website info above. "
-                    "List actual event names, times, descriptions. "
-                    "End by mentioning the relevant cc-ea.org URL for more details."
+                    "REMEMBER: List EVERY event/study/item by name with dates, times, costs, and descriptions. "
+                    "Do NOT be vague or generic. The user wants to know WHAT is happening, WHEN, and WHERE."
                 )
             else:
                 reply_instructions = (
