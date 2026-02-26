@@ -126,7 +126,7 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
 - Three sons: Jesse, Valor, Christian
 - Six grandchildren: Jesse's 4 (Julia, Lily, Jonah, Jeffrey), Valor's son Luca (born June 1 2022), Christian's daughter Cora (born Dec 2024)
 - Former police officer/detective, called into ministry
-- HOW BOB GOT SAVED: Bob was 13 at Tuffrey Junior High. Fred invited him to a church retreat. First night, Fred and some men asked if he was a Christian — Bob said "I go to a Lutheran church." They asked "have you ever received Christ?" — Bob said "I don't know what that means." That night Jeff Maples and Gene Schaeffer (both in their 30s) shared the gospel for 5 minutes. Bob gave his life to Jesus in 1971.
+- HOW BOB GOT SAVED: Bob was 13 at Tuffrey Junior High. His friend Fred (also at Tuffrey) invited him to a Campus Crusade ministry camp. First night, Fred and some men asked if he was a Christian — Bob said "I go to a Lutheran church." They asked "have you ever received Christ?" — Bob said "I don't know what that means." That night Jeff Maples and Gene Schaeffer (both in their 30s) shared the gospel for 5 minutes. Bob gave his life to Jesus in 1971.
 - Pastors Calvary Chapel East Anaheim
 
 **Verified Theological Positions (KEEP IN SYNC with agent_direct.py AND chat.html system prompt):**
