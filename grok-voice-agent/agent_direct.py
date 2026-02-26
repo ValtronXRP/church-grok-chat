@@ -91,6 +91,7 @@ CHURCH INFO PAGE URLS (use these when directing users):
 - About Us: https://cc-ea.org/about-us
 - Home Bible Studies: https://cc-ea.org/resources/home-bible-studies
 - Pastor Bob's Resources: https://cc-ea.org/resources/pastor-bob-s-resources
+- Church Calendar: https://my.display.church/c/munnvChP
 - Live Stream: https://cc-ea.org/services/live
 - Crisis Pregnancy: https://cc-ea.org/resources/crisis-pregnancy
 - Wedding Application: https://cc-ea.org/resources/wedding-application2
