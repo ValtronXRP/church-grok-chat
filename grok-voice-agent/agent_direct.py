@@ -79,24 +79,18 @@ VERIFIED THEOLOGICAL POSITIONS (Pastor Bob's actual teaching):
 When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
 When asked about theological topics listed above, use these verified positions as the authoritative framework for your answer.
 
-CHURCH INFO PAGE URLS (use these when directing users):
-- Events & Registrations: https://cc-ea.org/registrations
-- Service Times & Location: https://cc-ea.org/service-times-and-location
-- Ministries: https://cc-ea.org/ministries-2
-- Missions: https://cc-ea.org/missions
-- Volunteering: https://cc-ea.org/volunteer
-- Giving: https://cc-ea.org/give
-- New Here: https://cc-ea.org/new-here
-- Statement of Faith: https://cc-ea.org/about-us/statement-of-faith
-- About Us: https://cc-ea.org/about-us
-- Home Bible Studies: https://cc-ea.org/resources/home-bible-studies
-- Pastor Bob's Resources: https://cc-ea.org/resources/pastor-bob-s-resources
-- Church Calendar: https://my.display.church/c/munnvChP
-- Live Stream: https://cc-ea.org/services/live
-- Crisis Pregnancy: https://cc-ea.org/resources/crisis-pregnancy
-- Wedding Application: https://cc-ea.org/resources/wedding-application2
-
-When answering church info questions, ALWAYS include the relevant URL above so the user knows where to go for more details.
+CHURCH INFO QUESTIONS (events, registrations, service times, ministries, bible studies, etc.):
+You have access to live church website data that will be provided to you via search results. When you receive church website data in your reply instructions, you MUST extract and list the SPECIFIC details — event names, dates, times, costs, locations.
+NEVER give a generic answer like "check the website" or "there are lots of events". You HAVE the data — use it.
+NEVER share phone numbers. NEVER tell the user to call the office.
+Include the relevant URL at the end:
+- Events: cc-ea.org/registrations
+- Services: cc-ea.org/service-times-and-location
+- Ministries: cc-ea.org/ministries-2
+- Calendar: my.display.church/c/munnvChP
+- Giving: cc-ea.org/give
+- Bible Studies: cc-ea.org/resources/home-bible-studies
+- Statement of Faith: cc-ea.org/about-us/statement-of-faith
 """
 
 
@@ -140,7 +134,7 @@ def is_church_info_query(query):
 
 
 async def _search_reranker(query, n=10):
-    n_website = 10 if is_church_info_query(query) else 0
+    n_website = 8 if is_church_info_query(query) else 0
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -165,7 +159,7 @@ async def _search_reranker(query, n=10):
                         text = r.get('text', '')
                         url = r.get('url', '')
                         if text and len(text) > 20:
-                            website_results.append(f"[Church Website - {page}] ({url}):\n{text[:600]}")
+                            website_results.append(f"[{page}] ({url}):\n{text[:400]}")
                     return results, website_results
                 else:
                     body = await response.text()
@@ -206,29 +200,17 @@ async def _handle_user_question(transcript):
 
         if results or website_results:
             context_text = "\n\n".join(results[:3])
-            website_text = "\n\n".join(website_results[:3]) if website_results else ""
             log(f"Search returned {len(results)} sermon results, {len(website_results)} website results")
 
             if website_results:
+                website_text = "\n\n".join(website_results[:6])
                 reply_instructions = (
-                    f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                    f"You MUST answer this question by extracting and listing the SPECIFIC details from the church website data below. "
-                    f"DO NOT give generic answers like 'there are lots of events' or 'check the website'. "
-                    f"DO NOT say 'Pastor Bob teaches'. "
-                    f"DO NOT share phone numbers or tell the user to call the office. "
-                    f"Instead, LIST each item by name with its date, time, location, cost, and description as found in the data. "
-                    f"For example: 'Here are the upcoming events at CCEA: First, there's the Men's Breakfast on Saturday February 28th at 8am with guest speaker Mark Spence...' "
-                    f"Be thorough — name every event, study, or item you find in the data. The user wants DETAILS, not a summary. "
-                    f"At the end, mention the relevant cc-ea.org URL for registration or more info.\n\n"
-                    f"Question: \"{transcript}\"\n\n"
-                )
-                if website_text:
-                    reply_instructions += f"CHURCH WEBSITE DATA (extract ALL details from this):\n{website_text}\n\n"
-                if context_text:
-                    reply_instructions += f"ADDITIONAL CONTEXT:\n{context_text}\n\n"
-                reply_instructions += (
-                    "REMEMBER: List EVERY event/study/item by name with dates, times, costs, and descriptions. "
-                    "Do NOT be vague or generic. The user wants to know WHAT is happening, WHEN, and WHERE."
+                    f"Answer this question about Calvary Chapel East Anaheim using the DATA below. "
+                    f"LIST each item BY NAME with date, time, cost, description. No generic answers. No phone numbers. "
+                    f"End with the cc-ea.org URL.\n\n"
+                    f"Q: \"{transcript}\"\n\n"
+                    f"DATA:\n{website_text}\n\n"
+                    f"List every item found above with specific details."
                 )
             else:
                 reply_instructions = (
@@ -247,6 +229,17 @@ async def _handle_user_question(transcript):
                 log("Reply generated with context")
             except Exception as e:
                 log(f"generate_reply error: {e}")
+                if website_results:
+                    try:
+                        short_text = "\n".join(website_results[:3])
+                        retry_instructions = (
+                            f"List the events/items from this data for the user. Be specific — names, dates, times.\n\n"
+                            f"{short_text}\n\nEnd with cc-ea.org URL."
+                        )
+                        await _session_ref.generate_reply(instructions=retry_instructions)
+                        log("Retry reply succeeded with shorter context")
+                    except Exception as e2:
+                        log(f"Retry also failed: {e2}")
         else:
             log("Search returned 0 results")
     except Exception as e:
