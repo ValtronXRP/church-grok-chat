@@ -204,14 +204,18 @@ async def _handle_user_question(transcript):
 
             if website_results:
                 website_text = "\n\n".join(website_results[:6])
-                reply_instructions = (
-                    f"Answer this question about Calvary Chapel East Anaheim using the DATA below. "
-                    f"LIST each item BY NAME with date, time, cost, description. No generic answers. No phone numbers. "
-                    f"End with the cc-ea.org URL.\n\n"
-                    f"Q: \"{transcript}\"\n\n"
-                    f"DATA:\n{website_text}\n\n"
-                    f"List every item found above with specific details."
+                injected_input = (
+                    f"[SYSTEM: The user asked about church info. Here is the LIVE DATA from cc-ea.org. "
+                    f"You MUST read this data and list EVERY item by name with dates, times, costs. "
+                    f"Do NOT say 'check the website'. Do NOT give generic answers. Do NOT share phone numbers. "
+                    f"List the specific details below:]\n\n"
+                    f"{website_text}"
                 )
+                try:
+                    await _session_ref.generate_reply(user_input=injected_input)
+                    log("Reply generated with website data via user_input injection")
+                except Exception as e:
+                    log(f"generate_reply error (website): {e}")
             else:
                 reply_instructions = (
                     f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
@@ -224,22 +228,11 @@ async def _handle_user_question(transcript):
                     f"Answer warmly from the transcripts above."
                 )
 
-            try:
-                await _session_ref.generate_reply(instructions=reply_instructions)
-                log("Reply generated with context")
-            except Exception as e:
-                log(f"generate_reply error: {e}")
-                if website_results:
-                    try:
-                        short_text = "\n".join(website_results[:3])
-                        retry_instructions = (
-                            f"List the events/items from this data for the user. Be specific — names, dates, times.\n\n"
-                            f"{short_text}\n\nEnd with cc-ea.org URL."
-                        )
-                        await _session_ref.generate_reply(instructions=retry_instructions)
-                        log("Retry reply succeeded with shorter context")
-                    except Exception as e2:
-                        log(f"Retry also failed: {e2}")
+                try:
+                    await _session_ref.generate_reply(instructions=reply_instructions)
+                    log("Reply generated with sermon context")
+                except Exception as e:
+                    log(f"generate_reply error: {e}")
         else:
             log("Search returned 0 results")
     except Exception as e:
