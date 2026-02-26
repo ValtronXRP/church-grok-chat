@@ -13,7 +13,7 @@
 |------------|---------|---------------|--------|
 | sermon_segments_v2 | 31,928 | 768 (mpnet) | ACTIVE - ENRICHED, correct timestamps, worship filtered |
 | illustrations_v5 | 23,559 | 768 (mpnet) | ACTIVE - all illustrations loaded |
-| church_website | 10 | 768 (mpnet) | ACTIVE |
+| church_website | ~69 | 768 (mpnet) | ACTIVE - auto-refreshes hourly from cc-ea.org |
 
 ### Old Collections (DO NOT USE)
 - sermon_segments: 72,948 (384-dim, poor semantic understanding)
@@ -23,6 +23,13 @@
 Test query: "What is the baptism of the Holy Spirit?"
 - **Before**: Returned bathtub baptism illustrations (keyword matching)
 - **After**: Returns R.A. Torrey quotes about Holy Spirit baptism (semantic understanding)
+
+### Church Website Database (cc-ea.org)
+- **Separate from sermons/illustrations** — stored in `church_website` ChromaDB collection
+- **Scraper**: `scrape_church_website.py` scrapes 20 public pages from cc-ea.org
+- **Auto-refresh**: Background thread in reranker_service.py refreshes hourly. Manual: `POST /refresh-website`
+- **On-demand only**: Website DB is ONLY queried when user asks about church info (events, studies, service times, registrations, etc.) — detected by `isChurchInfoQuery()` in server.js and `is_church_info_query()` in agent_direct.py
+- **URL inclusion**: Agents are instructed to include the cc-ea.org source URL in their response so users can visit the page
 
 ### Architecture
 ```
@@ -122,7 +129,7 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
 - Frontend calls `room.disconnect()` before creating new connection
 
 **Verified Facts in Agent Instructions (KEEP UPDATED):**
-- Wife: Becky Kopeny (maiden name Becky Olson). Bob first met Becky at Calvary Church on Chapman and Madison in Placentia after a service — invited her to his Sunday school college class, she said no (boyfriend in car). Brief chat: Cal State Fullerton, worked at Placentia Library. Years later, driving to Talbot Seminary, God brought her name to mind at Chapman and Kraemer. He drove to the library, learned she was in the AV department. A month later at same intersection, prompted again. He called her but she wasn't interested. God had already given Bob a word of knowledge. He told her on the phone God had shared something she needed to hear — her tone changed, she agreed to breakfast. At breakfast he revealed she'd gotten engaged the night before (something no one could have known). This changed everything. They got married shortly after. Bob was about 25.
+- Wife: Becky Kopeny (maiden name Becky Olson). Bob first met Becky at Calvary Church on Chapman and Madison in Placentia after a service — invited her to his Sunday school college class, she said no (boyfriend in car). Brief chat: Cal State Fullerton, worked at Placentia Library. Years later, driving to Talbot Seminary, God brought her name to mind at Chapman and Kraemer. He drove to the library, learned she was in the AV department. A month later at same intersection, prompted again. He called her but she wasn't interested — until Bob told her the Lord had revealed something to him that He wanted her to hear (Bob did NOT say what it was on the phone). Becky only agreed to breakfast because of that. It was at breakfast — NOT on the phone — that Bob shared the word of knowledge: that she'd gotten engaged the night before. Something no one could have known. This changed everything. They got married shortly after. Bob was about 25.
 - Three sons: Jesse, Valor, Christian
 - Six grandchildren: Jesse's 4 (Julia, Lily, Jonah, Jeffrey), Valor's son Luca (born June 1 2022), Christian's daughter Cora (born Dec 2024)
 - Former police officer/detective, called into ministry

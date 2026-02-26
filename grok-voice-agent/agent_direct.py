@@ -32,17 +32,21 @@ You will receive sermon transcripts from Pastor Bob's actual sermons along with 
 Rules:
 1. SYNTHESIZE across ALL provided transcripts for Pastor Bob's FULL, NUANCED teaching
 2. Preserve key distinctions (e.g., "there is X but there is ALSO Y")
-3. Say "Pastor Bob teaches..." and deliver with depth
-4. Give the COMPLETE multi-part answer, not a simplified version
-5. Keep answers to 3-5 sentences — enough for nuance but concise for voice
-6. Quote or closely paraphrase his actual words when they are powerful
-7. VARY your phrasing EVERY time — never give the same scripted answer twice. Change your sentence structure, word choice, opening line, and emphasis. Highlight different details or angles of the same truth each time. Be naturally conversational, not robotic or formulaic.
+3. For THEOLOGICAL and BIBLE questions: Say "Pastor Bob teaches..." and deliver with depth
+4. For CHURCH INFO questions (events, registrations, bible studies, service times, ministries, volunteering, giving, etc.): Answer directly with specific details from the church website data. Do NOT say "Pastor Bob teaches" — just answer the question with the actual info. Direct the user to the relevant page on cc-ea.org.
+5. Give the COMPLETE multi-part answer, not a simplified version
+6. Keep answers to 3-5 sentences — enough for nuance but concise for voice
+7. Quote or closely paraphrase his actual words when they are powerful
+8. VARY your phrasing EVERY time — never give the same scripted answer twice. Change your sentence structure, word choice, opening line, and emphasis. Highlight different details or angles of the same truth each time. Be naturally conversational, not robotic or formulaic.
 
 NEVER DO:
 - NEVER say you lack information, need to check, or don't have a specific teaching
 - NEVER mention searching, tools, clips, or transcripts to the user
 - NEVER hedge or deflect — answer authoritatively from the transcripts provided
 - NEVER flatten a nuanced teaching into one simple sentence
+- NEVER share phone numbers. Do NOT say the church phone number.
+- NEVER tell the user to "call the office" or "check the website" as your primary answer — YOU have the church website info, so answer the question directly with specifics
+- NEVER say "Pastor Bob teaches" when answering questions about church events, registrations, service times, ministries, or other church info — just answer directly
 
 FORBIDDEN PHRASES — never say any of these:
 - "I'd need to check"
@@ -50,6 +54,9 @@ FORBIDDEN PHRASES — never say any of these:
 - "Let me look into that"
 - "I don't have that information"
 - "in the materials I have"
+- "call the office"
+- "check the website" (instead, give the specific URL)
+- Any phone number
 
 Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
@@ -57,9 +64,11 @@ Be warm, helpful, and conversational.
 NEVER invent stories or teachings Pastor Bob didn't actually give.
 
 VERIFIED FACTS ABOUT PASTOR BOB KOPENY:
-- Wife: Becky Kopeny (maiden name Becky Olson). HOW THEY MET (full sequence): Bob first met Becky at Calvary Church on Chapman and Madison in Placentia after a service. He invited her to a Sunday school college class he taught but she said no — her boyfriend was waiting in the car. They chatted briefly about her going to Cal State Fullerton and working at the Placentia Library. Years later, while driving to Talbot Seminary, God brought her name to mind at the intersection of Chapman and Kraemer. He drove to the library and learned she was in the AV department. A month later at the same intersection, he felt prompted again. He called her but she wasn't interested. God had already given Bob a word of knowledge — something no one could have known. Bob told her on the phone that God had shared something with her that she needed to hear. That changed her tone and she agreed to go to breakfast. At breakfast, Bob revealed that God told him she had gotten engaged the night before. This changed everything and led to their relationship. They got married shortly after. Bob was about 25.
-- Three sons: Jesse, Valor, Christian
-- Six grandchildren: Jesse has four children (Julia, Lily, Jonah, Jeffrey), Valor is married to Stacy and has one son (Luca, born June 1 2022), Christian is married to Hayley and has one daughter (Cora, born December 2024)
+- Wife: Becky Kopeny (maiden name Becky Olson). HOW THEY MET (full sequence): Bob first met Becky at Calvary Church on Chapman and Madison in Placentia after a service. He invited her to a Sunday school college class he taught but she said no — her boyfriend was waiting in the car. They chatted briefly about her going to Cal State Fullerton and working at the Placentia Library. Years later, while driving to Talbot Seminary, God brought her name to mind at the intersection of Chapman and Kraemer. He drove to the library and learned she was in the AV department. A month later at the same intersection, he felt prompted again. He called her but she wasn't interested — until Bob told her that the Lord had revealed something to him that He wanted her to hear (Bob did NOT tell her what it was on the phone). Becky only agreed to go to breakfast because of that. It was at breakfast — NOT on the phone — that Bob shared the word of knowledge: that she had gotten engaged the night before. This was something no one could have known, and it changed everything, leading to their relationship. They got married shortly after. Bob was about 25.
+- Three sons: Jesse (oldest), Valor (middle), Christian (youngest)
+- Six grandchildren: Julia, Lily, Jonah, Jeffrey (Jesse's children), Luca (Valor and Stacy's son, born June 1 2022), Cora (Christian and Hayley's daughter, born December 2024)
+- IMPORTANT: Jesse does NOT have a wife. NEVER say "Jesse and his wife" or mention Jesse having a wife.
+- FAMILY QUESTION RULES: Answer ONLY what is asked. If asked "how many kids does Bob have?" — just say three sons (Jesse, Valor, Christian). If asked "how many grandchildren?" — just say six and list their names. Do NOT volunteer extra family details beyond what was specifically asked.
 - Was a police officer/detective before entering full-time ministry. God called him out of law enforcement into pastoral ministry.
 - HOW BOB GOT SAVED: Bob was 13 and in junior high at Tuffrey. His friend Fred, who also went to Tuffrey, invited him to a Campus Crusade ministry camp. The first night at the camp, Fred and some men asked Bob if he was a Christian. Bob said "oh yeah, I go to a Lutheran church." They asked "have you ever received Christ?" and Bob said "I don't know what that means." That night, two men named Jeff Maples and Gene Schaeffer — both in their 30s — shared the gospel with Bob for about five minutes and asked if he would receive Christ. Bob gave his life to Jesus that night in 1971.
 - Pastors Calvary Chapel East Anaheim
@@ -69,15 +78,73 @@ VERIFIED THEOLOGICAL POSITIONS (Pastor Bob's actual teaching):
 
 When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
 When asked about theological topics listed above, use these verified positions as the authoritative framework for your answer.
+
+CHURCH INFO PAGE URLS (use these when directing users):
+- Events & Registrations: https://cc-ea.org/registrations
+- Service Times & Location: https://cc-ea.org/service-times-and-location
+- Ministries: https://cc-ea.org/ministries-2
+- Missions: https://cc-ea.org/missions
+- Volunteering: https://cc-ea.org/volunteer
+- Giving: https://cc-ea.org/give
+- New Here: https://cc-ea.org/new-here
+- Statement of Faith: https://cc-ea.org/about-us/statement-of-faith
+- About Us: https://cc-ea.org/about-us
+- Home Bible Studies: https://cc-ea.org/resources/home-bible-studies
+- Pastor Bob's Resources: https://cc-ea.org/resources/pastor-bob-s-resources
+- Live Stream: https://cc-ea.org/services/live
+- Crisis Pregnancy: https://cc-ea.org/resources/crisis-pregnancy
+- Wedding Application: https://cc-ea.org/resources/wedding-application2
+
+When answering church info questions, ALWAYS include the relevant URL above so the user knows where to go for more details.
 """
 
 
+CHURCH_INFO_KEYWORDS = [
+    'service time', 'service times', 'what time', 'when is service', 'when are services',
+    'sunday service', 'wednesday service', 'wednesday night',
+    'bible study', 'bible studies', 'study group', 'community group', 'community groups',
+    'home group', 'home groups', 'small group', 'small groups',
+    'register', 'registration', 'sign up', 'signup', 'event', 'events', 'happening',
+    'coming up', 'upcoming', 'calendar', 'schedule',
+    'volunteer', 'volunteering', 'serve', 'serving',
+    'give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering',
+    'statement of faith', 'what does the church believe', 'what do you believe',
+    'mission', 'missions', 'missionary', 'missionaries',
+    'ministry', 'ministries',
+    'new here', 'first time', 'visiting', 'visitor', 'new to the church',
+    'location', 'address', 'where is the church', 'directions',
+    'contact', 'phone number', 'email', 'office hours',
+    'wedding', 'marriage application',
+    'crisis pregnancy', 'pregnancy resource',
+    'disability', 'special needs',
+    "pastor bob's resources", 'study tools', 'e-sword',
+    'live stream', 'livestream', 'watch live', 'watch online',
+    "women's study", "women's bible", "men's study", "men's bible",
+    'youth group', 'youth ministry', 'kids ministry', "children's ministry",
+    'homeschool', 'home school',
+    'prayer request', 'prayer list',
+    'church info', 'church information', 'about the church', 'about ccea',
+    'calvary chapel east anaheim',
+    'bulletin', 'announcements',
+    'worship', 'worship team', 'worship lyrics',
+    'baptism class', 'membership',
+    'highlights',
+    'school of discipleship',
+    'tuesday', 'thursday', 'friday', 'saturday',
+]
+
+def is_church_info_query(query):
+    q = query.lower()
+    return any(kw in q for kw in CHURCH_INFO_KEYWORDS)
+
+
 async def _search_reranker(query, n=10):
+    n_website = 4 if is_church_info_query(query) else 0
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{RERANKER_URL}/search/fast-all",
-                json={"query": query, "n_sermons": n, "n_illustrations": 0},
+                json={"query": query, "n_sermons": n, "n_illustrations": 0, "n_website": n_website},
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
                 if response.status == 200:
@@ -91,14 +158,21 @@ async def _search_reranker(query, n=10):
                         if text and len(text) > 50 and key not in seen:
                             seen.add(key)
                             results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:600]}\"")
-                    return results
+                    website_results = []
+                    for r in data.get('website', []):
+                        page = r.get('page', '')
+                        text = r.get('text', '')
+                        url = r.get('url', '')
+                        if text and len(text) > 20:
+                            website_results.append(f"[Church Website - {page}] ({url}):\n{text[:600]}")
+                    return results, website_results
                 else:
                     body = await response.text()
                     log(f"Reranker error {response.status}: {body[:200]}")
-                    return []
+                    return [], []
     except Exception as e:
         log(f"Search error: {e}")
-        return []
+        return [], []
 
 
 _room_ref = None
@@ -127,26 +201,48 @@ async def _handle_user_question(transcript):
     _searching = True
     try:
         log(f"SEARCHING for: {transcript[:80]}")
-        results = await _search_reranker(transcript)
+        results, website_results = await _search_reranker(transcript)
 
-        if results:
+        if results or website_results:
             context_text = "\n\n".join(results[:3])
-            log(f"Search returned {len(results)} results, generating reply with top 3")
+            website_text = "\n\n".join(website_results[:3]) if website_results else ""
+            log(f"Search returned {len(results)} sermon results, {len(website_results)} website results")
 
-            reply_instructions = (
-                f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
-                f"Say 'Pastor Bob teaches...' and quote his words. "
-                f"NEVER say you lack info or need to check. "
-                f"VARY your phrasing — different structure, word choice, and emphasis each time. Be natural, not formulaic.\n\n"
-                f"Question: \"{transcript}\"\n\n"
-                f"TRANSCRIPTS:\n{context_text}\n\n"
-                f"Answer warmly from the transcripts above."
-            )
+            if website_results:
+                reply_instructions = (
+                    f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
+                    f"Answer this question using ONLY the church website info below. Give detailed, specific information. "
+                    f"Do NOT say 'Pastor Bob teaches' — just answer the question directly with the actual details from the website data. "
+                    f"Do NOT tell the user to 'call the office' or 'check the website' — YOU have the info, so share it. "
+                    f"Do NOT share any phone numbers. "
+                    f"ALWAYS include the relevant cc-ea.org page URL so the user can visit for full details. "
+                    f"Be warm and helpful.\n\n"
+                    f"Question: \"{transcript}\"\n\n"
+                )
+                if website_text:
+                    reply_instructions += f"CHURCH WEBSITE INFO:\n{website_text}\n\n"
+                if context_text:
+                    reply_instructions += f"ADDITIONAL CONTEXT:\n{context_text}\n\n"
+                reply_instructions += (
+                    "Answer with SPECIFIC details from the church website info above. "
+                    "List actual event names, times, descriptions. "
+                    "End by mentioning the relevant cc-ea.org URL for more details."
+                )
+            else:
+                reply_instructions = (
+                    f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
+                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
+                    f"Say 'Pastor Bob teaches...' and quote his words. "
+                    f"NEVER say you lack info or need to check. "
+                    f"VARY your phrasing — different structure, word choice, and emphasis each time. Be natural, not formulaic.\n\n"
+                    f"Question: \"{transcript}\"\n\n"
+                    f"TRANSCRIPTS:\n{context_text}\n\n"
+                    f"Answer warmly from the transcripts above."
+                )
 
             try:
                 await _session_ref.generate_reply(instructions=reply_instructions)
-                log("Reply generated with sermon context")
+                log("Reply generated with context")
             except Exception as e:
                 log(f"generate_reply error: {e}")
         else:

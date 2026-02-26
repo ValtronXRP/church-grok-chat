@@ -179,6 +179,45 @@ const PINNED_STORY_CLIPS = {
   }
 };
 
+const CHURCH_INFO_KEYWORDS = [
+  'service time', 'service times', 'what time', 'when is service', 'when are services',
+  'sunday service', 'wednesday service', 'wednesday night',
+  'bible study', 'bible studies', 'study group', 'community group', 'community groups',
+  'home group', 'home groups', 'small group', 'small groups',
+  'register', 'registration', 'sign up', 'signup', 'event', 'events', 'happening',
+  'coming up', 'upcoming', 'calendar', 'schedule',
+  'volunteer', 'volunteering', 'serve', 'serving',
+  'give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering',
+  'statement of faith', 'what does the church believe', 'what do you believe',
+  'mission', 'missions', 'missionary', 'missionaries',
+  'ministry', 'ministries',
+  'new here', 'first time', 'visiting', 'visitor', 'new to the church',
+  'location', 'address', 'where is the church', 'directions',
+  'contact', 'phone number', 'email', 'office hours',
+  'wedding', 'marriage application',
+  'crisis pregnancy', 'pregnancy resource',
+  'disability', 'special needs',
+  'pastor bob\'s resources', 'study tools', 'e-sword',
+  'live stream', 'livestream', 'watch live', 'watch online',
+  'women\'s study', 'women\'s bible', 'men\'s study', 'men\'s bible',
+  'youth group', 'youth ministry', 'kids ministry', 'children\'s ministry',
+  'homeschool', 'home school',
+  'prayer request', 'prayer list',
+  'church info', 'church information', 'about the church', 'about ccea',
+  'calvary chapel east anaheim',
+  'bulletin', 'announcements',
+  'worship', 'worship team', 'worship lyrics',
+  'baptism class', 'membership',
+  'highlights',
+  'school of discipleship',
+  'tuesday', 'thursday', 'friday', 'saturday',
+];
+
+function isChurchInfoQuery(query) {
+  const q = query.toLowerCase().replace(/['']/g, "'");
+  return CHURCH_INFO_KEYWORDS.some(kw => q.includes(kw));
+}
+
 function detectPersonalStoryQuery(query) {
   const q = query.toLowerCase().replace(/['']/g, "'");
   const matches = [];
@@ -462,12 +501,16 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
   }
 
   if (hasWebsite) {
-    context += '=== CHURCH WEBSITE INFO (Calvary Chapel East Anaheim) ===\n\n';
+    context += '=== CHURCH WEBSITE INFO (from cc-ea.org) ===\n\n';
     websiteResults.forEach((result, i) => {
-      context += `[${result.page || 'Church Info'}]:\n`;
+      context += `[${result.page || 'Church Info'}] (${result.url}):\n`;
       context += `${result.text.substring(0, 800)}\n\n`;
     });
-    context += 'Use the above church info to answer questions about service times, events, registrations, ministries, giving, and statement of faith.\n\n';
+    context += 'ANSWER THIS QUESTION using the church website info above. Give detailed, specific information.\n';
+    context += 'Do NOT say "Pastor Bob teaches" for church info questions — just answer directly with the details.\n';
+    context += 'Do NOT share phone numbers. Do NOT tell the user to "call the office".\n';
+    context += 'ALWAYS include the relevant cc-ea.org page URL so the user can visit for full details.\n';
+    context += 'Format: "You can find more details at https://cc-ea.org/registrations"\n\n';
   }
 
   return context;
@@ -602,12 +645,14 @@ app.post('/api/chat', async (req, res) => {
       
       const numSermons = isMoreRequest ? 12 : 6;
       const numIllustrations = isMoreRequest ? 0 : 3;
+      const numWebsite = isChurchInfoQuery(searchQuery) ? 4 : 0;
       
       try {
         const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {
           query: searchQuery,
           n_sermons: numSermons,
-          n_illustrations: numIllustrations
+          n_illustrations: numIllustrations,
+          n_website: numWebsite
         }, { timeout: 10000 });
         
         if (fastResponse.data) {
@@ -630,7 +675,13 @@ app.post('/api/chat', async (req, res) => {
             timestamp: r.timestamp || '',
             source: 'illustration'
           }));
-          console.log(`Fast search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations (${fastResponse.data.timing_ms}ms)`);
+          websiteResults = (fastResponse.data.website || []).map(r => ({
+            text: r.text,
+            page: r.page || '',
+            url: r.url || '',
+            source: 'website'
+          }));
+          console.log(`Fast search: ${sermonResults.length} sermons, ${illustrationResults.length} illustrations, ${websiteResults.length} website (${fastResponse.data.timing_ms}ms)`);
         }
       } catch (err) {
         console.log(`Fast search error: ${err.message}, falling back to direct search`);
