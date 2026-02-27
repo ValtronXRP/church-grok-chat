@@ -1,8 +1,16 @@
 {
   "version": "1.0",
-  "last_updated": "2026-02-04",
+  "last_updated": "2026-02-27",
   "source": "Extracted from Pastor Bob's sermon transcripts - VERIFIED FACTS ONLY",
-  
+
+  "church": {
+    "name": "Calvary Chapel East Anaheim",
+    "address": "5605 East La Palma Avenue, Anaheim",
+    "service_times": "Sundays at 9am and 11am. Wednesdays at 7pm.",
+    "office_hours": "Tuesday through Friday, 9am to 5pm. NOT open Monday. NO Wednesday 7am hours.",
+    "office_hours_wrong": "NEVER say Wednesday at 7am — that is incorrect"
+  },
+
   "personal": {
     "full_name": "Bob Kopeny",
     "wife": {
