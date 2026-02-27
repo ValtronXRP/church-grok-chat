@@ -1772,6 +1772,12 @@ When asked about theological topics listed above, use these verified positions a
                 '<span class="scripture-ref">$1 $2:$3</span>'
             );
             
+            // Make cc-ea.org and display.church URLs clickable
+            result = result.replace(
+                /https?:\/\/(?:www\.)?(?:cc-ea\.org|my\.display\.church)[^\s<&)}\]"]*/gi,
+                '<a href="$&" target="_blank" rel="noopener" style="color:#4fc3f7;text-decoration:underline;">$&</a>'
+            );
+            
             // Convert line breaks
             result = result.replace(/\n/g, '<br>');
             
