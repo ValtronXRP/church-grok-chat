@@ -229,7 +229,19 @@ async def _handle_user_question(transcript):
                 except Exception as e:
                     log(f"generate_reply error: {e}")
         else:
-            log("Search returned 0 results")
+            log("Search returned 0 results, generating fallback reply")
+            try:
+                await _session_ref.generate_reply(
+                    instructions=(
+                        f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
+                        f"Answer this question warmly from the Bible and general Christian knowledge. "
+                        f"NEVER say you lack info or need to check. Keep it to 3-5 sentences.\n\n"
+                        f"Question: \"{transcript}\""
+                    )
+                )
+                log("Fallback reply generated")
+            except Exception as e:
+                log(f"Fallback generate_reply error: {e}")
     except Exception as e:
         log(f"Handle question error: {e}")
     finally:
@@ -243,7 +255,17 @@ async def entrypoint(ctx: JobContext):
 
         last_sent_message = {"text": None}
 
-        model = RealtimeModel(voice="Aria")
+        model = RealtimeModel(
+            voice="Aria",
+            turn_detection={
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 500,
+                "create_response": False,
+                "interrupt_response": True,
+            },
+        )
         session = AgentSession(llm=model)
         _session_ref = session
         apb_agent = Agent(
