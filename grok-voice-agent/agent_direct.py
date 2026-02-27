@@ -195,6 +195,11 @@ async def _handle_user_question(transcript):
         return
     _searching = True
     try:
+        try:
+            await _session_ref.interrupt(force=True)
+            log("Interrupted auto-response before search")
+        except Exception as e:
+            log(f"Interrupt note: {e}")
         log(f"SEARCHING for: {transcript[:80]}")
         results, website_results = await _search_reranker(transcript)
 

@@ -15,5 +15,9 @@ livekit-agents[xai]>=1.2.0
 aiohttp>=3.9.0
 python-dotenv>=1.0.0
 
+# Website scraper (reranker hourly refresh)
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
 # Pinned for compatibility across all packages
 numpy==1.26.4

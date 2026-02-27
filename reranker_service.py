@@ -676,14 +676,18 @@ def _refresh_website_db():
 
 
 def _hourly_website_refresh():
-    time.sleep(300)
+    logger.info("Initial website refresh starting (immediate)...")
+    try:
+        _refresh_website_db()
+    except Exception as e:
+        logger.error(f"Initial website refresh error: {e}")
     while True:
+        time.sleep(3600)
         logger.info("Hourly website refresh starting...")
         try:
             _refresh_website_db()
         except Exception as e:
             logger.error(f"Hourly refresh error: {e}")
-        time.sleep(3600)
 
 
 @app.route('/refresh-website', methods=['POST'])
@@ -712,7 +716,7 @@ sys.stdout.flush()
 
 refresh_thread = threading.Thread(target=_hourly_website_refresh, daemon=True)
 refresh_thread.start()
-logger.info("Hourly website refresh thread started (first refresh in 5 min)")
+logger.info("Website refresh thread started (immediate refresh + hourly)")
 
 if __name__ == '__main__':
     port = int(os.environ.get('RERANKER_PORT', os.environ.get('PORT', 5050)))
