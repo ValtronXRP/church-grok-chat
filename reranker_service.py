@@ -684,6 +684,9 @@ def _refresh_website_db():
                 lines = []
                 for l in body:
                     if len(l) > 2 and l not in seen and not l.endswith('- ccea'):
+                        ll = l.lower()
+                        if any(x in ll for x in ['office hour', 'phone', 'fax', 'email', '@cc-ea', '@ccea', '714-', '(714)', 'call the office', 'call us']):
+                            continue
                         seen.add(l)
                         lines.append(l)
                 lines = _filter_past_events(lines)
