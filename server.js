@@ -218,6 +218,37 @@ function isChurchInfoQuery(query) {
   return CHURCH_INFO_KEYWORDS.some(kw => q.includes(kw));
 }
 
+const CHURCH_TOPIC_PAGES = {
+  events: { keywords: ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule'], pages: ['/registrations'] },
+  studies: { keywords: ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups'], pages: ['/resources/home-bible-studies', '/service-times-and-location'] },
+  services: { keywords: ['service time', 'service times', 'what time', 'when is service', 'when are services', 'sunday service', 'wednesday service', 'wednesday night'], pages: ['/service-times-and-location'] },
+  ministries: { keywords: ['ministry', 'ministries'], pages: ['/ministries-2'] },
+  volunteer: { keywords: ['volunteer', 'volunteering', 'serve', 'serving'], pages: ['/volunteer'] },
+  giving: { keywords: ['give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering'], pages: ['/give'] },
+  missions: { keywords: ['mission', 'missions', 'missionary', 'missionaries'], pages: ['/missions'] },
+  faith: { keywords: ['statement of faith', 'what does the church believe', 'what do you believe'], pages: ['/about-us/statement-of-faith'] },
+  newHere: { keywords: ['new here', 'first time', 'visiting', 'visitor', 'new to the church'], pages: ['/new-here'] },
+  location: { keywords: ['location', 'address', 'where is the church', 'directions'], pages: ['/service-times-and-location'] },
+  livestream: { keywords: ['live stream', 'livestream', 'watch live', 'watch online'], pages: ['/services/live'] },
+  youth: { keywords: ['youth group', 'youth ministry', 'kids ministry', "children's ministry"], pages: ['/ministries-2'] },
+  women: { keywords: ["women's study", "women's bible", "women's ministry"], pages: ['/ministries-2', '/resources/home-bible-studies'] },
+  men: { keywords: ["men's study", "men's bible", "men's ministry"], pages: ['/ministries-2', '/resources/home-bible-studies'] },
+};
+
+function detectChurchTopicPages(query) {
+  const q = query.toLowerCase().replace(/['']/g, "'");
+  const matched = new Set();
+  for (const [, config] of Object.entries(CHURCH_TOPIC_PAGES)) {
+    for (const kw of config.keywords) {
+      if (q.includes(kw)) {
+        config.pages.forEach(p => matched.add(p));
+        break;
+      }
+    }
+  }
+  return [...matched];
+}
+
 function detectPersonalStoryQuery(query) {
   const q = query.toLowerCase().replace(/['']/g, "'");
   const matches = [];
@@ -507,12 +538,12 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
       context += `${result.text.substring(0, 800)}\n\n`;
     });
     context += 'CRITICAL INSTRUCTIONS FOR CHURCH INFO QUESTIONS:\n';
-    context += '1. Extract and list EVERY specific item from the data above (event names, dates, times, costs, locations, descriptions).\n';
-    context += '2. Do NOT give generic answers like "there are lots of events" or "check the website" — LIST the actual events with details.\n';
-    context += '3. Do NOT say "Pastor Bob teaches" — just answer directly.\n';
-    context += '4. Do NOT share phone numbers or tell the user to call the office.\n';
-    context += '5. At the end, include the relevant cc-ea.org page URL for registration or more info.\n';
-    context += '6. Be thorough — the user wants to know WHAT is happening, WHEN, WHERE, and HOW MUCH.\n\n';
+    context += '1. Answer ONLY what was asked — if they asked about events, list only events. If about Bible studies, list only studies.\n';
+    context += '2. List specific details: names, dates, times, costs, locations.\n';
+    context += '3. Do NOT dump unrelated info (e.g., don\'t list volunteer roles when asked about events).\n';
+    context += '4. Do NOT say "Pastor Bob teaches", share phone numbers, or tell the user to call the office.\n';
+    context += '5. Include the relevant cc-ea.org page URL at the end.\n';
+    context += '6. Be concise and direct.\n\n';
   }
 
   return context;
@@ -645,17 +676,21 @@ app.post('/api/chat', async (req, res) => {
         }
       }
       
-      const numSermons = isMoreRequest ? 12 : 6;
-      const numIllustrations = isMoreRequest ? 0 : 3;
-      const numWebsite = isChurchInfoQuery(searchQuery) ? 10 : 0;
+      const isChurch = isChurchInfoQuery(searchQuery);
+      const numSermons = isMoreRequest ? 12 : (isChurch ? 0 : 6);
+      const numIllustrations = isMoreRequest ? 0 : (isChurch ? 0 : 3);
+      const numWebsite = isChurch ? 10 : 0;
+      const websitePages = isChurch ? detectChurchTopicPages(searchQuery) : [];
       
       try {
-        const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, {
+        const searchPayload = {
           query: searchQuery,
           n_sermons: numSermons,
           n_illustrations: numIllustrations,
           n_website: numWebsite
-        }, { timeout: 10000 });
+        };
+        if (websitePages.length > 0) searchPayload.website_pages = websitePages;
+        const fastResponse = await axios.post(`${RERANKER_URL}/search/fast-all`, searchPayload, { timeout: 10000 });
         
         if (fastResponse.data) {
           sermonResults = (fastResponse.data.sermons || []).map(r => ({

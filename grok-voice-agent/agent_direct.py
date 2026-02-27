@@ -121,18 +121,94 @@ CHURCH_INFO_KEYWORDS = [
     'tuesday', 'thursday', 'friday', 'saturday',
 ]
 
+CHURCH_TOPIC_PAGES = {
+    'events': {
+        'keywords': ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule'],
+        'pages': ['/registrations'],
+    },
+    'studies': {
+        'keywords': ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups'],
+        'pages': ['/resources/home-bible-studies', '/service-times-and-location'],
+    },
+    'services': {
+        'keywords': ['service time', 'service times', 'what time', 'when is service', 'when are services', 'sunday service', 'wednesday service', 'wednesday night'],
+        'pages': ['/service-times-and-location'],
+    },
+    'ministries': {
+        'keywords': ['ministry', 'ministries'],
+        'pages': ['/ministries-2'],
+    },
+    'volunteer': {
+        'keywords': ['volunteer', 'volunteering', 'serve', 'serving'],
+        'pages': ['/volunteer'],
+    },
+    'giving': {
+        'keywords': ['give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering'],
+        'pages': ['/give'],
+    },
+    'missions': {
+        'keywords': ['mission', 'missions', 'missionary', 'missionaries'],
+        'pages': ['/missions'],
+    },
+    'faith': {
+        'keywords': ['statement of faith', 'what does the church believe', 'what do you believe'],
+        'pages': ['/about-us/statement-of-faith'],
+    },
+    'new': {
+        'keywords': ['new here', 'first time', 'visiting', 'visitor', 'new to the church'],
+        'pages': ['/new-here'],
+    },
+    'location': {
+        'keywords': ['location', 'address', 'where is the church', 'directions'],
+        'pages': ['/service-times-and-location'],
+    },
+    'livestream': {
+        'keywords': ['live stream', 'livestream', 'watch live', 'watch online'],
+        'pages': ['/services/live'],
+    },
+    'youth': {
+        'keywords': ['youth group', 'youth ministry', 'kids ministry', "children's ministry"],
+        'pages': ['/ministries-2'],
+    },
+    'women': {
+        'keywords': ["women's study", "women's bible", "women's ministry"],
+        'pages': ['/ministries-2', '/resources/home-bible-studies'],
+    },
+    'men': {
+        'keywords': ["men's study", "men's bible", "men's ministry"],
+        'pages': ['/ministries-2', '/resources/home-bible-studies'],
+    },
+}
+
+def detect_church_topic(query):
+    q = query.lower()
+    matched_pages = set()
+    for topic, config in CHURCH_TOPIC_PAGES.items():
+        for kw in config['keywords']:
+            if kw in q:
+                for p in config['pages']:
+                    matched_pages.add(p)
+                break
+    return list(matched_pages)
+
 def is_church_info_query(query):
     q = query.lower()
     return any(kw in q for kw in CHURCH_INFO_KEYWORDS)
 
 
 async def _search_reranker(query, n=10):
-    n_website = 8 if is_church_info_query(query) else 0
+    is_church = is_church_info_query(query)
+    n_website = 8 if is_church else 0
+    website_pages = detect_church_topic(query) if is_church else []
+    n_sermons = 0 if is_church else n
     try:
         async with aiohttp.ClientSession() as session:
+            payload = {"query": query, "n_sermons": n_sermons, "n_illustrations": 0, "n_website": n_website}
+            if website_pages:
+                payload["website_pages"] = website_pages
             async with session.post(
                 f"{RERANKER_URL}/search/fast-all",
-                json={"query": query, "n_sermons": n, "n_illustrations": 0, "n_website": n_website},
+                json=payload,
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
                 if response.status == 200:
@@ -198,12 +274,11 @@ async def _handle_user_question(transcript):
             if website_results:
                 website_text = "\n\n".join(website_results[:6])
                 injected_input = (
-                    f"[SYSTEM: The user asked about church info. Here is the LIVE DATA from cc-ea.org. "
-                    f"You MUST read this data and list EVERY item by name with dates, times, costs. "
-                    f"Do NOT say 'check the website'. Do NOT give generic answers. Do NOT share phone numbers. "
-                    f"Do NOT say any URLs or web addresses out loud — the clickable links will be added to the chat automatically. "
-                    f"Just reference the page naturally, like 'the registrations page' or 'the church calendar'. "
-                    f"List the specific details below:]\n\n"
+                    f"[SYSTEM: Answer the user's question using ONLY the relevant data below. "
+                    f"Be CONCISE — 2-4 sentences max. List only the items that directly answer what was asked. "
+                    f"Do NOT list every ministry or event — only what's relevant to the question. "
+                    f"Do NOT say URLs out loud — links appear in chat automatically. "
+                    f"Do NOT say 'check the website', share phone numbers, or give generic answers.]\n\n"
                     f"{website_text}"
                 )
                 try:

@@ -382,6 +382,7 @@ def search_fast_all():
     n_sermons = data.get('n_sermons', 6)
     n_illustrations = data.get('n_illustrations', 3)
     n_website = data.get('n_website', 0)
+    website_pages = data.get('website_pages', [])
 
     if not query:
         return jsonify({'error': 'No query provided'}), 400
@@ -463,11 +464,17 @@ def search_fast_all():
                     break
 
     if n_website > 0 and website_collection:
-        results = website_collection.query(
-            query_embeddings=query_emb,
-            n_results=n_website + 3,
-            include=['metadatas', 'documents', 'distances']
-        )
+        query_kwargs = {
+            'query_embeddings': query_emb,
+            'n_results': n_website + 3,
+            'include': ['metadatas', 'documents', 'distances'],
+        }
+        if website_pages:
+            if len(website_pages) == 1:
+                query_kwargs['where'] = {'path': website_pages[0]}
+            else:
+                query_kwargs['where'] = {'path': {'$in': website_pages}}
+        results = website_collection.query(**query_kwargs)
         if results['ids'] and results['ids'][0]:
             seen = set()
             for i in range(len(results['ids'][0])):
