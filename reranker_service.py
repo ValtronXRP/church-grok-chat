@@ -666,10 +666,6 @@ def _refresh_website_db():
 
         embs = embedder.encode(documents, normalize_embeddings=True).tolist()
 
-        try:
-            chroma_client.delete_collection('church_website')
-        except:
-            pass
         coll = chroma_client.get_or_create_collection(name='church_website', metadata={'description': 'cc-ea.org pages'})
         for i in range(0, len(ids), 50):
             batch_end = min(i + 50, len(ids))
