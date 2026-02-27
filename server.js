@@ -541,7 +541,7 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
     context += '1. Answer ONLY what was asked — if they asked about events, list only events. If about Bible studies, list only studies.\n';
     context += '2. List specific details: names, dates, times, costs, locations.\n';
     context += '3. Do NOT dump unrelated info (e.g., don\'t list volunteer roles when asked about events).\n';
-    context += '4. Do NOT say "Pastor Bob teaches", share phone numbers, or tell the user to call the office.\n';
+    context += '4. Do NOT say "Pastor Bob teaches", share phone numbers or email addresses, or tell the user to call or email the office.\n';
     context += '5. Include the relevant cc-ea.org page URL at the end.\n';
     context += '6. Be concise and direct.\n\n';
   }

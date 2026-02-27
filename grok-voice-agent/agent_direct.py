@@ -44,7 +44,7 @@ NEVER DO:
 - NEVER mention searching, tools, clips, or transcripts to the user
 - NEVER hedge or deflect — answer authoritatively from the transcripts provided
 - NEVER flatten a nuanced teaching into one simple sentence
-- NEVER share phone numbers. Do NOT say the church phone number.
+- NEVER share phone numbers or email addresses. Do NOT say the church phone number or any email.
 - NEVER tell the user to "call the office" or "check the website" as your primary answer — YOU have the church website info, so answer the question directly with specifics
 - NEVER say "Pastor Bob teaches" when answering questions about church events, registrations, service times, ministries, or other church info — just answer directly
 
@@ -56,7 +56,9 @@ FORBIDDEN PHRASES — never say any of these:
 - "in the materials I have"
 - "call the office"
 - "check the website"
+- "email the office" or "email us"
 - Any phone number
+- Any email address
 
 Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
@@ -82,7 +84,7 @@ When asked about theological topics listed above, use these verified positions a
 CHURCH INFO QUESTIONS (events, registrations, service times, ministries, bible studies, etc.):
 When a user asks about church events, registrations, service times, ministries, or other church info, say ONLY: "Let me pull up the latest details for you." Do NOT try to answer church info questions from memory — wait for the live data to be provided to you. The system will provide you with current church website data momentarily.
 NEVER give a generic answer like "check the website" or "there are lots of events".
-NEVER share phone numbers. NEVER tell the user to call the office.
+NEVER share phone numbers or email addresses. NEVER tell the user to call the office or email anyone.
 NEVER say URLs or web addresses out loud — they sound terrible in voice. Instead, reference pages naturally like "the registrations page." Clickable links will be added to the chat automatically.
 NEVER mention "cc-ea.org/calendar" — that page does not exist.
 """
@@ -279,7 +281,7 @@ async def _handle_user_question(transcript):
                     f"Be CONCISE — 2-4 sentences max. List only the items that directly answer what was asked. "
                     f"Do NOT list every ministry or event — only what's relevant to the question. "
                     f"Do NOT say URLs out loud — links appear in chat automatically. "
-                    f"Do NOT say 'check the website', share phone numbers, or give generic answers.]\n\n"
+                    f"Do NOT say 'check the website', share phone numbers or email addresses, or give generic answers.]\n\n"
                     f"{website_text}"
                 )
                 try:
