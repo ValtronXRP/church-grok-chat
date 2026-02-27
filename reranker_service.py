@@ -12,6 +12,7 @@ Endpoints:
 """
 
 import os, sys, json, time, hashlib, gc, threading, re
+from datetime import datetime, timedelta
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 
@@ -570,6 +571,57 @@ def ensure_models():
         models_initialized = True
 
 
+MONTH_NAMES = {
+    'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+    'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+}
+
+DATE_PATTERNS = [
+    re.compile(r'(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)[,\s]+(' + '|'.join(MONTH_NAMES.keys()) + r')\s+(\d{1,2})(?:\s*,\s*(\d{4}))?', re.IGNORECASE),
+    re.compile(r'(' + '|'.join(MONTH_NAMES.keys()) + r')\s+(\d{1,2})(?:\s*(?:st|nd|rd|th))?(?:\s*,\s*(\d{4}))?', re.IGNORECASE),
+    re.compile(r'(\d{1,2})/(\d{1,2})/(\d{2,4})'),
+]
+
+def _extract_date_from_text(text):
+    for pattern in DATE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            groups = m.groups()
+            try:
+                if groups[0].lower() in MONTH_NAMES:
+                    month = MONTH_NAMES[groups[0].lower()]
+                    day = int(groups[1])
+                    year = int(groups[2]) if groups[2] else datetime.now().year
+                else:
+                    month = int(groups[0])
+                    day = int(groups[1])
+                    year = int(groups[2]) if len(groups) > 2 and groups[2] else datetime.now().year
+                    if year < 100:
+                        year += 2000
+                return datetime(year, month, day)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+def _filter_past_events(lines):
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    filtered = []
+    skip_block = False
+    for line in lines:
+        detected = _extract_date_from_text(line)
+        if detected and detected < today - timedelta(days=7):
+            skip_block = True
+            continue
+        if detected and detected >= today - timedelta(days=7):
+            skip_block = False
+        if skip_block and line and not any(c.isdigit() for c in line[:3]):
+            continue
+        skip_block = False
+        filtered.append(line)
+    return filtered
+
+
 def _refresh_website_db():
     global website_collection
     try:
@@ -634,6 +686,7 @@ def _refresh_website_db():
                     if len(l) > 2 and l not in seen and not l.endswith('- ccea'):
                         seen.add(l)
                         lines.append(l)
+                lines = _filter_past_events(lines)
                 content = '\n'.join(lines)
                 if len(content) <= 800:
                     all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': content, 'chunk_index': 0})

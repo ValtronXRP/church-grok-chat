@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import aiohttp
+from datetime import date
 from dotenv import load_dotenv
 from html import unescape
 
@@ -276,8 +277,10 @@ async def _handle_user_question(transcript):
 
             if website_results:
                 website_text = "\n\n".join(website_results[:6])
+                today_str = date.today().strftime('%B %d, %Y')
                 injected_input = (
-                    f"[SYSTEM: Answer the user's question using ONLY the relevant data below. "
+                    f"[SYSTEM: Today is {today_str}. Answer the user's question using ONLY the relevant data below. "
+                    f"NEVER mention past events — only current and upcoming ones. "
                     f"Be CONCISE — 2-4 sentences max. List only the items that directly answer what was asked. "
                     f"Do NOT list every ministry or event — only what's relevant to the question. "
                     f"Do NOT say URLs out loud — links appear in chat automatically. "
