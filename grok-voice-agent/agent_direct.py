@@ -83,14 +83,7 @@ CHURCH INFO QUESTIONS (events, registrations, service times, ministries, bible s
 You have access to live church website data that will be provided to you via search results. When you receive church website data in your reply instructions, you MUST extract and list the SPECIFIC details — event names, dates, times, costs, locations.
 NEVER give a generic answer like "check the website" or "there are lots of events". You HAVE the data — use it.
 NEVER share phone numbers. NEVER tell the user to call the office.
-Include the relevant URL at the end:
-- Events: cc-ea.org/registrations
-- Services: cc-ea.org/service-times-and-location
-- Ministries: cc-ea.org/ministries-2
-- Calendar: my.display.church/c/munnvChP
-- Giving: cc-ea.org/give
-- Bible Studies: cc-ea.org/resources/home-bible-studies
-- Statement of Faith: cc-ea.org/about-us/statement-of-faith
+NEVER say URLs or web addresses out loud — they sound terrible in voice. Instead, say something natural like "you can find that on the registrations page" or "the church calendar has all the details." The clickable link will be added to the chat automatically.
 """
 
 
@@ -208,6 +201,8 @@ async def _handle_user_question(transcript):
                     f"[SYSTEM: The user asked about church info. Here is the LIVE DATA from cc-ea.org. "
                     f"You MUST read this data and list EVERY item by name with dates, times, costs. "
                     f"Do NOT say 'check the website'. Do NOT give generic answers. Do NOT share phone numbers. "
+                    f"Do NOT say any URLs or web addresses out loud — the clickable links will be added to the chat automatically. "
+                    f"Just reference the page naturally, like 'the registrations page' or 'the church calendar'. "
                     f"List the specific details below:]\n\n"
                     f"{website_text}"
                 )

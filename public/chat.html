@@ -1788,6 +1788,51 @@ When asked about theological topics listed above, use these verified positions a
             // Legacy function - just use formatMessageText now
             return formatMessageText(text);
         }
+
+        const CHURCH_LINK_RULES = [
+            { keywords: ['registration', 'register', 'sign up', 'signup'], url: 'https://cc-ea.org/registrations', label: 'Registrations' },
+            { keywords: ['calendar', 'upcoming', 'schedule', 'coming up', 'happening'], url: 'https://my.display.church/c/munnvChP', label: 'Church Calendar' },
+            { keywords: ['service time', 'service times', 'when is service', 'sunday service', 'wednesday service'], url: 'https://cc-ea.org/service-times-and-location', label: 'Service Times' },
+            { keywords: ['bible study', 'bible studies', 'home group', 'small group', 'community group'], url: 'https://cc-ea.org/resources/home-bible-studies', label: 'Home Bible Studies' },
+            { keywords: ['give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering'], url: 'https://cc-ea.org/give', label: 'Give' },
+            { keywords: ['ministry', 'ministries'], url: 'https://cc-ea.org/ministries-2', label: 'Ministries' },
+            { keywords: ['volunteer', 'volunteering', 'serve', 'serving'], url: 'https://cc-ea.org/volunteer', label: 'Volunteer' },
+            { keywords: ['statement of faith', 'what we believe', 'what the church believe'], url: 'https://cc-ea.org/about-us/statement-of-faith', label: 'Statement of Faith' },
+            { keywords: ['mission', 'missions', 'missionary'], url: 'https://cc-ea.org/missions', label: 'Missions' },
+            { keywords: ['new here', 'first time', 'visiting', 'visitor'], url: 'https://cc-ea.org/new-here', label: 'New Here' },
+            { keywords: ['live stream', 'livestream', 'watch live', 'watch online'], url: 'https://cc-ea.org/services/live', label: 'Live Stream' },
+            { keywords: ['wedding', 'marriage application'], url: 'https://cc-ea.org/resources/wedding-application2', label: 'Wedding Application' },
+            { keywords: ['crisis pregnancy', 'pregnancy resource'], url: 'https://cc-ea.org/resources/crisis-pregnancy', label: 'Crisis Pregnancy' },
+        ];
+
+        function appendChurchInfoLinks(msgEl, text) {
+            const lower = text.toLowerCase();
+            const matched = [];
+            const seen = new Set();
+            for (const rule of CHURCH_LINK_RULES) {
+                if (seen.has(rule.url)) continue;
+                for (const kw of rule.keywords) {
+                    if (lower.includes(kw)) {
+                        matched.push(rule);
+                        seen.add(rule.url);
+                        break;
+                    }
+                }
+            }
+            if (matched.length === 0) return;
+            const linksDiv = document.createElement('div');
+            linksDiv.style.cssText = 'margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);';
+            for (const rule of matched) {
+                const a = document.createElement('a');
+                a.href = rule.url;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = rule.label + ' \u2192';
+                a.style.cssText = 'display:inline-block;color:#4fc3f7;text-decoration:none;margin-right:12px;margin-bottom:4px;font-size:0.9em;';
+                linksDiv.appendChild(a);
+            }
+            msgEl.appendChild(linksDiv);
+        }
         
         function extractNgrams(text, minWords, maxWords) {
             const words = text.split(/\s+/).filter(w => w.length > 0);
@@ -2532,6 +2577,7 @@ When asked about theological topics listed above, use these verified positions a
                             const agentMsg = addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
                             if (agentMsg) {
+                                appendChurchInfoLinks(agentMsg, message.text);
                                 setTimeout(() => highlightClipReferences(agentMsg), 3000);
                             }
                         }
