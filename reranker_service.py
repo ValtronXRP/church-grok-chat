@@ -622,6 +622,40 @@ def _filter_past_events(lines):
     return filtered
 
 
+VERIFIED_MINISTRIES = [
+    "Adventure Kids: Children's ministry. When: Sunday mornings 9am & 11am, Wednesday nights 7pm. Where: CCEA Adventure Lodge. Who: Kids.",
+    "Youth Ministry: Equipping students with an understanding of God. When: Sunday mornings 9am & 11am, Wednesday nights 7pm. Where: CCEA Jr High & High School rooms. Who: Jr. High & High School.",
+    "Ignited (Young Adults 18-25): Becoming more like Jesus Christ, reflecting God's love daily. When: Thursday nights 7pm. Where: CCEA High School room. Who: Men & Women ages 18-25.",
+    "Women's Ministry: Fellowship, prayer, and encouragement. When: Monday nights 6:30pm AND Thursday mornings 9am. Where: CCEA Sanctuary. Who: Women.",
+    "Men's Ministry: Developing Godly character, equipping men to influence their world for Christ. Men's Bible Study: Thursday mornings 6am. Men's Fellowship (Friday AM): Friday mornings 6:30am at Solid Rock Cafe. Who: Men.",
+    "Devoted (Young Adults 25-45): Community of believers growing in knowledge and grace. When: Tuesday nights 7pm. Where: CCEA High School room. Who: Men & Women ages 25-45.",
+    "Spanish Ministry: Worship in Spanish. When: Sunday mornings 8am (off campus at VFW Anaheim), Sunday 11am (CCEA Gym), Wednesday nights 7pm (CCEA 5th/6th grade room). Who: Men, Women, Children & Youth.",
+    "Family Ministry: Royal Rangers & Mpact Girls, Level Up every Wednesday 7pm, Men's Bible Study every Thursday 6am, Home Groups Tuesday-Friday, Homeschool Community. Where: Multiple locations. Who: Families.",
+    "Man Up: When: Monday 7pm. Where: Solid Rock Cafe. Who: Men & Male Youth.",
+    "Cars & Coffee: When: 1st Saturday of the month. Where: CCEA Parking Lot. Who: Men, Women, Kids & Youth. No registration required.",
+    "Crosscurrent / Living Waters: When: Thursdays January through May. Where: CCEA Adventure Lodge. Who: Men & Women. Applications required.",
+    "Devoted Study: When: Tuesday 7pm. Where: Youth Room. Who: Men & Women.",
+    "Divorce Care: When: Thursdays at 6:30pm (Feb-May). Where: 5th/6th Grade Classroom. Who: Men & Women.",
+    "GriefShare: When: Thursdays at 6:30pm (Aug-Nov). Where: 5th/6th Grade Classroom. Who: Men & Women.",
+    "Homeschool: When: Times vary. Where: CCEA. Who: Kids & Youth.",
+    "Moms In Prayer: When: 2nd & 4th Wednesday of each month at 9am. Where: CCEA Prayer Room. Who: Women.",
+    "Military Moms: When: Third Thursday each month at 6:30pm. Where: CCEA 3 Year Old Room. Who: Women.",
+    "Mpact Girls: When: Every other Tuesday starting in September. Where: Solid Rock Cafe. Who: Kindergarten-12th grade.",
+    "Royal Rangers: When: Every other Tuesday starting in September. Where: CCEA Gym. Who: Kindergarten-12th grade.",
+    "School of Discipleship (SOD): Seasonal. When: Sunday 3pm & 4:15pm. Where: CCEA Campus. Who: Men, Women & Youth.",
+    "Community Groups: When: Every other week on Monday, Tuesday, Thursday or Friday evenings. Where: Various homes. Who: Men, Women, Youth & Kids.",
+    "Prayer Ministry: When: Every day. Where: CCEA. Who: Men, Women, Kids & Youth.",
+    "Widows Heart 2 Heart: When: 2nd Monday of each month. Where: Locations vary. Who: Women.",
+    "Salt & Light: Promoting biblical values in government. When: During elections. Where: CCEA Campus. Who: Men & Women.",
+    "Veterans: When: 3rd Saturday of each month. Where: CCEA Courtyard. Who: Men & Women.",
+    "BlessFest: Annual Thanksgiving outreach for homeless guests — dinner, clothing, dental, haircuts, legal advice. When: Thanksgiving. Where: CCEA.",
+    "Hiking: When: Once a month on Saturday. Where: On location. Who: Men, Women, Youth & Kids.",
+    "Dog Walks (Noah's Ark): When: Times and dates vary. Where: On location. Who: Men, Women, Youth & Kids.",
+    "Reel Disciples (Fishing Ministry): When: Monthly, dates vary. Where: Docks in Southern California. Who: Men, Women & Children.",
+    "Homeless Ministry: Message and meal for the homeless. When: 1st & 3rd Saturday of each month at 10:30am. Where: La Palma Park, Anaheim.",
+]
+
+
 def _refresh_website_db():
     global website_collection
     try:
@@ -690,22 +724,28 @@ def _refresh_website_db():
                         seen.add(l)
                         lines.append(l)
                 lines = _filter_past_events(lines)
-                content = '\n'.join(lines)
-                if len(content) <= 800:
-                    all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': content, 'chunk_index': 0})
+
+                if path == '/ministries-2':
+                    for ci, block in enumerate(VERIFIED_MINISTRIES):
+                        all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': block, 'chunk_index': ci})
+                    logger.info(f"  Using {len(VERIFIED_MINISTRIES)} verified ministry blocks for {name}")
                 else:
-                    current, current_len, ci = [], 0, 0
-                    for para in lines:
-                        if current_len + len(para) > 800 and current:
+                    content = '\n'.join(lines)
+                    if len(content) <= 800:
+                        all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': content, 'chunk_index': 0})
+                    else:
+                        current, current_len, ci = [], 0, 0
+                        for para in lines:
+                            if current_len + len(para) > 800 and current:
+                                all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': '\n'.join(current), 'chunk_index': ci})
+                                current, current_len = [para], len(para)
+                                ci += 1
+                            else:
+                                current.append(para)
+                                current_len += len(para)
+                        if current:
                             all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': '\n'.join(current), 'chunk_index': ci})
-                            current, current_len = [para], len(para)
-                            ci += 1
-                        else:
-                            current.append(para)
-                            current_len += len(para)
-                    if current:
-                        all_chunks.append({'page': name, 'url': f'https://cc-ea.org{path}', 'path': path, 'content': '\n'.join(current), 'chunk_index': ci})
-                logger.info(f"  Scraped: {name} ({len(content)} chars)")
+                    logger.info(f"  Scraped: {name}")
             except Exception as e:
                 logger.warning(f"  Failed to scrape {name}: {e}")
 
