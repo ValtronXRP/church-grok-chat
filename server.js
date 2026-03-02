@@ -1130,6 +1130,17 @@ app.get('/api/sermon/health', async (req, res) => {
   });
 });
 
+app.post('/api/ingest-sermons', async (req, res) => {
+  try {
+    const full = req.query.full === 'true';
+    const url = `${RERANKER_URL}/ingest-sermons${full ? '?full=true' : ''}`;
+    const response = await axios.post(url, {}, { timeout: 600000 });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running on http://localhost:${PORT}`);
   console.log(`📺 Open chat at: http://localhost:${PORT}/chat.html`);
