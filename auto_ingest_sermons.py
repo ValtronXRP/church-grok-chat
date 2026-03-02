@@ -362,7 +362,7 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
     processed_count = 0
     for vid, title in new_videos.items():
         if processed_count > 0:
-            wait = 10 if processed_count % 3 != 0 else 60
+            wait = 30 if processed_count % 5 != 0 else 120
             logger.info(f"  Pausing {wait}s to avoid rate limits ({processed_count} processed so far)...")
             time.sleep(wait)
 
