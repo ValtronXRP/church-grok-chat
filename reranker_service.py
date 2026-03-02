@@ -817,6 +817,44 @@ refresh_thread = threading.Thread(target=_hourly_website_refresh, daemon=True)
 refresh_thread.start()
 logger.info("Website refresh thread started (immediate refresh + hourly)")
 
+
+def _weekly_sermon_ingest():
+    time.sleep(120)
+    logger.info("Initial sermon ingest check starting (full scan)...")
+    try:
+        from auto_ingest_sermons import ingest_new_sermons
+        count = ingest_new_sermons(full_scan=True)
+        logger.info(f"Initial sermon ingest: {count} new sermons added")
+    except Exception as e:
+        logger.error(f"Initial sermon ingest error: {e}")
+    while True:
+        time.sleep(7 * 24 * 3600)
+        logger.info("Weekly sermon ingest check starting...")
+        try:
+            from auto_ingest_sermons import ingest_new_sermons
+            count = ingest_new_sermons()
+            logger.info(f"Weekly sermon ingest: {count} new sermons added")
+        except Exception as e:
+            logger.error(f"Weekly sermon ingest error: {e}")
+
+
+sermon_ingest_thread = threading.Thread(target=_weekly_sermon_ingest, daemon=True)
+sermon_ingest_thread.start()
+logger.info("Sermon ingest thread started (startup check + weekly)")
+
+
+@app.route('/ingest-sermons', methods=['POST'])
+def ingest_sermons():
+    try:
+        from auto_ingest_sermons import ingest_new_sermons
+        full = request.args.get('full', 'false').lower() == 'true'
+        count = ingest_new_sermons(full_scan=full)
+        return jsonify({'status': 'ok', 'new_sermons': count})
+    except Exception as e:
+        logger.error(f"Manual sermon ingest error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('RERANKER_PORT', os.environ.get('PORT', 5050)))
     print(f"\nReranker service starting on port {port}")
