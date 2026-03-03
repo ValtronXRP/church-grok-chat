@@ -1067,11 +1067,13 @@ app.post('/api/clips', async (req, res) => {
     if (fastResponse.data) {
       for (const r of (fastResponse.data.sermons || [])) {
         const url = r.timestamped_url || r.url || '';
-        const vidMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
+        const vidMatch = url.match(/v=([a-zA-Z0-9_-]{11})/);
         if (!vidMatch) continue;
         const vid = vidMatch[1];
+        if (vid.startsWith('audio_')) continue;
         const title = r.title || '';
         if (!title || title.toLowerCase() === 'sermon' || title.toLowerCase() === 'unknown sermon') continue;
+        if (/^\d{8}-\d{2}-[A-Z]{3}/.test(title)) continue;
         const tLower = title.toLowerCase();
         if (tLower.startsWith('sunday morning live') || tLower.startsWith('wednesday night live') || tLower.startsWith('sunday night live')) continue;
         const text = (r.text || '').substring(0, 150);
