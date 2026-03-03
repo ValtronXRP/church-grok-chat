@@ -267,7 +267,7 @@ function isChurchInfoQuery(query) {
 
 const CHURCH_TOPIC_PAGES = {
   events: { keywords: ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule', 'camp', 'church camp', 'retreat', 'conference', 'cruise', 'trip', 'tour', 'easter', 'christmas', 'good friday', 'potluck', 'dinner', 'brunch', 'breakfast', 'blessfest', 'newcomer', 'cost', 'how much', 'price', 'fee'], pages: ['/registrations'] },
-  studies: { keywords: ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups'], pages: ['/resources/home-bible-studies', '/service-times-and-location'] },
+  studies: { keywords: ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups', 'join a group', 'host a group', 'good shepherd study'], pages: ['/resources/home-bible-studies', '/service-times-and-location', 'https://www.cceacommunity.org/'] },
   services: { keywords: ['service time', 'service times', 'what time', 'when is service', 'when are services', 'sunday service', 'wednesday service', 'wednesday night'], pages: ['/service-times-and-location'] },
   ministries: { keywords: ['ministry', 'ministries'], pages: ['/ministries-2'] },
   volunteer: { keywords: ['volunteer', 'volunteering', 'serve', 'serving'], pages: ['/volunteer'] },

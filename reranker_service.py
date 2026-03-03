@@ -764,6 +764,85 @@ def _refresh_website_db():
             except Exception as e:
                 logger.warning(f"  Failed to scrape {name}: {e}")
 
+        EXTERNAL_PAGES = [
+            ('https://www.cceacommunity.org/', 'Community Groups'),
+            ('https://cceacommgroups.churchcenter.com/groups/ccea-community-groups?enrollment=open_signup%2Crequest_to_join&filter=enrollment', 'Browse Community Groups'),
+        ]
+        for ext_url, ext_name in EXTERNAL_PAGES:
+            time.sleep(2)
+            try:
+                r = session.get(ext_url, timeout=15, allow_redirects=True)
+                r.raise_for_status()
+                soup = BeautifulSoup(r.text, 'html.parser')
+                for tag in soup(['script', 'style', 'link', 'meta', 'noscript']):
+                    tag.decompose()
+                text = soup.get_text(separator='\n', strip=True)
+                ext_lines = [l.strip() for l in text.split('\n') if l.strip()]
+                skip_nav = 0
+                for idx, l in enumerate(ext_lines):
+                    if 'BROWSE GROUPS' in l:
+                        skip_nav = idx + 1
+                        break
+                footer_idx = len(ext_lines)
+                for idx in range(len(ext_lines) - 1, -1, -1):
+                    if 'CHURCH WEBSITE' in ext_lines[idx]:
+                        footer_idx = idx
+                        break
+                body = ext_lines[skip_nav:footer_idx]
+                seen_ext = set()
+                clean_lines = []
+                for l in body:
+                    if len(l) > 2 and l not in seen_ext:
+                        ll = l.lower()
+                        if any(x in ll for x in ['skip to content', 'open menu', 'close menu', 'browse groups']):
+                            continue
+                        seen_ext.add(l)
+                        clean_lines.append(l)
+                content = '\n'.join(clean_lines)
+                if content and len(content) > 50:
+                    if len(content) <= 800:
+                        all_chunks.append({'page': ext_name, 'url': ext_url, 'path': ext_url, 'content': content, 'chunk_index': 0})
+                    else:
+                        current, current_len, ci = [], 0, 0
+                        for para in clean_lines:
+                            if current_len + len(para) > 800 and current:
+                                all_chunks.append({'page': ext_name, 'url': ext_url, 'path': ext_url, 'content': '\n'.join(current), 'chunk_index': ci})
+                                current, current_len = [para], len(para)
+                                ci += 1
+                            else:
+                                current.append(para)
+                                current_len += len(para)
+                        if current:
+                            all_chunks.append({'page': ext_name, 'url': ext_url, 'path': ext_url, 'content': '\n'.join(current), 'chunk_index': ci})
+                    logger.info(f"  Scraped external: {ext_name} ({ext_url})")
+                else:
+                    logger.info(f"  External page {ext_name} had no usable content (JS-rendered?), skipping")
+            except Exception as e:
+                logger.warning(f"  Failed to scrape external {ext_name}: {e}")
+
+        MANUAL_EXTERNAL_CONTENT = [
+            {
+                'page': 'Browse Community Groups',
+                'url': 'https://cceacommgroups.churchcenter.com/groups/ccea-community-groups?enrollment=open_signup%2Crequest_to_join&filter=enrollment',
+                'content': (
+                    "CCEA Community Groups - Browse and Join\n"
+                    "Browse all available community groups at Calvary Chapel East Anaheim. "
+                    "Groups meet throughout the week across Orange County, accommodating various stages of life. "
+                    "To browse available groups, see meeting times, locations, and sign up, visit: "
+                    "https://cceacommgroups.churchcenter.com/groups/ccea-community-groups\n"
+                    "For more info about community groups, visit: https://www.cceacommunity.org/\n"
+                    "How it works: (1) HOST - Step forward to create a warm space where a small group gathers to watch messages, pray, and share fellowship. "
+                    "(2) JOIN - Explore and join the group that suits you best. "
+                    "(3) CONNECT - Build genuine friendships and Biblical fellowship through brief messages, meaningful discussions, and prayer."
+                ),
+            },
+        ]
+        for manual in MANUAL_EXTERNAL_CONTENT:
+            existing = any(c['url'] == manual['url'] for c in all_chunks)
+            if not existing:
+                all_chunks.append({'page': manual['page'], 'url': manual['url'], 'path': manual['url'], 'content': manual['content'], 'chunk_index': 0})
+                logger.info(f"  Added manual content: {manual['page']}")
+
         if not all_chunks:
             logger.warning("No website content scraped, skipping DB update")
             return False

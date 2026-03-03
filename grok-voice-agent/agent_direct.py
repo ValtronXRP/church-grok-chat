@@ -154,8 +154,8 @@ CHURCH_TOPIC_PAGES = {
         'pages': ['/registrations'],
     },
     'studies': {
-        'keywords': ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups'],
-        'pages': ['/resources/home-bible-studies', '/service-times-and-location'],
+        'keywords': ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups', 'join a group', 'host a group', 'good shepherd study'],
+        'pages': ['/resources/home-bible-studies', '/service-times-and-location', 'https://www.cceacommunity.org/'],
     },
     'services': {
         'keywords': ['service time', 'service times', 'what time', 'when is service', 'when are services', 'sunday service', 'wednesday service', 'wednesday night'],
