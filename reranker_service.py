@@ -293,7 +293,7 @@ def search():
         sermon_results = search_and_rerank(query, sermon_collection, n_candidates, n_results, 'sermon')
         sermon_results = [r for r in sermon_results if r.get('video_id') not in pinned_vids]
         title_lower = query.lower()
-        sermon_results = [r for r in sermon_results if not is_worship_content(r.get('text', ''), r.get('title', ''))]
+        sermon_results = [r for r in sermon_results if not is_non_bob_content(r.get('text', ''), r.get('title', ''))]
         all_results.extend(sermon_results)
 
     if search_type in ('all', 'illustrations') and illustration_collection:
@@ -349,7 +349,7 @@ def search_fast():
                 meta = results['metadatas'][0][i] or {}
                 dist = results['distances'][0][i] if results['distances'] else 1.0
                 title = meta.get('title', '')
-                if is_worship_content(text, title):
+                if is_non_bob_content(text, title):
                     continue
                 vid = meta.get('video_id', '')
                 if vid in pinned_vids:
@@ -416,7 +416,7 @@ def search_fast_all():
                 meta = results['metadatas'][0][i] or {}
                 dist = results['distances'][0][i] if results['distances'] else 1.0
                 title = meta.get('title', '')
-                if is_worship_content(text, title):
+                if is_non_bob_content(text, title):
                     continue
                 vid = meta.get('video_id', '')
                 if vid in pinned_vids:
@@ -519,7 +519,7 @@ def search_sermons():
     pinned, pinned_vids = detect_pinned_stories(query)
     results = search_and_rerank(query, sermon_collection, 20, n_results, 'sermon') if sermon_collection else []
     results = [r for r in results if r.get('video_id') not in pinned_vids]
-    results = [r for r in results if not is_worship_content(r.get('text', ''), r.get('title', ''))]
+    results = [r for r in results if not is_non_bob_content(r.get('text', ''), r.get('title', ''))]
     all_results = pinned + results
 
     return jsonify({'query': query, 'results': all_results})
@@ -545,13 +545,24 @@ def search_website():
     return jsonify({'query': query, 'results': results})
 
 
-def is_worship_content(text, title):
+def is_non_bob_content(text, title):
     text_lower = (text or '').lower()
     title_lower = (title or '').lower()
     if title_lower in ['unknown sermon', 'unknown', '']:
         return True
-    worship_indicators = ['worship song', 'hymn', 'music video', 'singing', 'choir']
-    if any(w in title_lower for w in worship_indicators):
+    non_bob_title_patterns = [
+        "women's", "womens", "women's", "ladies",
+        "adventure kid", "children's ministry", "kids ministry", "kids church",
+        "worship song", "hymn", "music video", "singing", "choir",
+        "servicio", "español", "espanol", "en vivo", "iglesia", "spanish",
+        "guest speaker", "guest pastor", "guest:",
+        "men's bible study", "mens bible study", "men's study", "mens study",
+        "men's friday", "mens friday", "men's breakfast", "mens breakfast",
+        "men's conference", "mens conference", "men's retreat",
+        "vlog #", "vlog #",
+        "weekly devotional", "daily devotional", "midweek devotional", "devotional with",
+    ]
+    if any(p in title_lower for p in non_bob_title_patterns):
         return True
     import re
     worship_count = len(re.findall(r'\b(la la|glory glory|praise him praise him|hallelujah hallelujah)\b', text_lower))

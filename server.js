@@ -118,12 +118,23 @@ function computeKeywordRelevance(text, query) {
   return queryWords.length > 0 ? matches / queryWords.length : 0;
 }
 
-function isWorshipContent(text, title) {
+function isNonBobContent(text, title) {
   const textLower = (text || '').toLowerCase();
   const titleLower = (title || '').toLowerCase();
   if (titleLower === 'unknown sermon' || titleLower === 'unknown' || titleLower === '') return true;
-  const worshipIndicators = ['worship song', 'hymn', 'music video', 'singing', 'choir', 'la la la', 'hallelujah hallelujah'];
-  if (worshipIndicators.some(w => titleLower.includes(w))) return true;
+  const nonBobPatterns = [
+    "women's", "womens", "women\u2019s", "ladies",
+    "adventure kid", "children's ministry", "kids ministry", "kids church",
+    "worship song", "hymn", "music video", "singing", "choir",
+    "servicio", "espa\u00f1ol", "espanol", "en vivo", "iglesia", "spanish",
+    "guest speaker", "guest pastor", "guest:",
+    "men's bible study", "mens bible study", "men's study", "mens study",
+    "men's friday", "mens friday", "men's breakfast", "mens breakfast",
+    "men's conference", "mens conference", "men\u2019s conference", "men's retreat",
+    "vlog #", "vlog #",
+    "weekly devotional", "daily devotional", "midweek devotional", "devotional with",
+  ];
+  if (nonBobPatterns.some(p => titleLower.includes(p))) return true;
   const worshipPhrases = /\b(la la|glory glory|praise him praise him|hallelujah hallelujah)\b/gi;
   if ((textLower.match(worshipPhrases) || []).length > 2) return true;
   if (textLower.length < 100) return true;
@@ -383,7 +394,7 @@ async function searchSermons(query, nResults = 6) {
       return true;
     });
     const filtered = deduped
-      .filter(r => !isWorshipContent(r.text, r.title))
+      .filter(r => !isNonBobContent(r.text, r.title))
       .filter(r => r.relevance_score > 0.15 || r.keyword_score > 0.2)
       .slice(0, nResults);
     console.log(`Found ${formatted.length} results, ${deduped.length} after dedup, returning ${filtered.length} after relevance filtering`);
@@ -412,7 +423,7 @@ async function searchSermons(query, nResults = 6) {
       }
       formatted.sort((a, b) => b.relevance_score - a.relevance_score);
       const filtered = formatted
-        .filter(r => !isWorshipContent(r.text, r.title))
+        .filter(r => !isNonBobContent(r.text, r.title))
         .filter(r => r.relevance_score > 0.25)
         .slice(0, nResults);
       console.log(`Retry found ${filtered.length} sermon results`);
@@ -858,6 +869,7 @@ app.post('/api/chat', async (req, res) => {
         if (!vidMatch) return false;
         const title = r.title || '';
         if (/^\d{8}-\d{2}-[A-Z]{3}/.test(title)) return false;
+        if (isNonBobContent(r.text, title)) return false;
         return true;
       })
       .map(r => ({
@@ -1085,6 +1097,7 @@ app.post('/api/clips', async (req, res) => {
         if (/^\d{8}-\d{2}-[A-Z]{3}/.test(title)) continue;
         const tLower = title.toLowerCase();
         if (tLower.startsWith('sunday morning live') || tLower.startsWith('wednesday night live') || tLower.startsWith('sunday night live')) continue;
+        if (isNonBobContent(r.text, title)) continue;
         const text = (r.text || '').substring(0, 150);
         if (text.length < 50) continue;
         const clipKey = `${vid}_${r.start_time || ''}`;
