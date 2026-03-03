@@ -851,7 +851,16 @@ app.post('/api/chat', async (req, res) => {
       
       // For "more" requests, skip the first 5 (already shown) and show next batch
       const startIndex = isMoreRequest ? 5 : 0;
-      const videosToSend = filteredResults.slice(startIndex, startIndex + 5).map(r => ({
+      const videosToSend = filteredResults.slice(startIndex, startIndex + 5)
+      .filter(r => {
+        const url = r.timestamped_url || r.url || '';
+        const vidMatch = url.match(/v=([a-zA-Z0-9_-]{11})/);
+        if (!vidMatch) return false;
+        const title = r.title || '';
+        if (/^\d{8}-\d{2}-[A-Z]{3}/.test(title)) return false;
+        return true;
+      })
+      .map(r => ({
         title: r.title || 'Sermon Clip',
         url: r.timestamped_url || r.url,
         timestamp: r.start_time || '',
