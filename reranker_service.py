@@ -39,6 +39,7 @@ chroma_client = None
 sermon_collection = None
 illustration_collection = None
 website_collection = None
+website_dynamic_keywords = []
 
 PINNED_STORIES = {
     "becky_story": {
@@ -561,6 +562,9 @@ def is_non_bob_content(text, title):
         "men's conference", "mens conference", "men's retreat",
         "vlog #", "vlog #",
         "weekly devotional", "daily devotional", "midweek devotional", "devotional with",
+        "community groups |", "community group |",
+        "home bible study session", "home bible study |",
+        "heart & stone | session",
     ]
     if any(p in title_lower for p in non_bob_title_patterns):
         return True
@@ -778,11 +782,70 @@ def _refresh_website_db():
             batch_end = min(i + 50, len(ids))
             coll.upsert(ids=ids[i:batch_end], documents=documents[i:batch_end], metadatas=metadatas[i:batch_end], embeddings=embs[i:batch_end])
         website_collection = coll
+
+        global website_dynamic_keywords
+        website_dynamic_keywords = _extract_dynamic_keywords(all_chunks)
+
         logger.info(f"Website DB refreshed: {coll.count()} chunks from {len(PAGES)} pages")
         return True
     except Exception as e:
         logger.error(f"Website refresh failed: {e}")
         return False
+
+
+def _extract_dynamic_keywords(chunks):
+    import re
+    keywords = set()
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+                  'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+                  'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'shall',
+                  'can', 'this', 'that', 'these', 'those', 'it', 'its', 'our', 'your', 'their', 'we',
+                  'you', 'they', 'he', 'she', 'him', 'her', 'his', 'us', 'me', 'my', 'i', 'not', 'no',
+                  'so', 'if', 'as', 'up', 'out', 'all', 'more', 'here', 'there', 'when', 'where', 'how',
+                  'what', 'who', 'which', 'each', 'every', 'about', 'also', 'than', 'just', 'very',
+                  'click', 'register', 'learn', 'sign', 'get', 'join', 'submit', 'follow'}
+
+    for chunk in chunks:
+        content = chunk.get('content', '')
+        page = chunk.get('page', '')
+
+        if page in ('Registrations', 'Ministries', 'Highlights', 'Home'):
+            titles = re.findall(r'(?:^|\n)([A-Z][A-Za-z\'\-\&\s]{2,40}?)(?:\s*[-–—:|\n])', content)
+            for t in titles:
+                t_clean = t.strip().lower()
+                if len(t_clean) > 2 and t_clean not in stop_words and not all(w in stop_words for w in t_clean.split()):
+                    keywords.add(t_clean)
+
+            event_patterns = re.findall(
+                r'(?i)(church camp|summer camp|youth retreat|men\'?s conference|women\'?s conference|'
+                r'prophecy conference|alaska cruise|vacation bible school|vbs|'
+                r'sprinter retreat|newcomer\'?s dinner|taste (?:&|and) see|'
+                r'school of discipleship|community group|bible study|'
+                r'blessfest|cars (?:&|and) coffee|divorce\s?care|grief\s?share|'
+                r'living waters|crosscurrent|man up|ignited|devoted|'
+                r'royal rangers|mpact girls|adventure kids|'
+                r'a better us|married study|good medicine|'
+                r'moms in prayer|military moms|widows heart|'
+                r'sugar pine|yosemite|camp [\w]+)',
+                content
+            )
+            for ep in event_patterns:
+                keywords.add(ep.lower().strip())
+
+            location_names = re.findall(r'(?i)(sugar pine|yosemite|solid rock cafe|adventure lodge)', content)
+            for loc in location_names:
+                keywords.add(loc.lower().strip())
+
+            date_events = re.findall(r'(?i)(\w[\w\s\'&\-]{3,30}?)\s*[-–—]\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)', content)
+            for de in date_events:
+                de_clean = de.strip().lower()
+                if len(de_clean) > 3 and de_clean not in stop_words:
+                    keywords.add(de_clean)
+
+    keywords.discard('')
+    result = sorted(keywords)
+    logger.info(f"Extracted {len(result)} dynamic keywords from website content")
+    return result
 
 
 def _hourly_website_refresh():
@@ -807,6 +870,11 @@ def refresh_website():
         count = website_collection.count() if website_collection else 0
         return jsonify({'status': 'ok', 'documents': count})
     return jsonify({'status': 'error'}), 500
+
+
+@app.route('/website-keywords', methods=['GET'])
+def get_website_keywords():
+    return jsonify({'keywords': website_dynamic_keywords})
 
 
 @app.before_request

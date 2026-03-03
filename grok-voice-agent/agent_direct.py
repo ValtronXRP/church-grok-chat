@@ -64,6 +64,8 @@ FORBIDDEN PHRASES — never say any of these:
 
 Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
+IMPORTANT: If you receive a question WITHOUT accompanying sermon transcripts, give a warm, general answer from the Bible and Christian knowledge. Say something like "Great question! From Scripture we know..." — NEVER say you don't have transcripts or need to look something up. A better answer with Pastor Bob's specific teaching will follow shortly.
+
 Be warm, helpful, and conversational.
 NEVER invent stories or teachings Pastor Bob didn't actually give.
 
@@ -132,11 +134,23 @@ CHURCH_INFO_KEYWORDS = [
     'highlights',
     'school of discipleship',
     'tuesday', 'thursday', 'friday', 'saturday',
+    'camp', 'church camp', 'summer camp', 'retreat', 'conference',
+    'cruise', 'trip', 'tour',
+    'easter', 'christmas', 'good friday', 'sunrise service',
+    'potluck', 'dinner', 'brunch', 'breakfast',
+    'baptism', 'water baptism', 'beach baptism',
+    'blessfest', 'cars and coffee', 'cars & coffee',
+    'royal rangers', 'mpact girls', 'adventure kids',
+    'griefshare', 'divorcecare', 'divorce care', 'grief share',
+    'ignited', 'devoted', 'man up', 'crosscurrent', 'living waters',
+    'newcomer', 'newcomers dinner',
+    'at ccea', 'at the church', 'at calvary',
+    'cost', 'how much', 'price', 'fee',
 ]
 
 CHURCH_TOPIC_PAGES = {
     'events': {
-        'keywords': ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule'],
+        'keywords': ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule', 'camp', 'church camp', 'retreat', 'conference', 'cruise', 'trip', 'tour', 'easter', 'christmas', 'good friday', 'potluck', 'dinner', 'brunch', 'breakfast', 'blessfest', 'newcomer', 'cost', 'how much', 'price', 'fee'],
         'pages': ['/registrations'],
     },
     'studies': {
@@ -204,9 +218,27 @@ def detect_church_topic(query):
                 break
     return list(matched_pages)
 
+dynamic_website_keywords = []
+
+async def fetch_dynamic_keywords():
+    global dynamic_website_keywords
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{RERANKER_URL}/website-keywords", timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    dynamic_website_keywords = data.get('keywords', [])
+                    log(f"Loaded {len(dynamic_website_keywords)} dynamic website keywords")
+    except Exception:
+        pass
+
 def is_church_info_query(query):
     q = query.lower()
-    return any(kw in q for kw in CHURCH_INFO_KEYWORDS)
+    if any(kw in q for kw in CHURCH_INFO_KEYWORDS):
+        return True
+    if any(kw in q for kw in dynamic_website_keywords):
+        return True
+    return False
 
 
 async def _search_reranker(query, n=10):
@@ -361,6 +393,8 @@ async def entrypoint(ctx: JobContext):
         apb_agent = Agent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
         )
+
+        await fetch_dynamic_keywords()
 
         log("Connecting to room...")
         await ctx.connect()

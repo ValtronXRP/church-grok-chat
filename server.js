@@ -133,6 +133,9 @@ function isNonBobContent(text, title) {
     "men's conference", "mens conference", "men\u2019s conference", "men's retreat",
     "vlog #", "vlog #",
     "weekly devotional", "daily devotional", "midweek devotional", "devotional with",
+    "community groups |", "community group |",
+    "home bible study session", "home bible study |",
+    "heart & stone | session",
   ];
   if (nonBobPatterns.some(p => titleLower.includes(p))) return true;
   const worshipPhrases = /\b(la la|glory glory|praise him praise him|hallelujah hallelujah)\b/gi;
@@ -222,15 +225,48 @@ const CHURCH_INFO_KEYWORDS = [
   'highlights',
   'school of discipleship',
   'tuesday', 'thursday', 'friday', 'saturday',
+  'camp', 'church camp', 'summer camp', 'retreat', 'conference',
+  'cruise', 'trip', 'tour',
+  'easter', 'christmas', 'good friday', 'sunrise service',
+  'potluck', 'dinner', 'brunch', 'breakfast',
+  'baptism', 'water baptism', 'beach baptism',
+  'blessfest', 'cars and coffee', 'cars & coffee',
+  'royal rangers', 'mpact girls', 'adventure kids',
+  'griefshare', 'divorcecare', 'divorce care', 'grief share',
+  'ignited', 'devoted', 'man up', 'crosscurrent', 'living waters',
+  'newcomer', 'newcomers dinner',
+  'at ccea', 'at the church', 'at calvary',
+  'cost', 'how much', 'price', 'fee',
 ];
+
+let dynamicWebsiteKeywords = [];
+let lastKeywordFetch = 0;
+
+async function fetchDynamicKeywords() {
+  try {
+    const res = await axios.get(`${RERANKER_URL}/website-keywords`, { timeout: 5000 });
+    if (res.data && res.data.keywords) {
+      dynamicWebsiteKeywords = res.data.keywords;
+      lastKeywordFetch = Date.now();
+      console.log(`Loaded ${dynamicWebsiteKeywords.length} dynamic website keywords`);
+    }
+  } catch (err) {
+    // silent
+  }
+}
+
+setTimeout(fetchDynamicKeywords, 30000);
+setInterval(fetchDynamicKeywords, 3600000);
 
 function isChurchInfoQuery(query) {
   const q = query.toLowerCase().replace(/['']/g, "'");
-  return CHURCH_INFO_KEYWORDS.some(kw => q.includes(kw));
+  if (CHURCH_INFO_KEYWORDS.some(kw => q.includes(kw))) return true;
+  if (dynamicWebsiteKeywords.some(kw => q.includes(kw))) return true;
+  return false;
 }
 
 const CHURCH_TOPIC_PAGES = {
-  events: { keywords: ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule'], pages: ['/registrations'] },
+  events: { keywords: ['event', 'events', 'upcoming', 'coming up', 'happening', 'register', 'registration', 'sign up', 'signup', 'calendar', 'schedule', 'camp', 'church camp', 'retreat', 'conference', 'cruise', 'trip', 'tour', 'easter', 'christmas', 'good friday', 'potluck', 'dinner', 'brunch', 'breakfast', 'blessfest', 'newcomer', 'cost', 'how much', 'price', 'fee'], pages: ['/registrations'] },
   studies: { keywords: ['bible study', 'bible studies', 'home group', 'home groups', 'small group', 'small groups', 'community group', 'community groups'], pages: ['/resources/home-bible-studies', '/service-times-and-location'] },
   services: { keywords: ['service time', 'service times', 'what time', 'when is service', 'when are services', 'sunday service', 'wednesday service', 'wednesday night'], pages: ['/service-times-and-location'] },
   ministries: { keywords: ['ministry', 'ministries'], pages: ['/ministries-2'] },
