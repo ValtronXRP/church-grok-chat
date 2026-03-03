@@ -95,14 +95,59 @@ def save_title_map(title_map):
     with open(TITLE_MAP_PATH, 'w', encoding='utf-8') as f:
         json.dump(title_map, f, indent=2, ensure_ascii=False)
 
+def parse_json_transcript_file(file_path):
+    with open(file_path, 'rb') as f:
+        raw = f.read()
+    text = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n').decode('utf-8', errors='replace')
+    data = json.loads(text)
+
+    sermons = []
+    for item in data:
+        transcript = item.get('transcript', '').strip()
+        if not transcript or len(transcript.split()) < 50:
+            continue
+        if transcript.endswith('---'):
+            transcript = transcript[:-3].strip()
+
+        video_id = item.get('id', '')
+        title = item.get('title', '')
+        if not title:
+            continue
+
+        words = transcript.split()
+        segments = []
+        for i in range(0, len(words), 20):
+            chunk_words = words[i:i+20]
+            text = ' '.join(chunk_words)
+            if SKIP_PATTERNS.match(text):
+                continue
+            segments.append({
+                'text': text,
+                'start_ms': 0,
+                'start_sec': 0.0
+            })
+
+        if segments:
+            sermons.append({
+                'title': title,
+                'video_id': video_id,
+                'segments': segments,
+                'flat_text': True
+            })
+
+    return sermons
+
 def parse_transcript_file(file_path):
+    if file_path.endswith('.json'):
+        return parse_json_transcript_file(file_path)
+
     if file_path.endswith('.rtf'):
         import subprocess
         result = subprocess.run(['textutil', '-convert', 'txt', '-stdout', file_path],
                               capture_output=True, text=True)
         content = result.stdout
     else:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
 
     sermons = []
