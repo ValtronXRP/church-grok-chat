@@ -103,49 +103,39 @@ NEVER mention "cc-ea.org/calendar" — that page does not exist.
 
 
 CHURCH_INFO_KEYWORDS = [
-    'service time', 'service times', 'what time', 'when is service', 'when are services',
-    'sunday service', 'wednesday service', 'wednesday night',
-    'bible study', 'bible studies', 'study group', 'community group', 'community groups',
-    'home group', 'home groups', 'small group', 'small groups',
-    'register', 'registration', 'sign up', 'signup', 'event', 'events', 'happening',
-    'coming up', 'upcoming', 'calendar', 'schedule',
-    'volunteer', 'volunteering', 'serve', 'serving',
-    'give', 'giving', 'tithe', 'tithing', 'donate', 'donation', 'offering',
+    'service time', 'service times', 'what time is service', 'when is service', 'when are services',
+    'community group', 'community groups', 'home group', 'home groups', 'small group', 'small groups',
+    'join a group', 'host a group',
+    'register', 'registration', 'sign up for', 'signup',
+    'coming up at', 'upcoming event', 'calendar', 'schedule',
+    'volunteer at', 'volunteering at',
+    'how to give', 'how to tithe', 'donate to', 'donation',
     'statement of faith', 'what does the church believe', 'what do you believe',
-    'mission', 'missions', 'missionary', 'missionaries',
-    'ministry', 'ministries',
-    'new here', 'first time', 'visiting', 'visitor', 'new to the church',
+    'missionary', 'missionaries',
+    'new here', 'first time', 'visiting the church', 'visitor',
     'location', 'address', 'where is the church', 'directions',
-    'contact', 'phone number', 'email', 'office hours',
-    'wedding', 'marriage application',
+    'contact', 'phone number', 'office hours',
+    'wedding application', 'marriage application',
     'crisis pregnancy', 'pregnancy resource',
-    'disability', 'special needs',
+    'disability ministry', 'special needs ministry',
     "pastor bob's resources", 'study tools', 'e-sword',
     'live stream', 'livestream', 'watch live', 'watch online',
-    "women's study", "women's bible", "men's study", "men's bible",
     'youth group', 'youth ministry', 'kids ministry', "children's ministry",
     'homeschool', 'home school',
     'prayer request', 'prayer list',
     'church info', 'church information', 'about the church', 'about ccea',
     'calvary chapel east anaheim',
     'bulletin', 'announcements',
-    'worship', 'worship team', 'worship lyrics',
-    'baptism class', 'membership',
+    'worship team', 'worship lyrics',
+    'baptism class', 'membership class',
     'highlights',
     'school of discipleship',
-    'tuesday', 'thursday', 'friday', 'saturday',
-    'camp', 'church camp', 'summer camp', 'retreat', 'conference',
-    'cruise', 'trip', 'tour',
-    'easter', 'christmas', 'good friday', 'sunrise service',
-    'potluck', 'dinner', 'brunch', 'breakfast',
-    'baptism', 'water baptism', 'beach baptism',
+    'church camp', 'summer camp',
     'blessfest', 'cars and coffee', 'cars & coffee',
     'royal rangers', 'mpact girls', 'adventure kids',
     'griefshare', 'divorcecare', 'divorce care', 'grief share',
-    'ignited', 'devoted', 'man up', 'crosscurrent', 'living waters',
     'newcomer', 'newcomers dinner',
-    'at ccea', 'at the church', 'at calvary',
-    'cost', 'how much', 'price', 'fee',
+    'how much does', 'what is the cost', 'what is the price',
 ]
 
 CHURCH_TOPIC_PAGES = {
@@ -245,7 +235,7 @@ async def _search_reranker(query, n=10):
     is_church = is_church_info_query(query)
     n_website = 8 if is_church else 0
     website_pages = detect_church_topic(query) if is_church else []
-    n_sermons = 0 if is_church else n
+    n_sermons = 3 if is_church else n
     try:
         async with aiohttp.ClientSession() as session:
             payload = {"query": query, "n_sermons": n_sermons, "n_illustrations": 0, "n_website": n_website}
