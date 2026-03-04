@@ -805,69 +805,6 @@
             border-radius: 4px;
         }
 
-        /* Voice Response Toggle */
-        .voice-response-toggle {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .toggle-response-label {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 500;
-        }
-
-        .toggle-switch {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-            transition: all 0.3s ease;
-        }
-
-        .toggle-switch input[type="checkbox"] {
-            position: absolute;
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .toggle-slider {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 22px;
-            background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 22px;
-            margin-right: 10px;
-            transition: background-color 0.3s;
-        }
-
-        .toggle-slider::before {
-            content: '';
-            position: absolute;
-            height: 16px;
-            width: 16px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            border-radius: 50%;
-            transition: transform 0.3s;
-        }
-
-        .toggle-switch input:checked + .toggle-slider {
-            background-color: #22c55e;
-        }
-
-        .toggle-switch input:checked + .toggle-slider::before {
-            transform: translateX(18px);
-        }
-
         .toggle-label {
             color: rgba(255, 255, 255, 0.9);
             font-size: 11px;
@@ -911,10 +848,6 @@
             flex: 1;
         }
         
-        .chat-header-sticky .voice-response-toggle {
-            position: static;
-            flex-shrink: 0;
-        }
         
         /* Scrollable messages area */
         .chat-messages-container {
@@ -1332,14 +1265,6 @@
                 <!-- Sticky Header with Toggle and Instruction -->
                 <div class="chat-header-sticky">
                     <span class="instruction-text">Type a message below or click the microphone for voice chat</span>
-                    <div class="voice-response-toggle" id="voiceResponseToggle">
-                        <div class="toggle-response-label">Response</div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="voiceResponseCheckbox" checked>
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label">VOICE</span>
-                        </label>
-                    </div>
                 </div>
                 <!-- Scrollable messages container -->
                 <div class="chat-messages-container" id="chatMessages"></div>
@@ -1404,7 +1329,6 @@
         let room = null;
         let isConnected = false;
         let audioMonitorInterval = null;
-        let voiceResponseEnabled = true; // Track voice response preference
         let silentConnection = false; // Track if connection was from text input
         let typingTimeout = null;
         let autoDisconnectTimer = null;
@@ -2156,29 +2080,6 @@ When asked about theological topics listed above, use these verified positions a
                     conversationHistory.push({ role: 'assistant', content: fullResponse });
                     log('Received response from Grok', 'success');
                     
-                    // If voice response is enabled, connect if needed and speak
-                    if (voiceResponseEnabled) {
-                        if (!isConnected) {
-                            // Store the text to be spoken before connecting
-                            window.pendingTextToSpeak = fullResponse;
-                            
-                            // Connect silently just for speaking this response
-                            log('Connecting voice to speak response...', 'info');
-                            await connect(false); // false = no greeting
-                            // The connect function will handle sending the text to the agent
-                            // No need to wait here as the agent will speak automatically
-                        }
-                        
-                        if (isConnected && room && room.localParticipant) {
-                            // Voice agent should now be speaking the response
-                            log('Voice agent speaking the response', 'info');
-                            
-                            // Don't auto-disconnect here - let the agent finish speaking
-                            // The disconnect will happen from the data message handler
-                        }
-                    } else {
-                        log('Voice response disabled - text only', 'info');
-                    }
                 }
 
             } catch (error) {
@@ -2201,26 +2102,6 @@ When asked about theological topics listed above, use these verified positions a
             return conversationHistory
                 .filter(msg => msg.role !== 'system')
                 .slice(-20); // Last 20 messages for context
-        }
-
-        // Function to have the voice agent speak text responses
-        async function speakTextResponse(text) {
-            if (!room || !room.localParticipant) {
-                log('Cannot speak - not connected to voice room', 'warning');
-                return;
-            }
-            
-            try {
-                // For now, we'll use the agent's generate_reply capability
-                // The agent should speak the text we send
-                log('Voice agent will speak the response', 'info');
-                
-                // Don't disconnect based on estimated duration
-                // Let the agent complete speaking naturally
-                
-            } catch (error) {
-                log('Error with voice agent: ' + error.message, 'error');
-            }
         }
 
         function clearConversation() {
@@ -2883,39 +2764,6 @@ When asked about theological topics listed above, use these verified positions a
             }
         });
 
-        // Initialize voice response toggle on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            // Set up voice response toggle
-            const voiceToggle = document.getElementById('voiceResponseCheckbox');
-            if (voiceToggle) {
-                // Load saved preference
-                const savedPreference = localStorage.getItem('voiceResponseEnabled');
-                if (savedPreference !== null) {
-                    voiceResponseEnabled = savedPreference === 'true';
-                    voiceToggle.checked = voiceResponseEnabled;
-                    // Update initial label
-                    const label = document.querySelector('.toggle-label');
-                    if (label) {
-                        label.textContent = voiceResponseEnabled ? 'VOICE' : 'TEXT';
-                    }
-                }
-                
-                // Handle toggle changes
-                voiceToggle.addEventListener('change', (e) => {
-                    voiceResponseEnabled = e.target.checked;
-                    localStorage.setItem('voiceResponseEnabled', voiceResponseEnabled);
-                    
-                    const status = voiceResponseEnabled ? 'enabled' : 'disabled';
-                    log(`Voice response ${status} for typed messages`, 'info');
-                    
-                    // Update toggle label
-                    const label = document.querySelector('.toggle-label');
-                    if (label) {
-                        label.textContent = voiceResponseEnabled ? 'VOICE' : 'TEXT';
-                    }
-                });
-            }
-        });
 
         // Startup
         log('APB Voice & Chat ready', 'success');
