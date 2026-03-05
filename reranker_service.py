@@ -100,7 +100,7 @@ PINNED_STORIES = {
                       "meme about numbers", "viral clip", "tiktok clip", "went viral"],
         "results": [
             {
-                "text": "Pastor Bob discusses how his teaching about the biblical significance of the numbers 6 and 7 went viral on TikTok with six million views. Someone found the clip and repurposed it. Six represents man — created on day 6, always falls short. Seven represents completion and perfection — God rested on day 7. Pastor Bob says he wonders how the Lord can use social media and the internet to draw people to Christ.",
+                "text": "Pastor Bob discusses the famous 6-7 meme (also called the 67 meme or six seven meme) — his teaching about the biblical significance of the numbers 6 and 7 went viral on TikTok with six million views. Someone found the clip and repurposed it as a meme. The number 6 represents man — created on day 6, always falls short. The number 7 represents completion and perfection — God rested on day 7. Pastor Bob says he still doesn't know why the Lord allowed it to blow up but wonders how to use the internet and social media to draw people to Christ.",
                 "title": "Ask Pastor Bob | Episode 21",
                 "url": "https://www.youtube.com/watch?v=K56a6OVC87g",
                 "timestamped_url": "https://www.youtube.com/watch?v=K56a6OVC87g&t=25s",
