@@ -238,7 +238,7 @@ const PINNED_STORY_CLIPS = {
     ]
   },
   six_seven: {
-    keywords: ['6 and 7', 'six and seven', 'number 6', 'number 7', 'biblical numbers', 'significance of numbers', 'number six', 'number seven', '6 7', 'numerology bible'],
+    keywords: ['6 and 7', 'six and seven', 'number 6', 'number 7', 'biblical numbers', 'significance of numbers', 'number six', 'number seven', '6 7', 'numerology bible', 'meme 6', '6-7', 'the meme'],
     clips: [
       {
         title: 'Ask Pastor Bob | Episode 21',
@@ -257,8 +257,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Can Christians be POSSESSED by demons? | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=swZ0kGoe9gQ',
-        timestamped_url: 'https://www.youtube.com/watch?v=swZ0kGoe9gQ',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=swZ0kGoe9gQ&t=5s',
+        start_time: '0:05',
         video_id: 'swZ0kGoe9gQ',
         text: 'Pastor Bob directly addresses whether Christians can be possessed by demons. Believers can be influenced but not possessed — what we yield to controls us.',
         relevance_score: 1.0
@@ -266,8 +266,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 14',
         url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk',
-        timestamped_url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk&t=1617s',
-        start_time: '26:57',
+        timestamped_url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk&t=1654s',
+        start_time: '27:34',
         video_id: 'FuyAFd1iqwk',
         text: 'Pastor Bob teaches that believers can be influenced by demonic forces but not possessed. Ephesians 5 — don\'t be drunk with wine, be filled with Spirit. What we yield to controls us — flesh or Spirit.',
         relevance_score: 0.95
@@ -280,8 +280,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 11',
         url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4',
-        timestamped_url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4&t=0s',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4&t=109s',
+        start_time: '1:49',
         video_id: 'q4RHIF5IPZ4',
         text: 'Pastor Bob supports IVF but is concerned about treating fertilized eggs as human lives. Psalm 51 — David says "in sin my mother conceived me." Life begins at conception. Use all fertilized eggs, don\'t discard any.',
         relevance_score: 1.0
@@ -312,8 +312,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 12',
         url: 'https://www.youtube.com/watch?v=pbjvnVVa49M',
-        timestamped_url: 'https://www.youtube.com/watch?v=pbjvnVVa49M&t=2475s',
-        start_time: '41:15',
+        timestamped_url: 'https://www.youtube.com/watch?v=pbjvnVVa49M&t=3278s',
+        start_time: '54:38',
         video_id: 'pbjvnVVa49M',
         text: 'Pastor Bob defends pre-trib rapture position. Church not destined for wrath but for salvation. Lot removed before Sodom\'s destruction as the biblical protection model.',
         relevance_score: 0.9
@@ -335,8 +335,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 16',
         url: 'https://www.youtube.com/watch?v=LxLSHI_p6Yc',
-        timestamped_url: 'https://www.youtube.com/watch?v=LxLSHI_p6Yc&t=434s',
-        start_time: '7:14',
+        timestamped_url: 'https://www.youtube.com/watch?v=LxLSHI_p6Yc&t=427s',
+        start_time: '7:07',
         video_id: 'LxLSHI_p6Yc',
         text: 'Pastor Bob discusses Job\'s suffering. God allows suffering to develop and display faith. Millions have been blessed by Job\'s story through history. Even Jesus, the perfect sinless Son, suffered unjustly.',
         relevance_score: 0.95
@@ -372,8 +372,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Can We Lose Our Salvation?',
         url: 'https://www.youtube.com/watch?v=VIkQFbHWq4g',
-        timestamped_url: 'https://www.youtube.com/watch?v=VIkQFbHWq4g',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=VIkQFbHWq4g&t=135s',
+        start_time: '2:15',
         video_id: 'VIkQFbHWq4g',
         text: 'Pastor Bob directly addresses whether believers can lose their salvation — a dedicated full episode on eternal security.',
         relevance_score: 1.0
@@ -381,8 +381,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: '"Can I lose my salvation?" | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=FVH7iWbhbL4',
-        timestamped_url: 'https://www.youtube.com/watch?v=FVH7iWbhbL4',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=FVH7iWbhbL4&t=5s',
+        start_time: '0:05',
         video_id: 'FVH7iWbhbL4',
         text: 'Short-form clip where Pastor Bob answers the question "Can I lose my salvation?" directly.',
         relevance_score: 0.95
@@ -409,8 +409,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 10',
         url: 'https://www.youtube.com/watch?v=5HcKh75neAY',
-        timestamped_url: 'https://www.youtube.com/watch?v=5HcKh75neAY&t=0s',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=5HcKh75neAY&t=843s',
+        start_time: '14:03',
         video_id: '5HcKh75neAY',
         text: 'Pastor Bob teaches that babies are likely in heaven based on God\'s mercy. David\'s confidence about joining his deceased son (2 Samuel 12). God\'s judgment is based on knowledge — Paul found mercy because he acted in ignorance.',
         relevance_score: 1.0
@@ -432,8 +432,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 5',
         url: 'https://www.youtube.com/watch?v=xzy4Mrd2GiU',
-        timestamped_url: 'https://www.youtube.com/watch?v=xzy4Mrd2GiU&t=2964s',
-        start_time: '49:24',
+        timestamped_url: 'https://www.youtube.com/watch?v=xzy4Mrd2GiU&t=2463s',
+        start_time: '41:03',
         video_id: 'xzy4Mrd2GiU',
         text: 'Pastor Bob explains Gehenna — the Valley of Hinnom, a garbage dump with fires burning and corpses. Discusses hell as eternal, not temporary punishment. Perfect justice demands eternal punishment for sin against an infinite God.',
         relevance_score: 1.0
@@ -446,8 +446,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Why Can We Trust The Bible?',
         url: 'https://www.youtube.com/watch?v=LjwTOep0z-4',
-        timestamped_url: 'https://www.youtube.com/watch?v=LjwTOep0z-4',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=LjwTOep0z-4&t=135s',
+        start_time: '2:15',
         video_id: 'LjwTOep0z-4',
         text: 'Dedicated episode where Pastor Bob makes the case for why we can trust the Bible. Covers manuscript evidence, historical reliability, and fulfilled prophecy.',
         relevance_score: 1.0
@@ -455,8 +455,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 15',
         url: 'https://www.youtube.com/watch?v=QpxYcM046F4',
-        timestamped_url: 'https://www.youtube.com/watch?v=QpxYcM046F4&t=751s',
-        start_time: '12:31',
+        timestamped_url: 'https://www.youtube.com/watch?v=QpxYcM046F4&t=243s',
+        start_time: '4:03',
         video_id: 'QpxYcM046F4',
         text: 'Pastor Bob discusses Josephus (Jewish historian, first century), Tacitus (Roman historian, 116 AD mentions "Christus" under Pontius Pilate), and other non-Christian historical sources that verify biblical events.',
         relevance_score: 0.95
@@ -469,8 +469,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 11',
         url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4',
-        timestamped_url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4&t=780s',
-        start_time: '13:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=q4RHIF5IPZ4&t=1188s',
+        start_time: '19:48',
         video_id: 'q4RHIF5IPZ4',
         text: 'Pastor Bob teaches the Antichrist won\'t be revealed until the church is removed (2 Thessalonians 2). Initially brings peace, accepted as false messiah by Israel. Technology signs like palm scanners show proximity to prophetic fulfillment.',
         relevance_score: 1.0
@@ -501,8 +501,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 9',
         url: 'https://www.youtube.com/watch?v=wwruBqgB6s8',
-        timestamped_url: 'https://www.youtube.com/watch?v=wwruBqgB6s8&t=1860s',
-        start_time: '31:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=wwruBqgB6s8&t=2305s',
+        start_time: '38:25',
         video_id: 'wwruBqgB6s8',
         text: 'Pastor Bob on predestination and human responsibility. God weaves human sin into His predetermined plan. Examples: Joseph\'s brothers, the Crucifixion (Acts 2). Human accountability maintained while God accomplishes His purpose.',
         relevance_score: 0.9
@@ -543,8 +543,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 10',
         url: 'https://www.youtube.com/watch?v=5HcKh75neAY',
-        timestamped_url: 'https://www.youtube.com/watch?v=5HcKh75neAY&t=0s',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=5HcKh75neAY&t=1777s',
+        start_time: '29:37',
         video_id: '5HcKh75neAY',
         text: 'Parent asks about 29-year-old addicted son. Pastor Bob counsels tough love — don\'t enable addiction. Prodigal son had to hit bottom before returning. Continue praying, maintain boundaries, don\'t take addicted person into home.',
         relevance_score: 1.0
@@ -557,8 +557,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 14',
         url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk',
-        timestamped_url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk&t=1800s',
-        start_time: '30:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=FuyAFd1iqwk&t=1982s',
+        start_time: '33:02',
         video_id: 'FuyAFd1iqwk',
         text: 'Pastor Bob is a young earth creationist, rejects theistic evolution. Discusses day-age theory, gap theory, and appearance of age. Adam created as adult, stars created with light already traveling. Honest about not solving all scientific dating questions.',
         relevance_score: 1.0
@@ -571,8 +571,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'Ask Pastor Bob | Episode 15',
         url: 'https://www.youtube.com/watch?v=QpxYcM046F4',
-        timestamped_url: 'https://www.youtube.com/watch?v=QpxYcM046F4',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=QpxYcM046F4&t=131s',
+        start_time: '2:11',
         video_id: 'QpxYcM046F4',
         text: 'Easter special episode. Pastor Bob covers evidence for the resurrection: empty tomb with enemy guards, Dr. Simon Greenleaf (Harvard Law) concluded evidence sufficient, Frank Morrison tried to disprove it and became convinced. Disciples transformed from cowards to bold martyrs.',
         relevance_score: 1.0
@@ -599,8 +599,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'is this the SCARIEST verse in the Bible? | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=VUO1KpYh9YA',
-        timestamped_url: 'https://www.youtube.com/watch?v=VUO1KpYh9YA',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=VUO1KpYh9YA&t=5s',
+        start_time: '0:05',
         video_id: 'VUO1KpYh9YA',
         text: 'Pastor Bob discusses what may be the scariest verse in the Bible.',
         relevance_score: 1.0
@@ -613,8 +613,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'What are womens role in church leadership? | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=Zn2dlrNXYBw',
-        timestamped_url: 'https://www.youtube.com/watch?v=Zn2dlrNXYBw',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=Zn2dlrNXYBw&t=5s',
+        start_time: '0:05',
         video_id: 'Zn2dlrNXYBw',
         text: 'Pastor Bob discusses women\'s role in church leadership. Women can minister but not as senior pastors or elders. Joel 2/Acts 2 — sons and daughters prophesy. Not in authoritative teaching roles over men in church context.',
         relevance_score: 1.0
@@ -627,8 +627,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: '"What can I give to God?" | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=60lrWVviPKc',
-        timestamped_url: 'https://www.youtube.com/watch?v=60lrWVviPKc',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=60lrWVviPKc&t=5s',
+        start_time: '0:05',
         video_id: '60lrWVviPKc',
         text: 'Pastor Bob answers the question "What can I give to God?" from a biblical perspective.',
         relevance_score: 1.0
@@ -641,8 +641,8 @@ const PINNED_STORY_CLIPS = {
       {
         title: 'How Pastor Bob Met the Lord | Ask Pastor Bob',
         url: 'https://www.youtube.com/watch?v=Rg24InyZwVw',
-        timestamped_url: 'https://www.youtube.com/watch?v=Rg24InyZwVw',
-        start_time: '0:00',
+        timestamped_url: 'https://www.youtube.com/watch?v=Rg24InyZwVw&t=5s',
+        start_time: '0:05',
         video_id: 'Rg24InyZwVw',
         text: 'Podcast clip of Pastor Bob sharing how he met the Lord at 13 years old at a Campus Crusade camp. His friend Fred invited him, and Jeff Maples and Gene Schaeffer shared the gospel with him for about five minutes.',
         relevance_score: 1.0
