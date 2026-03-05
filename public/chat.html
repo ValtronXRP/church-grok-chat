@@ -2014,17 +2014,19 @@ When asked about theological topics listed above, use these verified positions a
                                 if (parsed.sermon_videos && parsed.sermon_videos.length) {
                                     const videoList = document.getElementById('videoList');
                                     const emptyState = document.getElementById('videoEmptyState');
-                                    if (emptyState) emptyState.style.display = 'none';
                                     if (!sermonGroup) {
                                         sermonGroup = document.createElement('div');
                                         sermonGroup.className = 'clip-group';
                                         sermonGroup.innerHTML = `<div class="clip-group-label">${text}</div>`;
-                                        videoList.insertBefore(sermonGroup, videoList.firstChild);
                                     }
                                     parsed.sermon_videos.forEach(v => {
                                         const item = createVideoItem(v.title, v.url, v.timestamp, v.text);
                                         if (item) { sermonGroup.appendChild(item); sidebarVideoCount++; }
                                     });
+                                    if (sermonGroup.querySelectorAll('.sidebar-video-item').length > 0 && !sermonGroup.parentNode) {
+                                        if (emptyState) emptyState.style.display = 'none';
+                                        videoList.insertBefore(sermonGroup, videoList.firstChild);
+                                    }
                                     document.getElementById('videoCount').textContent = sidebarVideoCount;
                                     continue;
                                 }
@@ -2032,17 +2034,19 @@ When asked about theological topics listed above, use these verified positions a
                                 if (parsed.illustrations && parsed.illustrations.length) {
                                     const illList = document.getElementById('illustrationList');
                                     const emptyState = document.getElementById('illustrationEmptyState');
-                                    if (emptyState) emptyState.style.display = 'none';
                                     if (!illGroup) {
                                         illGroup = document.createElement('div');
                                         illGroup.className = 'ill-clip-group';
                                         illGroup.innerHTML = `<div class="ill-clip-group-label">${text}</div>`;
-                                        illList.insertBefore(illGroup, illList.firstChild);
                                     }
                                     parsed.illustrations.forEach(ill => {
                                         const item = createIllustrationItem(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
                                         if (item) { illGroup.appendChild(item); illustrationCount++; }
                                     });
+                                    if (illGroup.querySelectorAll('.sidebar-illustration-item').length > 0 && !illGroup.parentNode) {
+                                        if (emptyState) emptyState.style.display = 'none';
+                                        illList.insertBefore(illGroup, illList.firstChild);
+                                    }
                                     document.getElementById('illustrationCount').textContent = illustrationCount;
                                     continue;
                                 }
@@ -2640,7 +2644,6 @@ When asked about theological topics listed above, use these verified positions a
                 if (data.sermon_videos && data.sermon_videos.length) {
                     const videoList = document.getElementById('videoList');
                     const emptyState = document.getElementById('videoEmptyState');
-                    if (emptyState) emptyState.style.display = 'none';
                     const group = document.createElement('div');
                     group.className = 'clip-group';
                     group.innerHTML = `<div class="clip-group-label">${query}</div>`;
@@ -2648,14 +2651,16 @@ When asked about theological topics listed above, use these verified positions a
                         const item = createVideoItem(v.title, v.url, v.timestamp, v.text);
                         if (item) group.appendChild(item);
                     });
-                    videoList.insertBefore(group, videoList.firstChild);
-                    sidebarVideoCount += group.querySelectorAll('.sidebar-video-item').length;
-                    document.getElementById('videoCount').textContent = sidebarVideoCount;
+                    if (group.querySelectorAll('.sidebar-video-item').length > 0) {
+                        if (emptyState) emptyState.style.display = 'none';
+                        videoList.insertBefore(group, videoList.firstChild);
+                        sidebarVideoCount += group.querySelectorAll('.sidebar-video-item').length;
+                        document.getElementById('videoCount').textContent = sidebarVideoCount;
+                    }
                 }
                 if (data.illustrations && data.illustrations.length) {
                     const illList = document.getElementById('illustrationList');
                     const emptyState = document.getElementById('illustrationEmptyState');
-                    if (emptyState) emptyState.style.display = 'none';
                     const group = document.createElement('div');
                     group.className = 'ill-clip-group';
                     group.innerHTML = `<div class="ill-clip-group-label">${query}</div>`;
@@ -2663,9 +2668,12 @@ When asked about theological topics listed above, use these verified positions a
                         const item = createIllustrationItem(ill.title, ill.text, ill.tone, ill.url, ill.timestamp);
                         if (item) group.appendChild(item);
                     });
-                    illList.insertBefore(group, illList.firstChild);
-                    illustrationCount += group.querySelectorAll('.sidebar-illustration-item').length;
-                    document.getElementById('illustrationCount').textContent = illustrationCount;
+                    if (group.querySelectorAll('.sidebar-illustration-item').length > 0) {
+                        if (emptyState) emptyState.style.display = 'none';
+                        illList.insertBefore(group, illList.firstChild);
+                        illustrationCount += group.querySelectorAll('.sidebar-illustration-item').length;
+                        document.getElementById('illustrationCount').textContent = illustrationCount;
+                    }
                 }
                 log(`Clips loaded: ${(data.sermon_videos || []).length} sermons, ${(data.illustrations || []).length} illustrations`, 'success');
             } catch(e) {
