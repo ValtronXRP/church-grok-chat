@@ -1,17 +1,18 @@
 # Ask Pastor Bob - Development Notes
 
-## Current State (2026-02-21)
+## Current State (2026-03-05)
 
 ### Data Sources
 - **JSON3 Folders 1-3**: 594 sermon files
 - **JSON3 Folder 4**: 119 sermon files  
 - **Batch files (SERMONS_ZIP_05)**: 457 sermons in 10 batch JSON files
-- **Total**: ~1,170 sermon sources
+- **Audio-only transcripts**: 891 sermon transcripts (no YouTube video, context only)
+- **Total**: ~2,061 sermon sources
 
 ### ChromaDB Collections (APB database) - CURRENT
 | Collection | Records | Embedding Dim | Status |
 |------------|---------|---------------|--------|
-| sermon_segments_v2 | 31,928 | 768 (mpnet) | ACTIVE - ENRICHED, correct timestamps, worship filtered |
+| sermon_segments_v2 | 100,185 | 768 (mpnet) | ACTIVE - ENRICHED + 18,340 audio-only transcript chunks |
 | illustrations_v5 | 23,559 | 768 (mpnet) | ACTIVE - all illustrations loaded |
 | church_website | ~69 | 768 (mpnet) | ACTIVE - auto-refreshes hourly from cc-ea.org |
 
@@ -64,6 +65,7 @@ Frontend (chat.html) ─┬─ Text Chat ──→ server.js ──→ reranker_
 - `reranker_service.py` - Flask service with 768-dim embeddings + reranking
 - `rebuild_embeddings.py` - Original script to rebuild collections
 - `rebuild_enriched.py` - Enriched rebuild with proper titles, correct timestamps, worship filtering
+- `upload_audio_transcripts.py` - Chunk and upload 891 audio-only transcripts (source_type=audio_transcript, no video URLs)
 - `upload_to_xai_collection.py` - Upload enriched segments to xAI collection (NOT currently used)
 - `video_title_map.json` - 728 sermon titles (batch files + YouTube oEmbed)
 - `server.js` - Main backend, calls reranker service, /api/clips endpoint

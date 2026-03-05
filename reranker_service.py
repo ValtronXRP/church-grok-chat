@@ -90,6 +90,25 @@ PINNED_STORIES = {
                 "rerank_score": 1.0
             }
         ]
+    },
+    "six_seven": {
+        "keywords": ["6 and 7", "six and seven", "number 6", "number 7", "biblical numbers",
+                      "significance of numbers", "number six", "number seven", "6 7", "meme 6",
+                      "6-7", "the meme", "67", "six seven", "6/7", "six-seven", "viral tiktok",
+                      "tiktok meme", "meme 67", "meme six seven", "what is 67", "what does 67 mean",
+                      "what does 6 7 mean"],
+        "results": [
+            {
+                "text": "Pastor Bob discusses how his teaching about the biblical significance of the numbers 6 and 7 went viral on TikTok with six million views. Someone found the clip and repurposed it. Six represents man — created on day 6, always falls short. Seven represents completion and perfection — God rested on day 7. Pastor Bob says he wonders how the Lord can use social media and the internet to draw people to Christ.",
+                "title": "Ask Pastor Bob | Episode 21",
+                "url": "https://www.youtube.com/watch?v=K56a6OVC87g",
+                "timestamped_url": "https://www.youtube.com/watch?v=K56a6OVC87g&t=25s",
+                "start_time": "0:25",
+                "video_id": "K56a6OVC87g",
+                "source": "sermon",
+                "rerank_score": 1.0
+            }
+        ]
     }
 }
 
