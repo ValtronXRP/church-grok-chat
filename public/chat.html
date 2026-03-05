@@ -249,25 +249,26 @@
         }
         
         .clip-ref {
-            background: rgba(99, 102, 241, 0.15);
-            border-bottom: 1px dashed rgba(99, 102, 241, 0.5);
+            background: rgba(99, 102, 241, 0.35);
+            border-bottom: 2px solid rgba(99, 102, 241, 0.8);
             cursor: pointer;
-            padding: 0 2px;
+            padding: 1px 4px;
             border-radius: 3px;
             transition: background 0.2s;
+            font-weight: 500;
         }
 
         .clip-ref:hover {
-            background: rgba(99, 102, 241, 0.3);
+            background: rgba(99, 102, 241, 0.55);
         }
 
         .clip-ref.ill-ref {
-            background: rgba(255, 200, 100, 0.15);
-            border-bottom-color: rgba(255, 200, 100, 0.5);
+            background: rgba(255, 200, 100, 0.35);
+            border-bottom-color: rgba(255, 200, 100, 0.8);
         }
 
         .clip-ref.ill-ref:hover {
-            background: rgba(255, 200, 100, 0.3);
+            background: rgba(255, 200, 100, 0.55);
         }
 
         .clip-pulse {
@@ -1615,20 +1616,17 @@ When asked about theological topics listed above, use these verified positions a
             item.dataset.clipId = clipId;
             clipRegistry.push({ id: clipId, element: item, text: text || '', title: title || '', type: 'illustration' });
             
-            let videoHtml = '';
-            if (url && url.includes('youtube.com')) {
-                const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
-                if (videoIdMatch) {
-                    const illVideoId = videoIdMatch[1];
-                    if (globalVideoIds.has(illVideoId)) return null;
-                    let startSeconds = 0;
-                    const timeMatch = url.match(/[&?]t=(\d+)/);
-                    if (timeMatch) startSeconds = parseInt(timeMatch[1]);
-                    const embedUrl = `https://www.youtube-nocookie.com/embed/${illVideoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
-                    videoHtml = `<iframe src="${embedUrl}" title="${title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen playsinline webkit-playsinline loading="lazy"></iframe>`;
-                    globalVideoIds.add(illVideoId);
-                }
-            }
+            if (!url || !url.includes('youtube.com')) return null;
+            const videoIdMatch = url.match(/v=([a-zA-Z0-9_-]+)/);
+            if (!videoIdMatch) return null;
+            const illVideoId = videoIdMatch[1];
+            if (globalVideoIds.has(illVideoId)) return null;
+            let startSeconds = 0;
+            const timeMatch = url.match(/[&?]t=(\d+)/);
+            if (timeMatch) startSeconds = parseInt(timeMatch[1]);
+            const embedUrl = `https://www.youtube-nocookie.com/embed/${illVideoId}?start=${startSeconds}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
+            const videoHtml = `<iframe src="${embedUrl}" title="${title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen playsinline webkit-playsinline loading="lazy"></iframe>`;
+            globalVideoIds.add(illVideoId);
             
             item.innerHTML = `
                 ${videoHtml}
