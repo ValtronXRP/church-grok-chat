@@ -91,6 +91,23 @@ PINNED_STORIES = {
             }
         ]
     },
+    "gilboa": {
+        "keywords": ["gilboa", "mount gilboa", "saul died", "saul death", "shield of saul",
+                      "david lament", "curse literal", "curse on the mountain", "curse on mount",
+                      "gilboa curse", "is the curse literal", "dew nor rain"],
+        "results": [
+            {
+                "text": "Someone asks: Was David's curse on Mount Gilboa poetic or literal — is there evidence the area has suffered? The verse says 'Mountains of Gilboa, may you have neither dew nor rain, may no showers fall on your terraced fields, for there the shield of the mighty was despised, the shield of Saul no longer rubbed with oil.' Pastor Bob gives context: David lamented the death of Saul, who was his enemy and tried to kill him, but Saul was still the Lord's anointed. David honored him despite everything.",
+                "title": "Ask Pastor Bob | Episode 8",
+                "url": "https://www.youtube.com/watch?v=u53G6pe6pYc",
+                "timestamped_url": "https://www.youtube.com/watch?v=u53G6pe6pYc&t=3895s",
+                "start_time": "64:55",
+                "video_id": "u53G6pe6pYc",
+                "source": "sermon",
+                "rerank_score": 1.0
+            }
+        ]
+    },
     "six_seven": {
         "keywords": ["6 and 7", "six and seven", "number 6", "number 7", "biblical numbers",
                       "significance of numbers", "number six", "number seven", "6 7", "meme 6",

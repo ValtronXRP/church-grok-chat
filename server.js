@@ -225,7 +225,7 @@ const PINNED_STORY_CLIPS = {
     ]
   },
   gilboa: {
-    keywords: ['gilboa', 'mount gilboa', 'saul died', 'saul death', 'shield of saul', 'david lament'],
+    keywords: ['gilboa', 'mount gilboa', 'saul died', 'saul death', 'shield of saul', 'david lament', 'curse literal', 'curse on the mountain', 'curse on mount', 'gilboa curse', 'is the curse literal', 'dew nor rain'],
     clips: [
       {
         title: 'Ask Pastor Bob | Episode 8',
@@ -233,7 +233,7 @@ const PINNED_STORY_CLIPS = {
         timestamped_url: 'https://www.youtube.com/watch?v=u53G6pe6pYc&t=3895s',
         start_time: '64:55',
         video_id: 'u53G6pe6pYc',
-        text: 'Pastor Bob discusses David\'s lament over Saul\'s death and the curse on Mount Gilboa — "may you have neither dew nor rain." David honored Saul as the Lord\'s anointed despite Saul trying to kill him.',
+        text: 'Someone asks: Was David\'s curse on Mount Gilboa poetic or literal — is there evidence the area has suffered? The verse says "Mountains of Gilboa, may you have neither dew nor rain, may no showers fall on your terraced fields, for there the shield of the mighty was despised, the shield of Saul no longer rubbed with oil." Pastor Bob gives context: David lamented the death of Saul, who was his enemy and tried to kill him, but Saul was still the Lord\'s anointed. David honored him despite everything.',
         relevance_score: 1.0
       }
     ]
