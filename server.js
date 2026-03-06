@@ -136,6 +136,7 @@ function isNonBobContent(text, title) {
     "community groups |", "community group |",
     "home bible study session", "home bible study |",
     "heart & stone | session",
+    "talent camp", "summer talent camp",
   ];
   if (nonBobPatterns.some(p => titleLower.includes(p))) return true;
   const worshipPhrases = /\b(la la|glory glory|praise him praise him|hallelujah hallelujah)\b/gi;

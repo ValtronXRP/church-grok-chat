@@ -585,6 +585,7 @@ def is_non_bob_content(text, title):
         "community groups |", "community group |",
         "home bible study session", "home bible study |",
         "heart & stone | session",
+        "talent camp", "summer talent camp",
     ]
     if any(p in title_lower for p in non_bob_title_patterns):
         return True
