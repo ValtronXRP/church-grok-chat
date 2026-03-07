@@ -184,8 +184,16 @@ CHURCH_TOPIC_PAGES = {
         'pages': ['/services/live'],
     },
     'youth': {
-        'keywords': ['youth group', 'youth ministry', 'kids ministry', "children's ministry"],
-        'pages': ['/ministries-2'],
+        'keywords': ['youth group', 'youth ministry'],
+        'pages': ['/ministries-2', 'https://www.cceayouth.com'],
+    },
+    'children': {
+        'keywords': ['kids ministry', "children's ministry", 'adventure kids', 'kids church', "children's church", 'level up wednesday', 'royal rangers', 'mpact girls', 'nursery'],
+        'pages': ['/ministries-2', 'https://www.cceachildrens.com'],
+    },
+    'homeschool': {
+        'keywords': ['homeschool', 'home school', 'homeschooling'],
+        'pages': ['/ministries-2', 'https://www.cceahomeschool.com'],
     },
     'women': {
         'keywords': ["women's study", "women's bible", "women's ministry"],

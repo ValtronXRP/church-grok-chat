@@ -41,6 +41,17 @@ PAGES = [
     ('/highlights', 'Highlights'),
 ]
 
+EXTERNAL_PAGES = [
+    ('https://www.cceacommunity.org/', 'Community Groups'),
+    ('https://www.cceayouth.com', 'Youth Ministry'),
+    ('https://www.cceaignited.com', 'Young Adults (Ignited)'),
+    ('https://www.cceachildrens.com', "Children's Ministry (Adventure Kids)"),
+    ('https://www.cceachildrens.com/childrens-church', "Children's Church - Sunday Mornings"),
+    ('https://www.cceachildrens.com/level-up-wed-nights', "Level Up - Wednesday Nights (Kids)"),
+    ('https://www.cceachildrens.com/royalrangersmpactgirls', "MPact Girls & Royal Rangers"),
+    ('https://www.cceahomeschool.com', 'CCEA Homeschool Community'),
+]
+
 NAV_LINES = {
     'Home', 'About Us', 'Contact Us', 'Statement of Faith', 'Services', 'Live',
     'Recent Sermons', 'Older Sermon Archive', 'Ministries', 'Missions',
@@ -55,6 +66,32 @@ NAV_LINES = {
 FOOTER_SEQUENCE = ['Follow Us', 'Subscribe']
 
 
+SKIP_LINK_TEXTS = {
+    'home', 'about us', 'contact us', 'statement of faith', 'services', 'live',
+    'recent sermons', 'older sermon archive', 'ministries', 'missions',
+    'registrations', 'resources', 'calendar', 'event photos', 'home bible studies',
+    "pastor bob's resources", 'prayer request', 'homeschool group', 'sermon outline',
+    'worship lyrics', 'crisis pregnancy', 'wedding application', 'give', 'volunteer',
+    'follow us', 'subscribe', 'church calendar', "pastor bob's study tools",
+    'prayer request', 'church information',
+}
+
+def _inline_links(soup):
+    for a in soup.find_all('a', href=True):
+        href = a['href']
+        text = a.get_text(strip=True)
+        if not text or len(text) < 3:
+            continue
+        if text.lower() in SKIP_LINK_TEXTS:
+            continue
+        if href.startswith('#') or href.startswith('javascript') or href.startswith('tel:'):
+            continue
+        if href.startswith('/'):
+            href = f'https://cc-ea.org{href}'
+        if href.startswith('http'):
+            a.replace_with(f'[{text}]({href})')
+
+
 def scrape_page(session, path, name):
     url = f'https://cc-ea.org{path}'
     r = session.get(url, timeout=15, allow_redirects=True)
@@ -62,6 +99,7 @@ def scrape_page(session, path, name):
     soup = BeautifulSoup(r.text, 'html.parser')
     for tag in soup(['script', 'style', 'link', 'meta', 'noscript']):
         tag.decompose()
+    _inline_links(soup)
     text = soup.get_text(separator='\n', strip=True)
     all_lines = []
     for l in text.split('\n'):
@@ -94,6 +132,25 @@ def scrape_page(session, path, name):
         lines.append(l)
     content = '\n'.join(lines)
     return {'page': name, 'url': url, 'path': path, 'content': content}
+
+
+def scrape_external_page(session, url, name):
+    r = session.get(url, timeout=15, allow_redirects=True)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, 'html.parser')
+    for tag in soup(['script', 'style', 'link', 'meta', 'noscript']):
+        tag.decompose()
+    _inline_links(soup)
+    text = soup.get_text(separator='\n', strip=True)
+    lines = []
+    seen = set()
+    for l in text.split('\n'):
+        l = l.strip()
+        if l and len(l) >= 3 and l not in seen:
+            seen.add(l)
+            lines.append(l)
+    content = '\n'.join(lines[:100])
+    return {'page': name, 'url': url, 'path': '', 'content': content}
 
 
 def chunk_page(page_data, max_chunk=800):
@@ -153,6 +210,16 @@ def main():
         except Exception as e:
             print(f"  FAIL: {name} - {e}")
 
+    for ext_url, ext_name in EXTERNAL_PAGES:
+        time.sleep(2)
+        try:
+            page = scrape_external_page(session, ext_url, ext_name)
+            chunks = chunk_page(page)
+            all_chunks.extend(chunks)
+            print(f"  OK: {ext_name} (external) -> {len(chunks)} chunk(s) ({len(page['content'])} chars)")
+        except Exception as e:
+            print(f"  FAIL: {ext_name} (external) - {e}")
+
     print(f"\nTotal chunks: {len(all_chunks)}")
     if not all_chunks:
         print("No content scraped, exiting.")
@@ -186,7 +253,7 @@ def main():
 
     print("Generating embeddings...")
     for chunk in all_chunks:
-        chunk_id = hashlib.md5(f"{chunk['path']}_{chunk.get('chunk_index', 0)}".encode()).hexdigest()
+        chunk_id = hashlib.md5(f"{chunk['url']}_{chunk.get('chunk_index', 0)}".encode()).hexdigest()
         ids.append(chunk_id)
         documents.append(chunk['content'])
         metadatas.append({

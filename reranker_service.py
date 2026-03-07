@@ -754,6 +754,23 @@ def _refresh_website_db():
                 soup = BeautifulSoup(r.text, 'html.parser')
                 for tag in soup(['script', 'style', 'link', 'meta', 'noscript']):
                     tag.decompose()
+                SKIP_LINK_TEXTS = {'home', 'about us', 'contact us', 'statement of faith', 'services', 'live',
+                    'recent sermons', 'older sermon archive', 'ministries', 'missions', 'registrations',
+                    'resources', 'calendar', 'event photos', 'home bible studies', "pastor bob's resources",
+                    'prayer request', 'homeschool group', 'sermon outline', 'worship lyrics', 'crisis pregnancy',
+                    'wedding application', 'give', 'volunteer', 'follow us', 'subscribe', 'church calendar',
+                    "pastor bob's study tools", 'church information'}
+                for a_tag in soup.find_all('a', href=True):
+                    href = a_tag['href']
+                    link_text = a_tag.get_text(strip=True)
+                    if not link_text or len(link_text) < 3 or link_text.lower() in SKIP_LINK_TEXTS:
+                        continue
+                    if href.startswith('#') or href.startswith('javascript') or href.startswith('tel:'):
+                        continue
+                    if href.startswith('/'):
+                        href = f'https://cc-ea.org{href}'
+                    if href.startswith('http'):
+                        a_tag.replace_with(f'[{link_text}]({href})')
                 text = soup.get_text(separator='\n', strip=True)
                 all_lines = [l.strip() for l in text.split('\n') if l.strip()]
                 nav_end = 0
@@ -805,7 +822,15 @@ def _refresh_website_db():
         EXTERNAL_PAGES = [
             ('https://www.cceacommunity.org/', 'Community Groups'),
             ('https://cceacommgroups.churchcenter.com/groups/ccea-community-groups?enrollment=open_signup%2Crequest_to_join&filter=enrollment', 'Browse Community Groups'),
+            ('https://www.cceachildrens.com', "Children's Ministry (Adventure Kids)"),
+            ('https://www.cceachildrens.com/childrens-church', "Children's Church - Sunday Mornings"),
+            ('https://www.cceachildrens.com/level-up-wed-nights', "Level Up - Wednesday Nights (Kids)"),
+            ('https://www.cceachildrens.com/royalrangersmpactgirls', "MPact Girls & Royal Rangers"),
+            ('https://www.cceahomeschool.com', 'CCEA Homeschool Community'),
+            ('https://www.cceayouth.com', 'Youth Ministry'),
+            ('https://www.cceaignited.com', 'Young Adults (Ignited)'),
         ]
+        SKIP_NAV_TEXTS = {'skip to content', 'open menu', 'close menu', 'browse groups', 'back'}
         for ext_url, ext_name in EXTERNAL_PAGES:
             time.sleep(2)
             try:
@@ -814,29 +839,31 @@ def _refresh_website_db():
                 soup = BeautifulSoup(r.text, 'html.parser')
                 for tag in soup(['script', 'style', 'link', 'meta', 'noscript']):
                     tag.decompose()
+                for a_tag in soup.find_all('a', href=True):
+                    href = a_tag['href']
+                    link_text = a_tag.get_text(strip=True)
+                    if not link_text or len(link_text) < 3:
+                        continue
+                    if href.startswith('#') or href.startswith('javascript') or href.startswith('tel:'):
+                        continue
+                    if href.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(ext_url)
+                        href = f"{parsed.scheme}://{parsed.netloc}{href}"
+                    if href.startswith('http'):
+                        a_tag.replace_with(f'[{link_text}]({href})')
                 text = soup.get_text(separator='\n', strip=True)
                 ext_lines = [l.strip() for l in text.split('\n') if l.strip()]
-                skip_nav = 0
-                for idx, l in enumerate(ext_lines):
-                    if 'BROWSE GROUPS' in l:
-                        skip_nav = idx + 1
-                        break
-                footer_idx = len(ext_lines)
-                for idx in range(len(ext_lines) - 1, -1, -1):
-                    if 'CHURCH WEBSITE' in ext_lines[idx]:
-                        footer_idx = idx
-                        break
-                body = ext_lines[skip_nav:footer_idx]
                 seen_ext = set()
                 clean_lines = []
-                for l in body:
+                for l in ext_lines:
                     if len(l) > 2 and l not in seen_ext:
-                        ll = l.lower()
-                        if any(x in ll for x in ['skip to content', 'open menu', 'close menu', 'browse groups']):
+                        ll = l.lower().strip()
+                        if ll in SKIP_NAV_TEXTS:
                             continue
                         seen_ext.add(l)
                         clean_lines.append(l)
-                content = '\n'.join(clean_lines)
+                content = '\n'.join(clean_lines[:100])
                 if content and len(content) > 50:
                     if len(content) <= 800:
                         all_chunks.append({'page': ext_name, 'url': ext_url, 'path': ext_url, 'content': content, 'chunk_index': 0})
@@ -887,7 +914,7 @@ def _refresh_website_db():
 
         ids, documents, metadatas = [], [], []
         for chunk in all_chunks:
-            chunk_id = hashlib.md5(f"{chunk['path']}_{chunk['chunk_index']}".encode()).hexdigest()
+            chunk_id = hashlib.md5(f"{chunk['url']}_{chunk['chunk_index']}".encode()).hexdigest()
             ids.append(chunk_id)
             documents.append(chunk['content'])
             metadatas.append({'page': chunk['page'], 'url': chunk['url'], 'path': chunk['path'], 'chunk_index': chunk['chunk_index'], 'scraped_at': time.strftime('%Y-%m-%d %H:%M:%S')})

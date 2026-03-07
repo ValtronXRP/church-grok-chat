@@ -726,7 +726,9 @@ const CHURCH_TOPIC_PAGES = {
   newHere: { keywords: ['new here', 'first time', 'visiting', 'visitor', 'new to the church'], pages: ['/new-here'] },
   location: { keywords: ['location', 'address', 'where is the church', 'directions'], pages: ['/service-times-and-location'] },
   livestream: { keywords: ['live stream', 'livestream', 'watch live', 'watch online'], pages: ['/services/live'] },
-  youth: { keywords: ['youth group', 'youth ministry', 'kids ministry', "children's ministry"], pages: ['/ministries-2'] },
+  youth: { keywords: ['youth group', 'youth ministry'], pages: ['/ministries-2', 'https://www.cceayouth.com'] },
+  children: { keywords: ['kids ministry', "children's ministry", 'adventure kids', 'kids church', "children's church", 'level up wednesday', 'royal rangers', 'mpact girls', 'kidcheck', 'kid check', 'nursery'], pages: ['/ministries-2', 'https://www.cceachildrens.com'] },
+  homeschool: { keywords: ['homeschool', 'home school', 'homeschooling'], pages: ['/ministries-2', 'https://www.cceahomeschool.com'] },
   women: { keywords: ["women's study", "women's bible", "women's ministry"], pages: ['/ministries-2', '/resources/home-bible-studies'] },
   men: { keywords: ["men's study", "men's bible", "men's ministry"], pages: ['/ministries-2', '/resources/home-bible-studies'] },
 };
@@ -1038,8 +1040,12 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
     context += '2. List specific details: names, dates, times, costs, locations.\n';
     context += '3. Do NOT dump unrelated info (e.g., don\'t list volunteer roles when asked about events).\n';
     context += '4. Do NOT say "Pastor Bob teaches", share phone numbers or email addresses, or tell the user to call or email the office.\n';
-    context += '5. Include the relevant cc-ea.org page URL at the end.\n';
-    context += '6. Be concise and direct.\n\n';
+    context += '5. If the data includes registration or sign-up links in [text](url) format, INCLUDE them in your response so users can click to register.\n';
+    context += '6. If asked about a specific ministry, include the direct link to that ministry\'s page if available.\n';
+    context += '7. For Community Groups, always include the link to https://www.cceacommunity.org/\n';
+    context += '8. For Children\'s Ministry / Adventure Kids, include the link to https://www.cceachildrens.com\n';
+    context += '9. For Homeschool Community, include the link to https://www.cceahomeschool.com\n';
+    context += '10. Be concise and direct.\n\n';
   }
 
   return context;

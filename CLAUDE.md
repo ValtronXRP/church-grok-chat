@@ -14,7 +14,7 @@
 |------------|---------|---------------|--------|
 | sermon_segments_v2 | 100,185 | 768 (mpnet) | ACTIVE - ENRICHED + 18,340 audio-only transcript chunks |
 | illustrations_v5 | 23,559 | 768 (mpnet) | ACTIVE - all illustrations loaded |
-| church_website | ~69 | 768 (mpnet) | ACTIVE - auto-refreshes hourly from cc-ea.org |
+| church_website | 117 | 768 (mpnet) | ACTIVE - auto-refreshes hourly from cc-ea.org + external ministry sites |
 
 ### Old Collections (DO NOT USE)
 - sermon_segments: 72,948 (384-dim, poor semantic understanding)
@@ -27,7 +27,9 @@ Test query: "What is the baptism of the Holy Spirit?"
 
 ### Church Website Database (cc-ea.org)
 - **Separate from sermons/illustrations** — stored in `church_website` ChromaDB collection
-- **Scraper**: `scrape_church_website.py` scrapes 20 public pages from cc-ea.org
+- **Scraper**: `scrape_church_website.py` scrapes 20 cc-ea.org pages + 8 external ministry sites (cceacommunity.org, cceayouth.com, cceaignited.com, cceachildrens.com, cceahomeschool.com)
+- **Inline links**: Scraper converts `<a>` tags to `[text](url)` markdown before text extraction so registration/ministry links survive into ChromaDB
+- **Clickable links**: `formatMessageText()` in chat.html converts markdown links to clickable `<a>` tags
 - **Auto-refresh**: Background thread in reranker_service.py refreshes hourly. Manual: `POST /refresh-website`
 - **On-demand only**: Website DB is ONLY queried when user asks about church info (events, studies, service times, registrations, etc.) — detected by `isChurchInfoQuery()` in server.js and `is_church_info_query()` in agent_direct.py
 - **URL inclusion**: Agents are instructed to include the cc-ea.org source URL in their response so users can visit the page
