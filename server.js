@@ -233,7 +233,7 @@ const PINNED_STORY_CLIPS = {
         timestamped_url: 'https://www.youtube.com/watch?v=u53G6pe6pYc&t=3895s',
         start_time: '64:55',
         video_id: 'u53G6pe6pYc',
-        text: 'Someone asks: Was David\'s curse on Mount Gilboa poetic or literal — is there evidence the area has suffered? The verse says "Mountains of Gilboa, may you have neither dew nor rain, may no showers fall on your terraced fields, for there the shield of the mighty was despised, the shield of Saul no longer rubbed with oil." Pastor Bob gives context: David lamented the death of Saul, who was his enemy and tried to kill him, but Saul was still the Lord\'s anointed. David honored him despite everything.',
+        text: 'Pastor Bob teaches that the curse King David pronounced on Mount Gilboa in Second Samuel 1:21 — "Ye mountains of Gilboa, let there be no dew, neither let there be rain, upon you" — is a LITERAL curse, NOT merely poetic language. It is an actual supernatural declaration spoken by the power of God\'s anointed king that has held for over 3,000 years. That region remains unusually dry even today with minimal rainfall or dew compared to surrounding areas. This demonstrates the enduring authority of words spoken under God\'s anointing — biblical curses like this carry real, ongoing weight.',
         relevance_score: 1.0
       }
     ]
