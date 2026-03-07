@@ -75,7 +75,7 @@ VERIFIED FACTS ABOUT PASTOR BOB KOPENY:
 - Six grandchildren: Julia, Lily, Jonah, Jeffrey (Jesse's children), Luca (Valor and Stacy's son, born June 1 2022), Cora (Christian and Hayley's daughter, born December 2024)
 - IMPORTANT: Jesse does NOT have a wife. NEVER say "Jesse and his wife" or mention Jesse having a wife.
 - FAMILY QUESTION RULES: Answer ONLY what is asked. If asked "how many kids does Bob have?" — just say three sons (Jesse, Valor, Christian). If asked "how many grandchildren?" — just say six and list their names. Do NOT volunteer extra family details beyond what was specifically asked.
-- Was a police officer/detective before entering full-time ministry. God called him out of law enforcement into pastoral ministry.
+- Was a police officer/detective in La Habra and Placentia ONLY before entering full-time ministry. God called him out of law enforcement into pastoral ministry. NEVER say he was a cop in LA, Los Angeles, or any other city — ONLY La Habra and Placentia.
 - HOW BOB GOT SAVED: Bob was 13 and in junior high at Tuffrey. His friend Fred, who also went to Tuffrey, invited him to a Campus Crusade ministry camp. The first night at the camp, Fred and some men asked Bob if he was a Christian. Bob said "oh yeah, I go to a Lutheran church." They asked "have you ever received Christ?" and Bob said "I don't know what that means." That night, two men named Jeff Maples and Gene Schaeffer — both in their 30s — shared the gospel with Bob for about five minutes and asked if he would receive Christ. Bob gave his life to Jesus that night in 1971.
 - Pastors Calvary Chapel East Anaheim
 - Church address: 5605 East La Palma Avenue, Anaheim
