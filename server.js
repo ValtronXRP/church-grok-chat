@@ -13,7 +13,7 @@ app.use(express.json());
 // Add CORS headers for all routes
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // Handle preflight requests
@@ -1769,6 +1769,24 @@ app.post('/api/feedback', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/feedback/:id/read', (req, res) => {
+  if (!analyticsData.feedback) return res.status(404).json({ error: 'No feedback' });
+  const item = analyticsData.feedback.find(f => f.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  item.read = true;
+  saveAnalytics();
+  res.json({ ok: true });
+});
+
+app.delete('/api/feedback/:id', (req, res) => {
+  if (!analyticsData.feedback) return res.status(404).json({ error: 'No feedback' });
+  const idx = analyticsData.feedback.findIndex(f => f.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  analyticsData.feedback.splice(idx, 1);
+  saveAnalytics();
+  res.json({ ok: true });
 });
 
 app.get('/api/analytics/data', (req, res) => {

@@ -320,6 +320,65 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .feedback-unread-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgb(0, 255, 65);
+            flex-shrink: 0;
+        }
+        .feedback-delete {
+            margin-top: 10px;
+            padding: 6px 16px;
+            border-radius: 50px;
+            border: 1px solid rgba(255, 80, 80, 0.4);
+            background: transparent;
+            color: #ff5050;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .feedback-delete:hover {
+            background: rgba(255, 80, 80, 0.1);
+        }
+        .feedback-password-prompt {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feedback-password-prompt input {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: #0a0a0a;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+        }
+        .feedback-password-prompt input:focus {
+            border-color: rgba(0, 255, 65, 0.5);
+        }
+        .feedback-password-prompt button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            background: rgb(0, 255, 65);
+            color: #000;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .feedback-pw-error {
+            color: #ff5050;
+            font-size: 11px;
+            padding: 0 16px 8px;
+        }
 
         .refresh-info {
             text-align: center;
@@ -586,19 +645,77 @@
             `).join('');
         }
 
+        const unlockedFeedback = new Set();
+
+        function handleFeedbackClick(id) {
+            const item = document.querySelector(`.feedback-item[data-id="${id}"]`);
+            if (!item) return;
+            if (unlockedFeedback.has(id)) {
+                item.classList.toggle('open');
+                return;
+            }
+            const existing = item.querySelector('.feedback-password-prompt');
+            if (existing) { existing.remove(); return; }
+            const prompt = document.createElement('div');
+            prompt.className = 'feedback-password-prompt';
+            prompt.innerHTML = `<input type="password" placeholder="Enter password" /><button>Unlock</button>`;
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'feedback-pw-error';
+            errorDiv.style.display = 'none';
+            item.querySelector('.feedback-header').after(errorDiv);
+            item.querySelector('.feedback-header').after(prompt);
+            const input = prompt.querySelector('input');
+            const btn = prompt.querySelector('button');
+            input.focus();
+            async function tryUnlock() {
+                if (input.value === 'Maranatha') {
+                    unlockedFeedback.add(id);
+                    prompt.remove();
+                    errorDiv.remove();
+                    item.classList.add('open');
+                    const dot = item.querySelector('.feedback-unread-dot');
+                    if (dot) dot.remove();
+                    try {
+                        await fetch(`/api/feedback/${id}/read`, { method: 'POST' });
+                        fetchAndRender();
+                    } catch(e) {}
+                } else {
+                    errorDiv.textContent = 'Incorrect password';
+                    errorDiv.style.display = 'block';
+                    input.value = '';
+                    input.focus();
+                }
+            }
+            btn.addEventListener('click', tryUnlock);
+            input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+        }
+
+        async function deleteFeedback(id) {
+            if (!confirm('Delete this feedback?')) return;
+            try {
+                await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
+                fetchAndRender();
+            } catch(e) {}
+        }
+
         function renderFeedback(feedback) {
             const list = document.getElementById('feedbackList');
             const count = document.getElementById('feedbackCount');
-            count.textContent = feedback.length;
+            const unreadCount = feedback.filter(f => !f.read).length;
+            count.textContent = unreadCount;
+            count.style.display = unreadCount > 0 ? 'inline-block' : 'none';
             if (!feedback.length) {
                 list.innerHTML = '<div class="feedback-empty">No feedback yet</div>';
                 return;
             }
             list.innerHTML = feedback.map(f => {
                 const preview = f.message.length > 80 ? f.message.slice(0, 80) + '...' : f.message;
-                return `<div class="feedback-item" data-id="${f.id}">
-                    <div class="feedback-header" onclick="this.parentElement.classList.toggle('open')">
+                const isUnlocked = unlockedFeedback.has(f.id);
+                const isOpen = isUnlocked && document.querySelector(`.feedback-item[data-id="${f.id}"]`)?.classList.contains('open');
+                return `<div class="feedback-item${isOpen ? ' open' : ''}" data-id="${f.id}">
+                    <div class="feedback-header" onclick="handleFeedbackClick('${f.id}')">
                         <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                            ${!f.read ? '<div class="feedback-unread-dot"></div>' : ''}
                             <span class="badge badge-${f.device}">${f.device}</span>
                             <span class="feedback-preview">${preview.replace(/</g,'&lt;')}</span>
                         </div>
@@ -607,7 +724,9 @@
                             <span class="feedback-arrow">&#9660;</span>
                         </div>
                     </div>
-                    <div class="feedback-body">${f.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+                    <div class="feedback-body">${f.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}
+                        ${isUnlocked ? `<br><button class="feedback-delete" onclick="event.stopPropagation();deleteFeedback('${f.id}')">Delete</button>` : ''}
+                    </div>
                 </div>`;
             }).join('');
         }
