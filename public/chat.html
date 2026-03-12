@@ -1180,8 +1180,8 @@
             position: fixed;
             bottom: 24px;
             right: 20px;
-            background: linear-gradient(135deg, #4fc3f7, #0288d1);
-            color: #fff;
+            background: linear-gradient(135deg, rgb(0, 255, 65) 0%, rgb(0, 200, 50) 100%);
+            color: #000;
             border: none;
             border-radius: 50px;
             padding: 12px 22px;
@@ -1190,7 +1190,7 @@
             font-weight: 600;
             cursor: pointer;
             z-index: 9999;
-            box-shadow: 0 4px 16px rgba(79, 195, 247, 0.4);
+            box-shadow: 0 4px 16px rgba(0, 255, 65, 0.4);
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
@@ -1210,8 +1210,8 @@
             position: fixed;
             bottom: 80px;
             right: 20px;
-            background: #1a1a2e;
-            border: 1px solid rgba(255,255,255,0.15);
+            background: #1c1c1c;
+            border: 1px solid rgba(255,255,255,0.12);
             border-radius: 16px;
             padding: 20px 24px;
             z-index: 10001;
@@ -1229,7 +1229,7 @@
         .share-popup a {
             display: block;
             padding: 10px 0;
-            color: #4fc3f7;
+            color: #fff;
             text-decoration: none;
             font-size: 15px;
             font-weight: 500;
@@ -1282,8 +1282,8 @@
     <div class="share-popup-overlay" id="shareOverlay"></div>
     <div class="share-popup" id="sharePopup" style="display:none;">
         <h3>Share</h3>
-        <a id="shareText" href="#">Text Message</a>
-        <a id="shareEmail" href="#">Email</a>
+        <a id="shareText" href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:8px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Text Message</a>
+        <a id="shareEmail" href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:8px;"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M22 4l-10 8L2 4"></path></svg>Email</a>
     </div>
 
     <!-- Menu Links (outside container for viewport positioning) -->
