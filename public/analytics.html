@@ -577,11 +577,11 @@
                 const showLabel = dailyData.indexOf(d) % 3 === 0;
                 return `<div class="bar-wrapper">
                     <div class="bar-tooltip">${d.sessions > 0 ? d.sessions : ''}</div>
-                    <div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:${barHeight}px;">
-                        <div class="bar sessions" style="height:${sh}px;flex:1;"></div>
+                    ${barHeight > 0 ? `<div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:${barHeight}px;">
+                        ${sh > 0 ? `<div class="bar sessions" style="height:${sh}px;flex:1;"></div>` : ''}
                         ${th > 0 ? `<div class="bar text" style="height:${th}px;flex:1;"></div>` : ''}
                         ${vh > 0 ? `<div class="bar voice" style="height:${vh}px;flex:1;"></div>` : ''}
-                    </div>
+                    </div>` : ''}
                     <div class="bar-label">${showLabel ? label : ''}</div>
                 </div>`;
             }).join('');
