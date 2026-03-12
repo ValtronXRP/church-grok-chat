@@ -1832,11 +1832,14 @@ app.get('/api/analytics/data', (req, res) => {
   const hourlyCounts = {};
   today.forEach(s => {
     const h = parseInt(new Date(s.startTime).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }));
-    hourlyCounts[h] = (hourlyCounts[h] || 0) + 1;
+    if (!hourlyCounts[h]) hourlyCounts[h] = { sessions: 0, textChats: 0, voiceSessions: 0 };
+    hourlyCounts[h].sessions++;
+    hourlyCounts[h].textChats += (s.textChats || 0);
+    hourlyCounts[h].voiceSessions += (s.voiceSessions || 0);
   });
   const hourlyData = [];
   for (let h = 0; h < 24; h++) {
-    hourlyData.push({ hour: h, sessions: hourlyCounts[h] || 0 });
+    hourlyData.push({ hour: h, sessions: (hourlyCounts[h]?.sessions || 0), textChats: (hourlyCounts[h]?.textChats || 0), voiceSessions: (hourlyCounts[h]?.voiceSessions || 0) });
   }
 
   const recentSessions = sessions

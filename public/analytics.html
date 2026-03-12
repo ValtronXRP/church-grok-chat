@@ -164,6 +164,20 @@
             line-height: 1;
         }
         .chart-modal-close:hover { color: #fff; }
+        .chart-modal.wide { max-width: 1400px; }
+        .half-hour-mark {
+            flex: 0.4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+        }
+        .half-hour-mark .bar-label {
+            font-size: 8px;
+            color: rgba(255,255,255,0.15);
+            margin-top: 6px;
+        }
         .chart-card h3 {
             font-size: 14px;
             font-weight: 600;
@@ -206,9 +220,9 @@
             font-weight: bold;
         }
         .bar-wrapper.now::after {
-            content: '▼';
+            content: '▲';
             position: absolute;
-            top: -2px;
+            bottom: -18px;
             font-size: 8px;
             color: rgb(0,255,65);
         }
@@ -714,6 +728,7 @@
             const overlay = document.getElementById('chartModalOverlay');
             const content = document.getElementById('chartModalContent');
             overlay.classList.add('open');
+            document.querySelector('.chart-modal').classList.remove('wide');
 
             if (type === 'daily') {
                 const dailyData = data.dailyChart || [];
@@ -743,21 +758,24 @@
                     </div>
                     <div class="bar-chart">${bars}</div>`;
             } else if (type === 'hourly') {
+                document.querySelector('.chart-modal').classList.add('wide');
                 const hourlyData = data.hourlyChart || [];
                 const maxVal = Math.max(1, ...hourlyData.map(h => h.sessions));
                 const nowHour = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }));
                 const bars = hourlyData.map(h => {
                     const height = h.sessions > 0 ? Math.max(6, (h.sessions / maxVal) * 260) : 0;
                     const label = h.hour === 0 ? '12am' : h.hour < 12 ? h.hour + 'am' : h.hour === 12 ? '12pm' : (h.hour - 12) + 'pm';
+                    const halfLabel = h.hour === 0 ? '12:30' : h.hour < 12 ? h.hour + ':30' : h.hour === 12 ? '12:30' : (h.hour - 12) + ':30';
                     const isNow = h.hour === nowHour;
+                    const detail = h.sessions > 0 ? `${h.sessions} visit${h.sessions>1?'s':''}${h.textChats ? ', '+h.textChats+' text' : ''}${h.voiceSessions ? ', '+h.voiceSessions+' voice' : ''}` : '';
                     return `<div class="bar-wrapper${isNow ? ' now' : ''}">
-                        <div class="bar-tooltip">${h.sessions > 0 ? h.sessions : ''}</div>
+                        <div class="bar-tooltip">${detail}</div>
                         <div class="bar sessions" style="height:${height}px;"></div>
                         <div class="bar-label">${label}</div>
-                    </div>`;
+                    </div><div class="half-hour-mark"><div class="bar-label">${halfLabel}</div></div>`;
                 }).join('');
                 content.innerHTML = `<h3>Today's Activity by Hour (PST)</h3>
-                    <div class="bar-chart">${bars}</div>`;
+                    <div class="bar-chart" style="overflow-x:auto;margin-bottom:12px;">${bars}</div>`;
             } else if (type === 'device') {
                 const s = data[currentPeriod];
                 const total = s.mobile + s.desktop || 1;
