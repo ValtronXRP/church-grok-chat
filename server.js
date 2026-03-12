@@ -1831,7 +1831,7 @@ app.get('/api/analytics/data', (req, res) => {
 
   const hourlyCounts = {};
   today.forEach(s => {
-    const h = new Date(s.startTime).getHours();
+    const h = parseInt(new Date(s.startTime).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }));
     hourlyCounts[h] = (hourlyCounts[h] || 0) + 1;
   });
   const hourlyData = [];
