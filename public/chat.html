@@ -1175,6 +1175,81 @@
             }
         }
 
+        .share-fab {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 20px;
+            background: linear-gradient(135deg, #4fc3f7, #0288d1);
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 22px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 9999;
+            box-shadow: 0 4px 16px rgba(79, 195, 247, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .share-fab:active {
+            transform: scale(0.95);
+        }
+
+        .share-popup-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+        }
+
+        .share-popup {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 20px 24px;
+            z-index: 10001;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+
+        .share-popup h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            color: #fff;
+        }
+
+        .share-popup a {
+            display: block;
+            padding: 10px 0;
+            color: #4fc3f7;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .share-popup a:last-child {
+            border-bottom: none;
+        }
+
+        .share-popup a:active {
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .share-fab {
+                display: block;
+            }
+        }
+
         /* Landscape mobile */
         @media (max-height: 600px) and (orientation: landscape) {
             .header {
@@ -1203,6 +1278,14 @@
     </style>
 </head>
 <body>
+    <button class="share-fab" id="shareFab">Share</button>
+    <div class="share-popup-overlay" id="shareOverlay"></div>
+    <div class="share-popup" id="sharePopup" style="display:none;">
+        <h3>Share</h3>
+        <a id="shareText" href="#">Text Message</a>
+        <a id="shareEmail" href="#">Email</a>
+    </div>
+
     <!-- Menu Links (outside container for viewport positioning) -->
     <div class="menu-links">
         <a href="https://www.youtube.com/playlist?list=PLEgYquYMZK-Sd5TXQnYge2rC-_zS0zPnm" target="_blank">APB Podcast</a>
@@ -2777,6 +2860,39 @@ When asked about theological topics listed above, use these verified positions a
             }
         });
 
+
+        const SHARE_URL = 'https://web-production-b652a.up.railway.app/';
+        const SHARE_MSG = 'Hey check out Ask Pastor Bob the interactive version! ' + SHARE_URL;
+        const shareFab = document.getElementById('shareFab');
+        const sharePopup = document.getElementById('sharePopup');
+        const shareOverlay = document.getElementById('shareOverlay');
+        const shareTextLink = document.getElementById('shareText');
+        const shareEmailLink = document.getElementById('shareEmail');
+
+        shareTextLink.href = 'sms:?&body=' + encodeURIComponent(SHARE_MSG);
+        shareEmailLink.href = 'mailto:?subject=' + encodeURIComponent('Check out Ask Pastor Bob!') + '&body=' + encodeURIComponent(SHARE_MSG);
+
+        shareFab.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = sharePopup.style.display === 'block';
+            sharePopup.style.display = open ? 'none' : 'block';
+            shareOverlay.style.display = open ? 'none' : 'block';
+        });
+
+        shareOverlay.addEventListener('click', () => {
+            sharePopup.style.display = 'none';
+            shareOverlay.style.display = 'none';
+        });
+
+        shareTextLink.addEventListener('click', () => {
+            sharePopup.style.display = 'none';
+            shareOverlay.style.display = 'none';
+        });
+
+        shareEmailLink.addEventListener('click', () => {
+            sharePopup.style.display = 'none';
+            shareOverlay.style.display = 'none';
+        });
 
         // Startup
         log('APB Voice & Chat ready', 'success');
