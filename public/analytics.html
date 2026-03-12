@@ -569,14 +569,15 @@
             const chart = document.getElementById('dailyChart');
             const maxVal = Math.max(1, ...dailyData.map(d => Math.max(d.sessions, d.textChats, d.voiceSessions)));
             chart.innerHTML = dailyData.map(d => {
-                const sh = Math.max(2, (d.sessions / maxVal) * 140);
-                const th = Math.max(0, (d.textChats / maxVal) * 140);
-                const vh = Math.max(0, (d.voiceSessions / maxVal) * 140);
+                const sh = d.sessions > 0 ? Math.max(6, (d.sessions / maxVal) * 140) : 0;
+                const th = d.textChats > 0 ? Math.max(4, (d.textChats / maxVal) * 140) : 0;
+                const vh = d.voiceSessions > 0 ? Math.max(4, (d.voiceSessions / maxVal) * 140) : 0;
+                const barHeight = Math.max(sh, th, vh);
                 const label = d.date.slice(5);
                 const showLabel = dailyData.indexOf(d) % 3 === 0;
                 return `<div class="bar-wrapper">
                     <div class="bar-tooltip">${d.sessions > 0 ? d.sessions : ''}</div>
-                    <div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:${sh}px;">
+                    <div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:${barHeight}px;">
                         <div class="bar sessions" style="height:${sh}px;flex:1;"></div>
                         ${th > 0 ? `<div class="bar text" style="height:${th}px;flex:1;"></div>` : ''}
                         ${vh > 0 ? `<div class="bar voice" style="height:${vh}px;flex:1;"></div>` : ''}
@@ -592,7 +593,7 @@
             const nowHour = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }));
             chart.innerHTML = hourlyData.map(h => {
                 const height = h.sessions > 0 ? Math.max(6, (h.sessions / maxVal) * 140) : 0;
-                const label = h.hour % 3 === 0 ? (h.hour === 0 ? '12a' : h.hour < 12 ? h.hour + 'a' : h.hour === 12 ? '12p' : (h.hour - 12) + 'p') : '';
+                const label = h.hour === 0 ? '12a' : h.hour < 12 ? h.hour + 'a' : h.hour === 12 ? '12p' : (h.hour - 12) + 'p';
                 const isNow = h.hour === nowHour;
                 return `<div class="bar-wrapper${isNow ? ' now' : ''}">
                     <div class="bar-tooltip">${h.sessions > 0 ? h.sessions : ''}</div>
