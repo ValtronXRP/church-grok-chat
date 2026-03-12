@@ -3,6 +3,8 @@ const { AccessToken } = require('livekit-server-sdk');
 const axios = require('axios');
 const { CloudClient } = require('chromadb');
 const SermonSearch = require('./sermonSearch');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -1674,8 +1676,165 @@ app.post('/api/ingest-sermons', async (req, res) => {
   }
 });
 
+// ============================================
+// ANALYTICS
+// ============================================
+const ANALYTICS_FILE = path.join(__dirname, 'analytics_data.json');
+
+let analyticsData = { sessions: {}, events: [] };
+try {
+  if (fs.existsSync(ANALYTICS_FILE)) {
+    analyticsData = JSON.parse(fs.readFileSync(ANALYTICS_FILE, 'utf8'));
+  }
+} catch (e) {
+  console.log('Analytics: starting fresh');
+}
+
+function saveAnalytics() {
+  try {
+    const maxEvents = 50000;
+    if (analyticsData.events.length > maxEvents) {
+      analyticsData.events = analyticsData.events.slice(-maxEvents);
+    }
+    fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(analyticsData), 'utf8');
+  } catch (e) {}
+}
+
+setInterval(saveAnalytics, 30000);
+
+app.post('/api/analytics/event', express.text({ type: '*/*' }), (req, res) => {
+  try {
+    const event = JSON.parse(req.body);
+    const { sessionId } = event;
+    if (!sessionId) return res.sendStatus(204);
+
+    if (!analyticsData.sessions[sessionId]) {
+      analyticsData.sessions[sessionId] = {
+        id: sessionId,
+        startTime: event.timestamp,
+        device: event.device || 'unknown',
+        referrer: event.referrer || '',
+        userAgent: event.userAgent || '',
+        textChats: 0,
+        voiceSessions: 0,
+        shareClicks: 0,
+        lastSeen: event.timestamp,
+        duration: 0
+      };
+    }
+
+    const session = analyticsData.sessions[sessionId];
+    session.lastSeen = event.timestamp;
+    session.duration = event.sessionDuration || session.duration;
+
+    if (event.event === 'text_chat') session.textChats = event.count || session.textChats + 1;
+    if (event.event === 'voice_start') session.voiceSessions = event.count || session.voiceSessions + 1;
+    if (event.event === 'share_click') session.shareClicks = event.count || session.shareClicks + 1;
+    if (event.event === 'session_end') {
+      session.textChats = event.totalTextChats || session.textChats;
+      session.voiceSessions = event.totalVoiceSessions || session.voiceSessions;
+      session.shareClicks = event.totalShareClicks || session.shareClicks;
+      session.duration = event.sessionDuration || session.duration;
+      session.ended = true;
+    }
+
+    analyticsData.events.push({
+      sessionId,
+      event: event.event,
+      timestamp: event.timestamp,
+      device: event.device
+    });
+
+    res.sendStatus(204);
+  } catch (e) {
+    res.sendStatus(204);
+  }
+});
+
+app.get('/api/analytics/data', (req, res) => {
+  const sessions = Object.values(analyticsData.sessions);
+  const now = Date.now();
+  const day = 86400000;
+
+  const today = sessions.filter(s => s.startTime > now - day);
+  const week = sessions.filter(s => s.startTime > now - 7 * day);
+  const month = sessions.filter(s => s.startTime > now - 30 * day);
+
+  function summarize(list) {
+    const total = list.length;
+    const withText = list.filter(s => s.textChats > 0).length;
+    const withVoice = list.filter(s => s.voiceSessions > 0).length;
+    const withShare = list.filter(s => s.shareClicks > 0).length;
+    const totalTextChats = list.reduce((a, s) => a + (s.textChats || 0), 0);
+    const totalVoiceSessions = list.reduce((a, s) => a + (s.voiceSessions || 0), 0);
+    const totalShareClicks = list.reduce((a, s) => a + (s.shareClicks || 0), 0);
+    const durations = list.map(s => s.duration || 0).filter(d => d > 0);
+    const avgDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    const maxDuration = durations.length ? Math.max(...durations) : 0;
+    const mobile = list.filter(s => s.device === 'mobile').length;
+    const desktop = list.filter(s => s.device === 'desktop').length;
+    return { total, withText, withVoice, withShare, totalTextChats, totalVoiceSessions, totalShareClicks, avgDuration, maxDuration, mobile, desktop };
+  }
+
+  const dailyCounts = {};
+  sessions.forEach(s => {
+    const d = new Date(s.startTime).toISOString().split('T')[0];
+    if (!dailyCounts[d]) dailyCounts[d] = { sessions: 0, textChats: 0, voiceSessions: 0 };
+    dailyCounts[d].sessions++;
+    dailyCounts[d].textChats += s.textChats || 0;
+    dailyCounts[d].voiceSessions += s.voiceSessions || 0;
+  });
+
+  const last30Days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * day).toISOString().split('T')[0];
+    last30Days.push({ date: d, ...(dailyCounts[d] || { sessions: 0, textChats: 0, voiceSessions: 0 }) });
+  }
+
+  const hourlyCounts = {};
+  today.forEach(s => {
+    const h = new Date(s.startTime).getHours();
+    hourlyCounts[h] = (hourlyCounts[h] || 0) + 1;
+  });
+  const hourlyData = [];
+  for (let h = 0; h < 24; h++) {
+    hourlyData.push({ hour: h, sessions: hourlyCounts[h] || 0 });
+  }
+
+  const recentSessions = sessions
+    .sort((a, b) => b.startTime - a.startTime)
+    .slice(0, 50)
+    .map(s => ({
+      id: s.id.slice(0, 8),
+      device: s.device,
+      textChats: s.textChats,
+      voiceSessions: s.voiceSessions,
+      shareClicks: s.shareClicks,
+      duration: s.duration,
+      startTime: s.startTime,
+      ended: !!s.ended
+    }));
+
+  res.json({
+    today: summarize(today),
+    week: summarize(week),
+    month: summarize(month),
+    allTime: summarize(sessions),
+    dailyChart: last30Days,
+    hourlyChart: hourlyData,
+    recentSessions,
+    totalSessions: sessions.length,
+    serverUptime: Math.round(process.uptime())
+  });
+});
+
+app.get('/chat.html/a', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running on http://localhost:${PORT}`);
   console.log(`📺 Open chat at: http://localhost:${PORT}/chat.html`);
+  console.log(`📊 Analytics at: http://localhost:${PORT}/chat.html/a`);
   console.log(`✅ Health check: http://localhost:${PORT}/health\n`);
 });

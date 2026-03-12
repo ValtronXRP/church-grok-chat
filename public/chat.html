@@ -2919,6 +2919,68 @@ When asked about theological topics listed above, use these verified positions a
             shareOverlay.style.display = 'none';
         });
 
+        const _analytics = {
+            sessionId: crypto.randomUUID(),
+            startTime: Date.now(),
+            textChats: 0,
+            voiceSessions: 0,
+            shareClicks: 0,
+            clipViews: 0,
+            device: window.innerWidth <= 768 ? 'mobile' : 'desktop',
+            _send(event, data) {
+                const payload = {
+                    sessionId: this.sessionId,
+                    event,
+                    timestamp: Date.now(),
+                    sessionDuration: Math.round((Date.now() - this.startTime) / 1000),
+                    device: this.device,
+                    ...data
+                };
+                navigator.sendBeacon('/api/analytics/event', JSON.stringify(payload));
+            }
+        };
+
+        _analytics._send('session_start', { referrer: document.referrer, userAgent: navigator.userAgent });
+
+        const _origSendText = sendTextMessage;
+        sendTextMessage = async function() {
+            _analytics.textChats++;
+            _analytics._send('text_chat', { count: _analytics.textChats });
+            return _origSendText.apply(this, arguments);
+        };
+
+        const _origToggleVoice = toggleVoice;
+        toggleVoice = async function() {
+            if (!isConnected) {
+                _analytics.voiceSessions++;
+                _analytics._send('voice_start', { count: _analytics.voiceSessions });
+            } else {
+                _analytics._send('voice_end', { duration: Math.round((Date.now() - _analytics.startTime) / 1000) });
+            }
+            return _origToggleVoice.apply(this, arguments);
+        };
+
+        shareFab.addEventListener('click', () => {
+            _analytics.shareClicks++;
+            _analytics._send('share_click', { count: _analytics.shareClicks });
+        });
+
+        window.addEventListener('pagehide', () => {
+            _analytics._send('session_end', {
+                totalTextChats: _analytics.textChats,
+                totalVoiceSessions: _analytics.voiceSessions,
+                totalShareClicks: _analytics.shareClicks,
+                sessionDuration: Math.round((Date.now() - _analytics.startTime) / 1000)
+            });
+        });
+
+        setInterval(() => {
+            _analytics._send('heartbeat', {
+                textChats: _analytics.textChats,
+                voiceSessions: _analytics.voiceSessions
+            });
+        }, 60000);
+
         // Startup
         log('APB Voice & Chat ready', 'success');
         log('Type a message or click the microphone', 'info');
