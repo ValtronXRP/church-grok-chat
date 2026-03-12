@@ -543,6 +543,25 @@
             max-width: 95%;
         }
 
+        .copy-msg-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 8px;
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: #999;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: fit-content;
+        }
+        .copy-msg-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .copy-msg-btn svg { width: 14px; height: 14px; }
+        .copy-msg-btn.copied { color: #4CAF50; border-color: rgba(76,175,80,0.4); }
+
         /* Sermon Links and References */
         .message .sermon-link {
             display: inline-block;
@@ -1725,9 +1744,34 @@ When asked about theological topics listed above, use these verified positions a
             
             chatMessages.appendChild(msg);
             
+            if (sender === 'agent' || sender === 'assistant') {
+                appendCopyButton(msg);
+            }
+            
             // Auto scroll
             chatMessages.scrollTop = chatMessages.scrollHeight;
             return msg;
+        }
+
+        function appendCopyButton(msgEl) {
+            const btn = document.createElement('button');
+            btn.className = 'copy-msg-btn';
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy';
+            btn.onclick = () => {
+                const clone = msgEl.cloneNode(true);
+                const copyBtn = clone.querySelector('.copy-msg-btn');
+                if (copyBtn) copyBtn.remove();
+                const plainText = clone.innerText.trim();
+                navigator.clipboard.writeText(plainText).then(() => {
+                    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                });
+            };
+            msgEl.appendChild(btn);
         }
         
         // ============================================
@@ -2306,6 +2350,7 @@ When asked about theological topics listed above, use these verified positions a
                 }
 
                 if (currentMessage) {
+                    appendCopyButton(currentMessage);
                     setTimeout(() => highlightClipReferences(currentMessage), 100);
                 }
 
