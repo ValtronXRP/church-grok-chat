@@ -130,7 +130,6 @@
         }
         .bar {
             width: 100%;
-            min-height: 2px;
             border-radius: 3px 3px 0 0;
             transition: height 0.3s;
         }
@@ -143,6 +142,20 @@
             margin-top: 6px;
             text-align: center;
             white-space: nowrap;
+        }
+        .bar-wrapper.now .bar-label {
+            color: rgb(0,255,65);
+            font-weight: bold;
+        }
+        .bar-wrapper.now::after {
+            content: '▼';
+            position: absolute;
+            top: -2px;
+            font-size: 8px;
+            color: rgb(0,255,65);
+        }
+        .bar-wrapper {
+            position: relative;
         }
         .bar-tooltip {
             font-size: 9px;
@@ -576,10 +589,12 @@
         function renderHourlyChart(hourlyData) {
             const chart = document.getElementById('hourlyChart');
             const maxVal = Math.max(1, ...hourlyData.map(h => h.sessions));
+            const nowHour = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }));
             chart.innerHTML = hourlyData.map(h => {
-                const height = Math.max(2, (h.sessions / maxVal) * 140);
+                const height = h.sessions > 0 ? Math.max(6, (h.sessions / maxVal) * 140) : 0;
                 const label = h.hour % 3 === 0 ? (h.hour === 0 ? '12a' : h.hour < 12 ? h.hour + 'a' : h.hour === 12 ? '12p' : (h.hour - 12) + 'p') : '';
-                return `<div class="bar-wrapper">
+                const isNow = h.hour === nowHour;
+                return `<div class="bar-wrapper${isNow ? ' now' : ''}">
                     <div class="bar-tooltip">${h.sessions > 0 ? h.sessions : ''}</div>
                     <div class="bar sessions" style="height:${height}px;"></div>
                     <div class="bar-label">${label}</div>
