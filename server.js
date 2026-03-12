@@ -1751,6 +1751,26 @@ app.post('/api/analytics/event', express.text({ type: '*/*' }), (req, res) => {
   }
 });
 
+app.post('/api/feedback', (req, res) => {
+  try {
+    const { message, sessionId, device, timestamp } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Empty feedback' });
+    if (!analyticsData.feedback) analyticsData.feedback = [];
+    analyticsData.feedback.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      message: message.trim().slice(0, 2000),
+      sessionId: sessionId || 'unknown',
+      device: device || 'unknown',
+      timestamp: timestamp || Date.now(),
+      read: false
+    });
+    saveAnalytics();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/analytics/data', (req, res) => {
   const sessions = Object.values(analyticsData.sessions);
   const now = Date.now();
@@ -1824,7 +1844,8 @@ app.get('/api/analytics/data', (req, res) => {
     hourlyChart: hourlyData,
     recentSessions,
     totalSessions: sessions.length,
-    serverUptime: Math.round(process.uptime())
+    serverUptime: Math.round(process.uptime()),
+    feedback: (analyticsData.feedback || []).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100)
   });
 });
 

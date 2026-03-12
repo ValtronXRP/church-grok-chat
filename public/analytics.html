@@ -232,6 +232,91 @@
             border-radius: 2px;
         }
 
+        .feedback-card {
+            background: #141414;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+        .feedback-card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .feedback-badge {
+            background: rgb(0, 255, 65);
+            color: #000;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 50px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .feedback-empty {
+            color: rgba(255,255,255,0.2);
+            font-size: 13px;
+            padding: 20px 0;
+            text-align: center;
+        }
+        .feedback-item {
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .feedback-header:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        .feedback-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+        }
+        .feedback-arrow {
+            color: rgba(255,255,255,0.3);
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+        .feedback-item.open .feedback-arrow {
+            transform: rotate(180deg);
+        }
+        .feedback-body {
+            display: none;
+            padding: 0 16px 14px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.75);
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .feedback-item.open .feedback-body {
+            display: block;
+        }
+        .feedback-preview {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .refresh-info {
             text-align: center;
             padding: 20px;
@@ -313,6 +398,11 @@
                 </thead>
                 <tbody id="sessionsTable"></tbody>
             </table>
+        </div>
+
+        <div class="feedback-card">
+            <h3>Feedback Notifications <span class="feedback-badge" id="feedbackCount">0</span></h3>
+            <div id="feedbackList"><div class="feedback-empty">No feedback yet</div></div>
         </div>
 
         <div class="refresh-info">Auto-refreshes every 30 seconds</div>
@@ -492,6 +582,32 @@
             `).join('');
         }
 
+        function renderFeedback(feedback) {
+            const list = document.getElementById('feedbackList');
+            const count = document.getElementById('feedbackCount');
+            count.textContent = feedback.length;
+            if (!feedback.length) {
+                list.innerHTML = '<div class="feedback-empty">No feedback yet</div>';
+                return;
+            }
+            list.innerHTML = feedback.map(f => {
+                const preview = f.message.length > 80 ? f.message.slice(0, 80) + '...' : f.message;
+                return `<div class="feedback-item" data-id="${f.id}">
+                    <div class="feedback-header" onclick="this.parentElement.classList.toggle('open')">
+                        <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                            <span class="badge badge-${f.device}">${f.device}</span>
+                            <span class="feedback-preview">${preview.replace(/</g,'&lt;')}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                            <span class="feedback-meta">${formatTime(f.timestamp)}</span>
+                            <span class="feedback-arrow">&#9660;</span>
+                        </div>
+                    </div>
+                    <div class="feedback-body">${f.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+                </div>`;
+            }).join('');
+        }
+
         async function fetchAndRender() {
             try {
                 const res = await fetch('/api/analytics/data');
@@ -502,6 +618,7 @@
                 renderHourlyChart(data.hourlyChart);
                 renderDonut(data[currentPeriod]);
                 renderSessions(data.recentSessions);
+                renderFeedback(data.feedback || []);
 
                 document.getElementById('uptime').textContent = formatUptime(data.serverUptime);
             } catch (e) {
