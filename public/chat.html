@@ -2151,7 +2151,9 @@ When asked about theological topics listed above, use these verified positions a
             }
 
             if (newHtml !== msgHtml) {
+                const existingCopyBtn = messageEl.querySelector('.copy-msg-btn');
                 messageEl.innerHTML = newHtml;
+                if (existingCopyBtn) messageEl.appendChild(existingCopyBtn);
                 messageEl.querySelectorAll('.clip-ref').forEach(span => {
                     span.addEventListener('click', handleClipRefClick);
                 });
