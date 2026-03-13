@@ -536,6 +536,29 @@
             </div>
         </div>
 
+        <div class="chart-card" style="margin-bottom:30px;">
+            <h3>Simultaneous Voice Sessions</h3>
+            <div style="display:flex;gap:30px;flex-wrap:wrap;margin-bottom:16px;">
+                <div style="text-align:center;">
+                    <div id="voiceActiveNow" style="font-size:36px;font-weight:700;color:rgb(0,255,65);">0</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Active Now</div>
+                </div>
+                <div style="text-align:center;">
+                    <div id="voicePeakConcurrent" style="font-size:36px;font-weight:700;color:#ff9800;">0</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Peak Simultaneous</div>
+                </div>
+                <div style="text-align:center;">
+                    <div id="voicePeakTime" style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.6);margin-top:10px;">—</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Peak Occurred At</div>
+                </div>
+                <div style="text-align:center;">
+                    <div id="voiceTotalSessions" style="font-size:36px;font-weight:700;color:#4fc3f7;">0</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Total Voice Sessions</div>
+                </div>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.25);">Tracks when 2+ users are on the voice agent at the same time</div>
+        </div>
+
         <div class="table-card">
             <h3>Recent Sessions</h3>
             <table>
@@ -915,6 +938,16 @@
                 renderDonut(data[currentPeriod]);
                 renderSessions(data.recentSessions);
                 renderFeedback(data.feedback || []);
+
+                if (data.voiceConcurrency) {
+                    const vc = data.voiceConcurrency;
+                    document.getElementById('voiceActiveNow').textContent = vc.activeNow;
+                    document.getElementById('voicePeakConcurrent').textContent = vc.peakConcurrent;
+                    document.getElementById('voiceTotalSessions').textContent = vc.totalVoiceSessions;
+                    document.getElementById('voicePeakTime').textContent = vc.peakTime
+                        ? new Date(vc.peakTime).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : '—';
+                }
 
                 document.getElementById('uptime').textContent = formatUptime(data.serverUptime);
             } catch (e) {

@@ -1728,7 +1728,17 @@ app.post('/api/analytics/event', express.text({ type: '*/*' }), (req, res) => {
     session.duration = event.sessionDuration || session.duration;
 
     if (event.event === 'text_chat') session.textChats = event.count || session.textChats + 1;
-    if (event.event === 'voice_start') session.voiceSessions = event.count || session.voiceSessions + 1;
+    if (event.event === 'voice_start') {
+      session.voiceSessions = event.count || session.voiceSessions + 1;
+      if (!analyticsData.voiceIntervals) analyticsData.voiceIntervals = [];
+      analyticsData.voiceIntervals.push({ sessionId, start: event.timestamp, end: null });
+    }
+    if (event.event === 'voice_end') {
+      if (analyticsData.voiceIntervals) {
+        const open = analyticsData.voiceIntervals.find(v => v.sessionId === sessionId && !v.end);
+        if (open) open.end = event.timestamp;
+      }
+    }
     if (event.event === 'share_click') session.shareClicks = event.count || session.shareClicks + 1;
     if (event.event === 'session_end') {
       session.textChats = event.totalTextChats || session.textChats;
@@ -1856,6 +1866,30 @@ app.get('/api/analytics/data', (req, res) => {
       ended: !!s.ended
     }));
 
+  const voiceIntervals = (analyticsData.voiceIntervals || []).map(v => ({
+    ...v,
+    end: v.end || (analyticsData.sessions[v.sessionId]?.ended ? analyticsData.sessions[v.sessionId].lastSeen : now)
+  }));
+  let peakConcurrent = 0;
+  let peakTime = null;
+  const concurrentEvents = [];
+  voiceIntervals.forEach(v => {
+    concurrentEvents.push({ t: v.start, delta: 1 });
+    concurrentEvents.push({ t: v.end, delta: -1 });
+  });
+  concurrentEvents.sort((a, b) => a.t - b.t);
+  let current = 0;
+  const concurrentHistory = [];
+  concurrentEvents.forEach(e => {
+    current += e.delta;
+    if (current > peakConcurrent) {
+      peakConcurrent = current;
+      peakTime = e.t;
+    }
+    concurrentHistory.push({ t: e.t, count: current });
+  });
+  const activeVoiceNow = voiceIntervals.filter(v => v.start <= now && (v.end >= now || !analyticsData.sessions[v.sessionId]?.ended)).length;
+
   res.json({
     today: summarize(today),
     week: summarize(week),
@@ -1866,7 +1900,13 @@ app.get('/api/analytics/data', (req, res) => {
     recentSessions,
     totalSessions: sessions.length,
     serverUptime: Math.round(process.uptime()),
-    feedback: (analyticsData.feedback || []).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100)
+    feedback: (analyticsData.feedback || []).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100),
+    voiceConcurrency: {
+      peakConcurrent,
+      peakTime,
+      activeNow: activeVoiceNow,
+      totalVoiceSessions: voiceIntervals.length
+    }
   });
 });
 
