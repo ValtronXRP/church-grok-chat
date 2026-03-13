@@ -472,6 +472,6 @@ if __name__ == "__main__":
 
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
-        num_idle_processes=5,
-        job_memory_warn_mb=2000,
+        num_idle_processes=12,
+        job_memory_warn_mb=4000,
     ))
