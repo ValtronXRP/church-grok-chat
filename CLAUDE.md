@@ -1,6 +1,54 @@
 # Ask Pastor Bob - Development Notes
 
-## Current State (2026-03-05)
+## FINAL WORKING STATE — SNAPSHOT (2026-03-13)
+
+> **DO NOT SPLIT SERVICES.** Everything runs in ONE Railway container. Splitting the voice agent
+> into a separate service WILL break things — the reranker is called at 127.0.0.1:5050 (localhost),
+> the generate_reply 10s timeout is already tight, and adding network latency will cause silent
+> audio failures. If more capacity is needed, upgrade RAM on the SAME container.
+
+### Single-Container Process Map (start.sh)
+```
+start.sh (PID 1)
+ ├── python reranker_service.py          → port 5050 (internal, ~2GB RAM)
+ ├── python chromadb_api/app.py          → port 5001 (internal, minimal RAM)
+ ├── python agent_direct.py dev          → LiveKit voice agent (auto-restart on crash, 5s delay)
+ │     └── num_idle_processes=5          → 5 warm workers ready (~300-500MB each)
+ │     └── job_memory_warn_mb=2000
+ │     └── load_threshold=inf (dev mode, never rejects jobs)
+ │     └── Reranker URL: http://127.0.0.1:5050 (MUST be localhost, NOT network)
+ └── npm start (server.js)               → port $PORT/8080 (public-facing)
+```
+
+### Memory Budget (Current: 8GB Hobby Plan)
+| Component | RAM |
+|-----------|-----|
+| Reranker (mpnet + cross-encoder) | ~2GB |
+| Node.js server | ~200MB |
+| ChromaDB API proxy | ~100MB |
+| 5 voice agent workers × ~400MB | ~2GB |
+| OS/buffer | ~1GB |
+| **Total** | **~5.3GB** |
+
+### Scaling to 10 Concurrent Voice Sessions
+- Upgrade Railway to **32GB RAM** (Pro plan)
+- Change `num_idle_processes` from 5 to **12** in `agent_direct.py:475`
+- Change `job_memory_warn_mb` from 2000 to **4000** in `agent_direct.py:476`
+- **DO NOT** split into separate services
+- Estimated RAM: ~2GB reranker + ~5GB (12 workers) + ~1.3GB other = ~8.3GB
+
+### Critical Voice Agent Settings (DO NOT CHANGE)
+- `generate_reply(instructions=...)` — REPLACES instructions for xAI RealtimeModel
+- Payload: top 3 results × 600 chars + compact prompt = ~2KB total
+- `generate_reply` has internal 10s timeout (NOT configurable)
+- Reranker at `127.0.0.1:5050` (IPv4, NOT localhost which resolves to IPv6)
+- `user_input_transcribed` event with `is_final=True` triggers search
+- `_searching` flag prevents concurrent overlapping searches
+- Automatic dispatch (NO agent_name, NO CreateDispatch API)
+- Room name reuse via sessionStorage prevents idle process exhaustion
+- `start.sh` auto-restarts voice agent on crash with 5s delay
+
+## Previous State (2026-03-05)
 
 ### Data Sources
 - **JSON3 Folders 1-3**: 594 sermon files
@@ -56,9 +104,10 @@ Frontend (chat.html) ─┬─ Text Chat ──→ server.js ──→ reranker_
                       └─ Illustration Clips (right sidebar) ──→ /api/clips ──→ ChromaDB illustrations_v5
 ```
 
-### Reranker Service (Bundled in Main Container)
-- **Memory**: ~2GB (mpnet model + cross-encoder), runs inside main container (8GB Hobby plan)
+### Reranker Service (Bundled in Main Container — DO NOT SEPARATE)
+- **Memory**: ~2GB (mpnet model + cross-encoder), runs inside main container
 - **Port**: 5050 (internal, via RERANKER_PORT env var)
+- **Address**: http://127.0.0.1:5050 (MUST be IPv4 localhost — voice agent depends on this)
 - **Endpoint**: `/search/fast-all` - returns sermons + illustrations with reranking
 - **First query**: ~60s (CPU warmup), subsequent: ~15s
 - **Status**: LIVE and working
@@ -191,10 +240,16 @@ CHROMA_TENANT=4b12a7c7-2fb4-4edc-9b6e-c2a77305136b
 CHROMA_DATABASE=APB
 ```
 
-### Railway Deployment
-- Main app: https://web-production-b652a.up.railway.app/
-- Reranker: bundled in main container (port 5050 internal)
-- Voice agent: separate LiveKit-based service
+### Railway Deployment (SINGLE CONTAINER — DO NOT SPLIT)
+- **URL**: https://web-production-b652a.up.railway.app/
+- **Analytics**: https://web-production-b652a.up.railway.app/chat.html/a
+- **All services bundled in ONE container** via start.sh:
+  - Node.js server (port $PORT/8080) — public
+  - Reranker service (port 5050) — internal only
+  - ChromaDB API (port 5001) — internal only
+  - Voice agent (LiveKit worker) — connects to LiveKit Cloud
+- **Current plan**: 8GB Hobby ($5/mo + usage)
+- **Recommended upgrade**: 32GB Pro plan for 10 concurrent voice sessions
 
 ### Bugs Fixed (2026-02-18)
 1. **Chunk timestamps stuck at 0-25s**: `chunk_segments()` overlap logic never reset `current_start_sec`. Rewrote with `next_start_sec` tracking.
