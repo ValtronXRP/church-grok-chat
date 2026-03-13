@@ -2075,9 +2075,11 @@ When asked about theological topics listed above, use these verified positions a
         function highlightClipReferences(messageEl) {
             if (!messageEl || clipRegistry.length === 0) return;
             const recentClips = clipRegistry.slice(-20);
+            const copyBtn = messageEl.querySelector('.copy-msg-btn');
+            if (copyBtn) copyBtn.remove();
             const msgHtml = messageEl.innerHTML;
             const msgText = messageEl.textContent || '';
-            if (msgText.length < 20) return;
+            if (msgText.length < 20) { appendCopyButton(messageEl); return; }
 
             const matches = [];
             const normMsg = normalizeText(msgText);
@@ -2135,7 +2137,7 @@ When asked about theological topics listed above, use these verified positions a
                 }
             }
 
-            if (validMatches.length === 0) return;
+            if (validMatches.length === 0) { appendCopyButton(messageEl); return; }
 
             let newHtml = msgHtml;
             const plainText = messageEl.textContent || '';
@@ -2152,13 +2154,12 @@ When asked about theological topics listed above, use these verified positions a
             }
 
             if (newHtml !== msgHtml) {
-                const existingCopyBtn = messageEl.querySelector('.copy-msg-btn');
                 messageEl.innerHTML = newHtml;
-                if (existingCopyBtn) messageEl.appendChild(existingCopyBtn);
                 messageEl.querySelectorAll('.clip-ref').forEach(span => {
                     span.addEventListener('click', handleClipRefClick);
                 });
             }
+            appendCopyButton(messageEl);
         }
 
         function handleClipRefClick(e) {
