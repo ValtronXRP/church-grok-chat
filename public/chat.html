@@ -1757,20 +1757,36 @@ When asked about theological topics listed above, use these verified positions a
             const btn = document.createElement('button');
             btn.className = 'copy-msg-btn';
             btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy';
-            btn.onclick = () => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 const clone = msgEl.cloneNode(true);
-                const copyBtn = clone.querySelector('.copy-msg-btn');
-                if (copyBtn) copyBtn.remove();
+                clone.querySelectorAll('.copy-msg-btn').forEach(b => b.remove());
                 const plainText = clone.innerText.trim();
-                navigator.clipboard.writeText(plainText).then(() => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(plainText).then(onCopied).catch(function() { fallbackCopy(plainText); });
+                } else {
+                    fallbackCopy(plainText);
+                }
+                function onCopied() {
                     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Copied!';
                     btn.classList.add('copied');
-                    setTimeout(() => {
+                    setTimeout(function() {
                         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy';
                         btn.classList.remove('copied');
                     }, 2000);
-                });
-            };
+                }
+                function fallbackCopy(text) {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;left:-9999px;';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    onCopied();
+                }
+            });
             msgEl.appendChild(btn);
         }
         
