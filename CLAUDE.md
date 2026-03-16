@@ -13,8 +13,8 @@ start.sh (PID 1)
  ├── python reranker_service.py          → port 5050 (internal, ~2GB RAM)
  ├── python chromadb_api/app.py          → port 5001 (internal, minimal RAM)
  ├── python agent_direct.py dev          → LiveKit voice agent (auto-restart on crash, 5s delay)
- │     └── num_idle_processes=12         → 12 warm workers ready (~300-500MB each)
- │     └── job_memory_warn_mb=4000
+ │     └── num_idle_processes=50         → 50 warm workers ready (~300-500MB each)
+ │     └── job_memory_warn_mb=28000
  │     └── load_threshold=inf (dev mode, never rejects jobs)
  │     └── Reranker URL: http://127.0.0.1:5050 (MUST be localhost, NOT network)
  └── npm start (server.js)               → port $PORT/8080 (public-facing)
@@ -26,17 +26,17 @@ start.sh (PID 1)
 | Reranker (mpnet + cross-encoder) | ~2GB |
 | Node.js server | ~200MB |
 | ChromaDB API proxy | ~100MB |
-| 12 voice agent workers × ~400MB | ~4.8GB |
+| 50 voice agent workers × ~500MB | ~25GB |
 | OS/buffer | ~1GB |
-| **Total** | **~8.1GB** |
-| **Headroom** | **~24GB** |
+| **Total** | **~28.3GB** |
+| **Headroom** | **~3.7GB** |
 
-### Concurrent Voice Capacity: 10-12 Simultaneous Sessions (ACTIVE)
+### Concurrent Voice Capacity: ~50 Simultaneous Sessions (ACTIVE)
 - Railway Pro plan: **32GB RAM**
-- `num_idle_processes=12` in `agent_direct.py:475`
-- `job_memory_warn_mb=4000` in `agent_direct.py:476`
+- `num_idle_processes=50` in `agent_direct.py:475`
+- `job_memory_warn_mb=28000` in `agent_direct.py:476`
 - **DO NOT** split into separate services
-- Estimated RAM: ~2GB reranker + ~4.8GB (12 workers) + ~1.3GB other = ~8.1GB
+- Estimated RAM: ~2GB reranker + ~25GB (50 workers) + ~1.3GB other = ~28.3GB
 
 ### Critical Voice Agent Settings (DO NOT CHANGE)
 - `generate_reply(instructions=...)` — REPLACES instructions for xAI RealtimeModel
