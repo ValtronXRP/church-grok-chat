@@ -18,7 +18,7 @@ start.sh (PID 1)
  │     └── load_threshold=inf (dev mode, never rejects jobs)
  │     └── Reranker URL: http://127.0.0.1:5050 (MUST be localhost, NOT network)
  ├── npm start (server.js)               → port $PORT/8080 (public-facing)
- └── auto-ingest scheduler               → runs Mon & Wed at 6 AM PST
+ └── auto-ingest scheduler               → runs Mon & Thu at 6 AM PST
        └── python auto_ingest_sermons.py --full-scan
        └── Playlist: PLEgYquYMZK-S5hMVvpeGJ4U-R627ZIQ94
        └── Manual trigger: POST /api/ingest/run
@@ -27,7 +27,7 @@ start.sh (PID 1)
 
 ### Sermon Auto-Ingestion Pipeline
 - **Script**: `auto_ingest_sermons.py` (production-ready)
-- **Schedule**: Monday & Wednesday at 6 AM PST (via start.sh scheduler loop)
+- **Schedule**: Monday & Thursday at 6 AM PST (via start.sh scheduler loop)
 - **Manual trigger**: POST `/api/ingest/run` or "Run Ingest Now" button on analytics page
 - **Playlist**: `PLEgYquYMZK-S5hMVvpeGJ4U-R627ZIQ94` (CCEA sermon playlist)
 - **Pipeline**: Fetch playlist → detect new videos → extract transcript (youtube-transcript-api + page scrape fallback) → filter worship/intro → chunk (~400 words) → embed (mpnet 768-dim) → upload to ChromaDB
