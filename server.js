@@ -1910,6 +1910,29 @@ app.get('/api/analytics/data', (req, res) => {
   });
 });
 
+let ingestRunning = false;
+let lastIngestResult = null;
+
+app.post('/api/ingest/run', (req, res) => {
+  if (ingestRunning) return res.json({ status: 'already_running' });
+  ingestRunning = true;
+  lastIngestResult = { status: 'running', startedAt: Date.now() };
+  const { spawn } = require('child_process');
+  const proc = spawn('python', ['auto_ingest_sermons.py', '--full-scan'], { cwd: __dirname });
+  let output = '';
+  proc.stdout.on('data', d => { output += d.toString(); });
+  proc.stderr.on('data', d => { output += d.toString(); });
+  proc.on('close', code => {
+    ingestRunning = false;
+    lastIngestResult = { status: code === 0 ? 'success' : 'error', code, output: output.slice(-2000), finishedAt: Date.now() };
+  });
+  res.json({ status: 'started' });
+});
+
+app.get('/api/ingest/status', (req, res) => {
+  res.json({ running: ingestRunning, lastResult: lastIngestResult });
+});
+
 app.get('/chat.html/a', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
 });

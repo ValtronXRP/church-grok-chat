@@ -17,8 +17,22 @@ start.sh (PID 1)
  │     └── job_memory_warn_mb=28000
  │     └── load_threshold=inf (dev mode, never rejects jobs)
  │     └── Reranker URL: http://127.0.0.1:5050 (MUST be localhost, NOT network)
- └── npm start (server.js)               → port $PORT/8080 (public-facing)
+ ├── npm start (server.js)               → port $PORT/8080 (public-facing)
+ └── auto-ingest scheduler               → runs Mon & Wed at 6 AM PST
+       └── python auto_ingest_sermons.py --full-scan
+       └── Playlist: PLEgYquYMZK-S5hMVvpeGJ4U-R627ZIQ94
+       └── Manual trigger: POST /api/ingest/run
+       └── Status check: GET /api/ingest/status
 ```
+
+### Sermon Auto-Ingestion Pipeline
+- **Script**: `auto_ingest_sermons.py` (production-ready)
+- **Schedule**: Monday & Wednesday at 6 AM PST (via start.sh scheduler loop)
+- **Manual trigger**: POST `/api/ingest/run` or "Run Ingest Now" button on analytics page
+- **Playlist**: `PLEgYquYMZK-S5hMVvpeGJ4U-R627ZIQ94` (CCEA sermon playlist)
+- **Pipeline**: Fetch playlist → detect new videos → extract transcript (youtube-transcript-api + page scrape fallback) → filter worship/intro → chunk (~400 words) → embed (mpnet 768-dim) → upload to ChromaDB
+- **Tracking**: `video_title_map.json` (known videos), `ingest_skip_list.json` (failed/no transcript)
+- **Rate limiting**: 30s between videos, 120s every 5 videos, stops on YouTube IP block
 
 ### Memory Budget (Current: 32GB Pro Plan)
 | Component | RAM |

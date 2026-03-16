@@ -58,10 +58,31 @@ echo "Starting web server on port $MAIN_PORT..."
 PORT=$MAIN_PORT npm start &
 SERVER_PID=$!
 
+# Start sermon auto-ingest scheduler (runs on Monday and Wednesday at 6 AM PST)
+echo "Starting sermon auto-ingest scheduler (Mon/Wed 6 AM PST)..."
+(
+  LAST_INGEST_DAY=""
+  while true; do
+    CURRENT_DAY=$(TZ='America/Los_Angeles' date +%u)
+    CURRENT_HOUR=$(TZ='America/Los_Angeles' date +%H)
+    TODAY_KEY=$(TZ='America/Los_Angeles' date +%Y-%m-%d)
+    # Monday=1, Wednesday=3, run at 6 AM PST
+    if { [ "$CURRENT_DAY" = "1" ] || [ "$CURRENT_DAY" = "3" ]; } && [ "$CURRENT_HOUR" = "06" ] && [ "$LAST_INGEST_DAY" != "$TODAY_KEY" ]; then
+      echo "[auto-ingest] Starting scheduled sermon ingest ($(TZ='America/Los_Angeles' date))..."
+      python auto_ingest_sermons.py --full-scan 2>&1 | while read line; do echo "[auto-ingest] $line"; done
+      LAST_INGEST_DAY="$TODAY_KEY"
+      echo "[auto-ingest] Ingest complete. Next check in 1 hour."
+    fi
+    sleep 3600
+  done
+) &
+INGEST_PID=$!
+
 # Wait for all processes
 echo "Services started:"
 echo "  Reranker PID: $RERANKER_PID (port $RERANKER_PORT_NUM)"
 echo "  ChromaDB API PID: $CHROMADB_PID (port $CHROMADB_PORT)"
 echo "  Voice Agent PID: $AGENT_PID"
 echo "  Web Server PID: $SERVER_PID (port $MAIN_PORT)"
+echo "  Auto-Ingest PID: $INGEST_PID (Mon/Wed 6AM PST)"
 wait $RERANKER_PID $CHROMADB_PID $AGENT_PID $SERVER_PID

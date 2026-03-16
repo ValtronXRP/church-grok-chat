@@ -559,6 +559,15 @@
             <div style="font-size:11px;color:rgba(255,255,255,0.25);">Tracks when 2+ users are on the voice agent at the same time</div>
         </div>
 
+        <div class="chart-card" style="margin-bottom:30px;">
+            <h3>Sermon Ingestion</h3>
+            <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+                <button id="ingestBtn" onclick="runIngest()" style="padding:8px 20px;background:rgb(0,255,65);color:#000;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">Run Ingest Now</button>
+                <div id="ingestStatus" style="font-size:13px;color:rgba(255,255,255,0.5);">Schedule: Mon & Wed at 6 AM PST</div>
+            </div>
+            <div id="ingestOutput" style="display:none;background:#0a0a0a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-top:8px;max-height:300px;overflow-y:auto;font-family:monospace;font-size:11px;color:rgba(255,255,255,0.6);white-space:pre-wrap;"></div>
+        </div>
+
         <div class="table-card">
             <h3>Recent Sessions</h3>
             <table>
@@ -957,6 +966,55 @@
 
         fetchAndRender();
         setInterval(fetchAndRender, 30000);
+
+        async function runIngest() {
+            const btn = document.getElementById('ingestBtn');
+            const status = document.getElementById('ingestStatus');
+            const output = document.getElementById('ingestOutput');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            btn.style.opacity = '0.5';
+            status.textContent = 'Ingestion started...';
+            output.style.display = 'block';
+            output.textContent = 'Starting sermon ingest (full scan)...\n';
+            try {
+                await fetch('/api/ingest/run', { method: 'POST' });
+                const poll = setInterval(async () => {
+                    const res = await fetch('/api/ingest/status');
+                    const data = await res.json();
+                    if (!data.running && data.lastResult && data.lastResult.status !== 'running') {
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        btn.textContent = 'Run Ingest Now';
+                        btn.style.opacity = '1';
+                        status.textContent = data.lastResult.status === 'success'
+                            ? 'Last run: Success at ' + new Date(data.lastResult.finishedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                            : 'Last run: Error (code ' + data.lastResult.code + ')';
+                        output.textContent = data.lastResult.output || 'No output';
+                    } else {
+                        status.textContent = 'Running... (checking every 10s)';
+                    }
+                }, 10000);
+            } catch (e) {
+                btn.disabled = false;
+                btn.textContent = 'Run Ingest Now';
+                btn.style.opacity = '1';
+                status.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        (async function checkIngestStatus() {
+            try {
+                const res = await fetch('/api/ingest/status');
+                const data = await res.json();
+                if (data.lastResult && data.lastResult.finishedAt) {
+                    document.getElementById('ingestStatus').textContent = 'Last run: ' +
+                        (data.lastResult.status === 'success' ? 'Success' : 'Error') + ' at ' +
+                        new Date(data.lastResult.finishedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) +
+                        ' | Schedule: Mon & Wed 6 AM PST';
+                }
+            } catch(e) {}
+        })();
     </script>
 </body>
 </html>
