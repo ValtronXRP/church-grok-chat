@@ -69,7 +69,7 @@ echo "Starting sermon auto-ingest scheduler (Mon/Thu 6 AM PST)..."
     # Monday=1, Thursday=4, run at 6 AM PST
     if { [ "$CURRENT_DAY" = "1" ] || [ "$CURRENT_DAY" = "4" ]; } && [ "$CURRENT_HOUR" = "06" ] && [ "$LAST_INGEST_DAY" != "$TODAY_KEY" ]; then
       echo "[auto-ingest] Starting scheduled sermon ingest ($(TZ='America/Los_Angeles' date))..."
-      python auto_ingest_sermons.py --full-scan 2>&1 | while read line; do echo "[auto-ingest] $line"; done
+      AUTO_INGEST=1 python auto_ingest_sermons.py --full-scan 2>&1 | while read line; do echo "[auto-ingest] $line"; done
       LAST_INGEST_DAY="$TODAY_KEY"
       echo "[auto-ingest] Ingest complete. Next check in 1 hour."
     fi

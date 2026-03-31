@@ -21,8 +21,11 @@ MAX_TEXT_LEN = 512
 BATCH_SIZE = 64
 TARGET_WORDS = 400
 
-TITLE_MAP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'video_title_map.json')
-SKIP_LIST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ingest_skip_list.json')
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.environ.get('DATA_DIR', SCRIPT_DIR)
+TITLE_MAP_PATH = os.path.join(SCRIPT_DIR, 'video_title_map.json')
+SKIP_LIST_PATH = os.path.join(SCRIPT_DIR, 'ingest_skip_list.json')
+INGEST_HISTORY_PATH = os.path.join(DATA_DIR, 'ingest_history.json')
 
 SKIP_PATTERNS = re.compile(
     r'^\[?(music|applause|laughter|silence|foreign)\]?$|'
@@ -100,6 +103,19 @@ def load_skip_list():
 def save_skip_list(skip_list):
     with open(SKIP_LIST_PATH, 'w', encoding='utf-8') as f:
         json.dump(skip_list, f, indent=2, ensure_ascii=False)
+
+def load_ingest_history():
+    if os.path.exists(INGEST_HISTORY_PATH):
+        with open(INGEST_HISTORY_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
+
+def save_ingest_report(report):
+    history = load_ingest_history()
+    history.append(report)
+    history = history[-200:]
+    with open(INGEST_HISTORY_PATH, 'w', encoding='utf-8') as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
 
 def fetch_playlist_videos(full_scan=False):
     if full_scan:
@@ -337,6 +353,22 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
 
     if not new_videos:
         logger.info("No new sermons found. Database is up to date.")
+        import datetime
+        report = {
+            'timestamp': int(time.time() * 1000),
+            'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'up_to_date',
+            'sermons_ingested': [],
+            'sermons_skipped': 0,
+            'total_chunks_added': 0,
+            'collection_total': None,
+            'playlist_total': len(playlist_videos),
+            'trigger': 'scheduled' if 'AUTO_INGEST' in os.environ else 'manual'
+        }
+        try:
+            save_ingest_report(report)
+        except Exception:
+            pass
         return 0
 
     logger.info(f"Found {len(new_videos)} new sermons to ingest:")
@@ -442,6 +474,25 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
 
     final_count = collection.count()
     logger.info(f"=== Ingest complete: {total_new_chunks} new chunks added. Collection now has {final_count} chunks ===")
+
+    import datetime
+    report = {
+        'timestamp': int(time.time() * 1000),
+        'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'status': 'success',
+        'sermons_ingested': [{'video_id': v, 'title': t} for v, t in successfully_ingested],
+        'sermons_skipped': len(skip_list) - len(load_skip_list()) + len([v for v in new_videos if v in skip_list]),
+        'total_chunks_added': total_new_chunks,
+        'collection_total': final_count,
+        'playlist_total': len(playlist_videos),
+        'trigger': 'scheduled' if 'AUTO_INGEST' in os.environ else 'manual'
+    }
+    try:
+        save_ingest_report(report)
+        logger.info(f"Ingest report saved to {INGEST_HISTORY_PATH}")
+    except Exception as e:
+        logger.warning(f"Failed to save ingest report: {e}")
+
     return len(successfully_ingested)
 
 

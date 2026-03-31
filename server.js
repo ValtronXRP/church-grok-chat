@@ -651,6 +651,10 @@ const PINNED_STORY_CLIPS = {
         relevance_score: 1.0
       }
     ]
+  },
+  matthew20_laborers: {
+    keywords: ['matthew 20', 'laborers in the vineyard', 'workers in the vineyard', 'parable of the laborers', 'parable of the workers', 'denarius', 'last shall be first', 'last will be first', 'hired workers', 'vineyard workers'],
+    clips: []
   }
 };
 
@@ -1679,7 +1683,11 @@ app.post('/api/ingest-sermons', async (req, res) => {
 // ============================================
 // ANALYTICS
 // ============================================
-const ANALYTICS_FILE = path.join(__dirname, 'analytics_data.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+if (DATA_DIR !== __dirname && !fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const ANALYTICS_FILE = path.join(DATA_DIR, 'analytics_data.json');
 
 let analyticsData = { sessions: {}, events: [] };
 try {
@@ -1866,10 +1874,16 @@ app.get('/api/analytics/data', (req, res) => {
       ended: !!s.ended
     }));
 
-  const voiceIntervals = (analyticsData.voiceIntervals || []).map(v => ({
-    ...v,
-    end: v.end || (analyticsData.sessions[v.sessionId]?.ended ? analyticsData.sessions[v.sessionId].lastSeen : now)
-  }));
+  const MAX_VOICE_MS = 30 * 60 * 1000;
+  const voiceIntervals = (analyticsData.voiceIntervals || []).map(v => {
+    let end = v.end;
+    if (!end) {
+      const sess = analyticsData.sessions[v.sessionId];
+      end = sess ? sess.lastSeen : v.start + MAX_VOICE_MS;
+    }
+    if (end - v.start > MAX_VOICE_MS) end = v.start + MAX_VOICE_MS;
+    return { ...v, end };
+  });
   let peakConcurrent = 0;
   let peakTime = null;
   const concurrentEvents = [];
@@ -1931,6 +1945,20 @@ app.post('/api/ingest/run', (req, res) => {
 
 app.get('/api/ingest/status', (req, res) => {
   res.json({ running: ingestRunning, lastResult: lastIngestResult });
+});
+
+app.get('/api/ingest/history', (req, res) => {
+  try {
+    const historyFile = path.join(DATA_DIR, 'ingest_history.json');
+    if (fs.existsSync(historyFile)) {
+      const history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+      res.json(history);
+    } else {
+      res.json([]);
+    }
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 app.get('/chat.html/a', (req, res) => {

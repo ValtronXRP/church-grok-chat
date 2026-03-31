@@ -568,6 +568,14 @@
             <div id="ingestOutput" style="display:none;background:#0a0a0a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-top:8px;max-height:300px;overflow-y:auto;font-family:monospace;font-size:11px;color:rgba(255,255,255,0.6);white-space:pre-wrap;"></div>
         </div>
 
+        <div class="table-card" style="margin-bottom:30px;">
+            <h3>Ingest History</h3>
+            <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;">Weekly report of sermons ingested from YouTube playlist</div>
+            <div id="ingestHistoryContainer">
+                <div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Loading ingest history...</div>
+            </div>
+        </div>
+
         <div class="table-card">
             <h3>Recent Sessions</h3>
             <table>
@@ -1015,6 +1023,73 @@
                 }
             } catch(e) {}
         })();
+
+        async function loadIngestHistory() {
+            const container = document.getElementById('ingestHistoryContainer');
+            try {
+                const res = await fetch('/api/ingest/history');
+                const history = await res.json();
+                if (!history || history.length === 0) {
+                    container.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">No ingest runs recorded yet. History will appear after the next scheduled or manual ingest.</div>';
+                    return;
+                }
+                const sorted = history.slice().sort((a, b) => b.timestamp - a.timestamp);
+                const weeks = {};
+                sorted.forEach(r => {
+                    const d = new Date(r.timestamp);
+                    const weekStart = new Date(d);
+                    weekStart.setDate(d.getDate() - d.getDay());
+                    const key = weekStart.toISOString().split('T')[0];
+                    if (!weeks[key]) weeks[key] = [];
+                    weeks[key].push(r);
+                });
+                let html = '';
+                Object.keys(weeks).sort().reverse().forEach(weekKey => {
+                    const runs = weeks[weekKey];
+                    const weekDate = new Date(weekKey + 'T00:00:00');
+                    const weekLabel = weekDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' });
+                    const weekEnd = new Date(weekDate);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+                    const weekEndLabel = weekEnd.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' });
+                    const totalSermons = runs.reduce((s, r) => s + (r.sermons_ingested ? r.sermons_ingested.length : 0), 0);
+                    const totalChunks = runs.reduce((s, r) => s + (r.total_chunks_added || 0), 0);
+                    html += '<div style="margin-bottom:20px;border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;">';
+                    html += '<div style="background:rgba(255,255,255,0.03);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">';
+                    html += '<div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.8);">Week of ' + weekLabel + ' — ' + weekEndLabel + '</div>';
+                    html += '<div style="font-size:12px;color:rgba(255,255,255,0.4);">' + totalSermons + ' sermon' + (totalSermons !== 1 ? 's' : '') + ' · ' + totalChunks + ' chunks</div>';
+                    html += '</div>';
+                    runs.forEach(r => {
+                        const runDate = new Date(r.timestamp).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                        const trigger = r.trigger === 'scheduled' ? '⏰ Scheduled' : '▶ Manual';
+                        const statusColor = r.status === 'success' ? 'rgb(0,255,65)' : r.status === 'up_to_date' ? '#4fc3f7' : '#ff5252';
+                        const statusLabel = r.status === 'success' ? 'Ingested' : r.status === 'up_to_date' ? 'Up to date' : 'Error';
+                        html += '<div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.04);">';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+                        html += '<div style="font-size:12px;color:rgba(255,255,255,0.5);">' + runDate + ' · ' + trigger + '</div>';
+                        html += '<div style="font-size:11px;font-weight:600;color:' + statusColor + ';">' + statusLabel + '</div>';
+                        html += '</div>';
+                        if (r.sermons_ingested && r.sermons_ingested.length > 0) {
+                            r.sermons_ingested.forEach(s => {
+                                const ytUrl = 'https://www.youtube.com/watch?v=' + s.video_id;
+                                html += '<div style="padding:4px 0 4px 12px;font-size:12px;color:rgba(255,255,255,0.65);border-left:2px solid rgb(0,255,65);">';
+                                html += '<a href="' + ytUrl + '" target="_blank" style="color:rgba(255,255,255,0.65);text-decoration:none;">' + s.title + '</a>';
+                                html += '</div>';
+                            });
+                            html += '<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">' + r.total_chunks_added + ' chunks added · Collection: ' + (r.collection_total || '—').toLocaleString() + ' total</div>';
+                        } else if (r.status === 'up_to_date') {
+                            html += '<div style="font-size:12px;color:rgba(255,255,255,0.3);padding-left:12px;">No new sermons found — database is current</div>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                });
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Failed to load ingest history</div>';
+            }
+        }
+        loadIngestHistory();
+        setInterval(loadIngestHistory, 60000);
     </script>
 </body>
 </html>
