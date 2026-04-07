@@ -25,7 +25,7 @@ COPY reranker_requirements.txt ./reranker_requirements.txt
 # Install all dependencies in a single pip resolve to avoid version conflicts
 RUN npm install
 COPY combined_requirements.txt ./combined_requirements.txt
-RUN pip install --no-cache-dir -r combined_requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r combined_requirements.txt
 
 # Pre-download reranker models into the image
 RUN python3 -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('sentence-transformers/all-mpnet-base-v2'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
