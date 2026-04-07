@@ -1431,10 +1431,28 @@ app.post('/token', async (req, res) => {
     });
     const token = await at.toJwt();
 
-    console.log(`Token created for room ${roomName} (auto-dispatch)`);
+    // If AGENT_NAME is set (staging), explicitly dispatch to that named agent
+    // This prevents production workers from intercepting staging sessions
+    const agentName = process.env.AGENT_NAME;
+    if (agentName) {
+      try {
+        const httpUrl = LIVEKIT_URL.replace('wss://', 'https://');
+        await axios.post(
+          `${httpUrl}/twirp/livekit.AgentDispatchService/CreateDispatch`,
+          { room: roomName, agent_name: agentName },
+          { headers: { 'Authorization': `Bearer ${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`, 'Content-Type': 'application/json' } }
+        );
+        console.log(`Token created for room ${roomName} (explicit dispatch → ${agentName})`);
+      } catch (dispatchErr) {
+        console.warn(`Dispatch to ${agentName} failed: ${dispatchErr.message} — falling back to auto-dispatch`);
+        console.log(`Token created for room ${roomName} (auto-dispatch fallback)`);
+      }
+    } else {
+      console.log(`Token created for room ${roomName} (auto-dispatch)`);
+    }
 
-    res.json({ 
-      token, 
+    res.json({
+      token,
       url: LIVEKIT_URL,
       roomName: roomName,
       participant: participantName

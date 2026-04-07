@@ -479,8 +479,15 @@ if __name__ == "__main__":
     logger.info("APB Voice Agent v12 (generate_reply with full context)")
     logger.info("=" * 50)
 
+    agent_name = os.environ.get("AGENT_NAME")
+    if agent_name:
+        logger.info(f"Registering with agent_name: {agent_name}")
+    else:
+        logger.info("No AGENT_NAME set — auto-dispatch mode")
+
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
+        agent_name=agent_name,
         num_idle_processes=50,
         job_memory_warn_mb=28000,
     ))
