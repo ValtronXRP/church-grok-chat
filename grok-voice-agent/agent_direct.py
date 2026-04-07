@@ -22,7 +22,8 @@ def log(msg):
     print(f"[APB] {msg}", flush=True)
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.plugins.xai.realtime import RealtimeModel
+from livekit.plugins import deepgram, elevenlabs
+from livekit.plugins import openai as lk_openai
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
@@ -333,20 +334,18 @@ async def _handle_user_question(transcript):
                 except Exception as e:
                     log(f"generate_reply error (website): {e}")
             else:
-                reply_instructions = (
-                    f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
+                injected_sermon = (
+                    f"[SYSTEM: Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
                     f"Say 'Pastor Bob teaches...' and quote his words. "
                     f"NEVER say you lack info, don't have a teaching, need to check, or that transcripts don't mention it. "
-                    f"The transcripts below ARE the answer — use them. "
-                    f"VARY your phrasing — different structure, word choice, and emphasis each time. Be natural, not formulaic.\n\n"
+                    f"VARY your phrasing — different structure, word choice, and emphasis each time. Be natural, not formulaic.]\n\n"
                     f"Question: \"{transcript}\"\n\n"
                     f"TRANSCRIPTS:\n{context_text}\n\n"
                     f"Answer warmly using the transcripts above. Do NOT say no transcripts were provided."
                 )
 
                 try:
-                    await _session_ref.generate_reply(instructions=reply_instructions)
+                    await _session_ref.generate_reply(user_input=injected_sermon)
                     log("Reply generated with sermon context")
                 except Exception as e:
                     log(f"generate_reply error: {e}")
@@ -354,11 +353,9 @@ async def _handle_user_question(transcript):
             log("Search returned 0 results, generating fallback reply")
             try:
                 await _session_ref.generate_reply(
-                    instructions=(
-                        f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                        f"Answer this question warmly from the Bible and general Christian knowledge. "
-                        f"NEVER say you lack info, don't have a teaching, need to check, or that no transcripts were provided. "
-                        f"Keep it to 3-5 sentences.\n\n"
+                    user_input=(
+                        f"[SYSTEM: Answer from the Bible and general Christian knowledge. "
+                        f"3-5 sentences, warm tone. NEVER say you lack info or need to check.]\n\n"
                         f"Question: \"{transcript}\""
                     )
                 )
@@ -378,18 +375,21 @@ async def entrypoint(ctx: JobContext):
 
         last_sent_message = {"text": None}
 
-        model = RealtimeModel(
-            voice="Aria",
-            turn_detection={
-                "type": "server_vad",
-                "threshold": 0.5,
-                "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
-                "create_response": True,
-                "interrupt_response": True,
-            },
+        stt = deepgram.STT()
+
+        llm = lk_openai.LLM(
+            model="grok-3-mini",
+            base_url="https://api.x.ai/v1",
+            api_key=os.environ["XAI_API_KEY"],
         )
-        session = AgentSession(llm=model)
+
+        tts = elevenlabs.TTS(
+            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
+            model="eleven_turbo_v2_5",
+            api_key=os.environ["ELEVENLABS_API_KEY"],
+        )
+
+        session = AgentSession(stt=stt, llm=llm, tts=tts)
         _session_ref = session
         apb_agent = Agent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
@@ -448,7 +448,7 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
+            await session.generate_reply(user_input=f"Please greet the user by saying exactly: '{greeting}'")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")

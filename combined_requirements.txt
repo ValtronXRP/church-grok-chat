@@ -11,7 +11,10 @@ flask-cors==4.0.0
 onnxruntime
 
 # Voice agent
-livekit-agents[xai]>=1.2.0
+livekit-agents>=1.2.0
+livekit-plugins-deepgram>=1.0.0
+livekit-plugins-openai>=1.0.0
+livekit-plugins-elevenlabs>=1.0.0
 aiohttp>=3.9.0
 python-dotenv>=1.0.0
 
