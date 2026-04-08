@@ -1,14 +1,7 @@
-# LiveKit Agents with xAI plugin (for STT/VAD)
-livekit-agents[xai]>=1.2.0
-
-# ElevenLabs Python SDK (for direct streaming TTS)
-elevenlabs>=1.0.0
-
-# xAI text API via OpenAI-compatible client
-openai>=1.0.0
-
-# HTTP client for API calls
+# LiveKit Agents core
+livekit-agents>=1.2.0
+livekit-plugins-deepgram>=1.0.0
+livekit-plugins-openai>=1.0.0
+livekit-plugins-elevenlabs>=1.0.0
 aiohttp>=3.9.0
-
-# Environment variables
 python-dotenv>=1.0.0

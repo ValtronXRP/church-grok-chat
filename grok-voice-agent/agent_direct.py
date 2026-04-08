@@ -22,26 +22,10 @@ def log(msg):
     print(f"[APB] {msg}", flush=True)
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.plugins.xai.realtime import RealtimeModel
-from livekit import rtc
-from openai import AsyncOpenAI
-from elevenlabs.client import AsyncElevenLabs
+from livekit.plugins import deepgram, elevenlabs
+from livekit.plugins import openai as lk_openai
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
-
-# xAI text API client (for LLM — Grok stays the brain)
-xai_client = AsyncOpenAI(
-    api_key=os.environ.get("XAI_API_KEY", ""),
-    base_url="https://api.x.ai/v1",
-)
-
-# ElevenLabs client (for TTS — New Bob voice)
-el_client = AsyncElevenLabs(
-    api_key=os.environ.get("ELEVENLABS_API_KEY", ""),
-)
-
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
-ELEVENLABS_MODEL = "eleven_turbo_v2_5"
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
 
@@ -309,51 +293,6 @@ async def _search_reranker(query, n=10):
 _room_ref = None
 _session_ref = None
 _searching = False
-_audio_source = None
-
-
-async def _speak_elevenlabs(text: str):
-    """Stream text to ElevenLabs TTS and publish audio directly to the LiveKit room."""
-    global _audio_source
-    if not _audio_source:
-        log("No audio source — cannot speak")
-        return
-    try:
-        log(f"Speaking via ElevenLabs: {text[:60]}...")
-        audio_stream = el_client.text_to_speech.stream(
-            voice_id=ELEVENLABS_VOICE_ID,
-            text=text,
-            model_id=ELEVENLABS_MODEL,
-            output_format="pcm_24000",
-        )
-        async for chunk in audio_stream:
-            if chunk and len(chunk) >= 2:
-                frame = rtc.AudioFrame(
-                    data=bytes(chunk),
-                    sample_rate=24000,
-                    num_channels=1,
-                    samples_per_channel=len(chunk) // 2,
-                )
-                await _audio_source.capture_frame(frame)
-        log("ElevenLabs speech complete")
-    except Exception as e:
-        log(f"ElevenLabs speak error: {e}")
-
-
-async def _generate_xai_response(transcript: str, user_content: str) -> str:
-    """Call xAI text API (Grok as brain) and return the response text."""
-    try:
-        response = await xai_client.chat.completions.create(
-            model="grok-3-mini",
-            messages=[
-                {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
-                {"role": "user", "content": user_content},
-            ],
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        log(f"xAI text API error: {e}")
-        return ""
 
 
 async def _send_data_message(message_type, data):
@@ -380,38 +319,51 @@ async def _handle_user_question(transcript):
         results, website_results = await _search_reranker(transcript)
 
         if results or website_results:
+            context_text = "\n\n".join(results[:3])
             log(f"Search returned {len(results)} sermon results, {len(website_results)} website results")
 
             if website_results:
                 website_text = "\n\n".join(website_results[:6])
                 today_str = date.today().strftime('%B %d, %Y')
-                user_content = (
+                injected_input = (
                     f"[SYSTEM: Today is {today_str}. Answer the user's question using ONLY the relevant data below. "
                     f"NEVER mention past events — only current and upcoming ones. "
-                    f"Be CONCISE — 2-4 sentences max. List only the items that directly answer what was asked. "
+                    f"Be CONCISE — 2-4 sentences max. "
                     f"Do NOT say URLs out loud — links appear in chat automatically.]\n\n"
-                    f"{website_text}\n\nQuestion: {transcript}"
+                    f"{website_text}"
                 )
+                try:
+                    await _session_ref.generate_reply(user_input=injected_input)
+                    log("Reply generated with website data")
+                except Exception as e:
+                    log(f"generate_reply error (website): {e}")
             else:
-                context_text = "\n\n".join(results[:3])
-                user_content = (
-                    f"[SYSTEM: Synthesize these transcripts of your own sermons. Speak in first person as yourself. "
-                    f"3-5 sentences. NEVER say you lack info or need to check. VARY phrasing each time.]\n\n"
-                    f"YOUR SERMON TRANSCRIPTS:\n{context_text}\n\nQuestion: {transcript}"
+                injected_sermon = (
+                    f"[SYSTEM: You ARE Pastor Bob. First person only. "
+                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
+                    f"NEVER say 'Pastor Bob teaches' — say 'I'. NEVER say you lack info.]\n\n"
+                    f"Question: \"{transcript}\"\n\n"
+                    f"YOUR SERMON TRANSCRIPTS:\n{context_text}\n\n"
+                    f"Answer warmly in first person."
                 )
+                try:
+                    await _session_ref.generate_reply(user_input=injected_sermon)
+                    log("Reply generated with sermon context")
+                except Exception as e:
+                    log(f"generate_reply error: {e}")
         else:
-            log("Search returned 0 results — using fallback")
-            user_content = (
-                f"[SYSTEM: Answer from the Bible and your Christian knowledge. "
-                f"First person. 3-5 sentences. NEVER say you lack info.]\n\nQuestion: {transcript}"
-            )
-
-        answer = await _generate_xai_response(transcript, user_content)
-        if answer:
-            asyncio.create_task(_send_data_message("agent_transcript", {"text": answer}))
-            await _speak_elevenlabs(answer)
-        else:
-            log("xAI returned empty response")
+            log("Search returned 0 results, generating fallback reply")
+            try:
+                await _session_ref.generate_reply(
+                    user_input=(
+                        f"[SYSTEM: You ARE Pastor Bob. First person. "
+                        f"Answer from the Bible and your Christian knowledge. "
+                        f"3-5 sentences. NEVER say you lack info.]\n\nQuestion: \"{transcript}\""
+                    )
+                )
+                log("Fallback reply generated")
+            except Exception as e:
+                log(f"Fallback generate_reply error: {e}")
 
     except Exception as e:
         log(f"Handle question error: {e}")
@@ -426,20 +378,21 @@ async def entrypoint(ctx: JobContext):
 
         last_sent_message = {"text": None}
 
-        # xAI Realtime model — used for STT/VAD only (create_response=False)
-        # Grok text API handles LLM, ElevenLabs handles TTS
-        model = RealtimeModel(
-            voice="Aria",
-            turn_detection={
-                "type": "server_vad",
-                "threshold": 0.5,
-                "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
-                "create_response": False,
-                "interrupt_response": True,
-            },
+        stt = deepgram.STT()
+
+        llm = lk_openai.LLM(
+            model="grok-3-mini",
+            base_url="https://api.x.ai/v1",
+            api_key=os.environ["XAI_API_KEY"],
         )
-        session = AgentSession(llm=model)
+
+        tts = elevenlabs.TTS(
+            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
+            model="eleven_turbo_v2_5",
+            api_key=os.environ["ELEVENLABS_API_KEY"],
+        )
+
+        session = AgentSession(stt=stt, llm=llm, tts=tts)
         _session_ref = session
         apb_agent = Agent(
             instructions=PASTOR_BOB_INSTRUCTIONS,
@@ -451,16 +404,6 @@ async def entrypoint(ctx: JobContext):
         await ctx.connect()
         _room_ref = ctx.room
         log(f"Connected to room: {ctx.room.name}")
-
-        # Set up ElevenLabs audio output track
-        global _audio_source
-        _audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
-        audio_track = rtc.LocalAudioTrack.create_audio_track("elevenlabs-voice", _audio_source)
-        await ctx.room.local_participant.publish_track(
-            audio_track,
-            rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
-        )
-        log("ElevenLabs audio track published")
 
         @session.on("conversation_item_added")
         def on_conversation_item(event):
@@ -508,7 +451,7 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await _speak_elevenlabs(greeting)
+            await session.generate_reply(user_input=f"Please greet the user by saying exactly: '{greeting}'")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")

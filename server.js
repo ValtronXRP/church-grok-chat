@@ -1411,7 +1411,8 @@ app.post('/token', async (req, res) => {
   try {
     const clientRoom = req.body.roomName;
     const sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const roomName = clientRoom && clientRoom.startsWith('apb-session-') ? clientRoom : `apb-session-${sessionId}`;
+    const prefix = process.env.AGENT_NAME ? 'staging' : 'apb';
+    const roomName = clientRoom && (clientRoom.startsWith('apb-session-') || clientRoom.startsWith('staging-session-')) ? clientRoom : `${prefix}-session-${sessionId}`;
     const participantName = `user_${sessionId}`;
     const context = req.body.context || [];
 

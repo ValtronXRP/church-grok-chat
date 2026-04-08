@@ -27,8 +27,8 @@ RUN npm install
 COPY combined_requirements.txt ./combined_requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r combined_requirements.txt
 
-# ElevenLabs SDK — installed explicitly to ensure no cache skip
-RUN pip install --no-cache-dir elevenlabs openai
+# Pipeline plugins — installed explicitly to bust Docker layer cache
+RUN pip install --no-cache-dir livekit-plugins-deepgram livekit-plugins-elevenlabs livekit-plugins-openai
 
 # Pre-download reranker models into the image
 RUN python3 -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('sentence-transformers/all-mpnet-base-v2'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
