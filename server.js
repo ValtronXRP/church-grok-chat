@@ -1427,7 +1427,9 @@ app.post('/token', async (req, res) => {
       canPublish: true,
       canSubscribe: true,
       roomCreate: true,
-      agent: true
+      // agent: true only when no explicit dispatch — prevents production workers
+      // auto-joining staging rooms when AGENT_NAME is set
+      agent: !process.env.AGENT_NAME,
     });
     const token = await at.toJwt();
 
@@ -1437,7 +1439,6 @@ app.post('/token', async (req, res) => {
     if (agentName) {
       try {
         const httpUrl = LIVEKIT_URL.replace('wss://', 'https://');
-        // Generate a properly signed admin JWT for the dispatch API call
         const dispatchAt = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
           identity: 'dispatch-server',
         });
@@ -1450,8 +1451,7 @@ app.post('/token', async (req, res) => {
         );
         console.log(`Token created for room ${roomName} (explicit dispatch → ${agentName})`);
       } catch (dispatchErr) {
-        console.warn(`Dispatch to ${agentName} failed: ${dispatchErr.message} — falling back to auto-dispatch`);
-        console.log(`Token created for room ${roomName} (auto-dispatch fallback)`);
+        console.warn(`Dispatch to ${agentName} failed: ${dispatchErr.message}`);
       }
     } else {
       console.log(`Token created for room ${roomName} (auto-dispatch)`);
