@@ -1437,10 +1437,16 @@ app.post('/token', async (req, res) => {
     if (agentName) {
       try {
         const httpUrl = LIVEKIT_URL.replace('wss://', 'https://');
+        // Generate a properly signed admin JWT for the dispatch API call
+        const dispatchAt = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+          identity: 'dispatch-server',
+        });
+        dispatchAt.addGrant({ roomAdmin: true, room: roomName });
+        const dispatchJwt = await dispatchAt.toJwt();
         await axios.post(
           `${httpUrl}/twirp/livekit.AgentDispatchService/CreateDispatch`,
           { room: roomName, agent_name: agentName },
-          { headers: { 'Authorization': `Bearer ${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`, 'Content-Type': 'application/json' } }
+          { headers: { 'Authorization': `Bearer ${dispatchJwt}`, 'Content-Type': 'application/json' } }
         );
         console.log(`Token created for room ${roomName} (explicit dispatch → ${agentName})`);
       } catch (dispatchErr) {
