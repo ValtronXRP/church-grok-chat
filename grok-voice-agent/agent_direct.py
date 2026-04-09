@@ -466,6 +466,21 @@ async def entrypoint(ctx: JobContext):
         raise
 
 
+async def _reject_staging_rooms(req):
+    """Module-level async handler — rejects staging- rooms so only the
+    dedicated ElevenLabs worker handles them. Must be at module level
+    (not inside __main__) so multiprocessing can pickle it."""
+    try:
+        room_name = req.job.room.name or ''
+        if room_name.startswith('staging-'):
+            logger.info(f"Rejecting staging room: {room_name}")
+            await req.reject()
+            return
+    except Exception as e:
+        logger.warning(f"request_fnc error — accepting job: {e}")
+    await req.accept()
+
+
 if __name__ == "__main__":
     logger.info("=" * 50)
     logger.info("APB Voice Agent v12 (generate_reply with full context)")
@@ -473,6 +488,7 @@ if __name__ == "__main__":
 
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
+        request_fnc=_reject_staging_rooms,
         num_idle_processes=50,
         job_memory_warn_mb=28000,
     ))
