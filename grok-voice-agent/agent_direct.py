@@ -371,6 +371,32 @@ async def _handle_user_question(transcript):
         _searching = False
 
 
+THINKING_PHRASES = [
+    "Let me look into that for you.",
+    "Great question, give me just a moment.",
+    "Let me check my sermon notes on that.",
+    "One moment while I pull that up.",
+]
+
+_thinking_index = 0
+
+async def _handle_user_question_with_thinking(transcript):
+    global _thinking_index
+    if _session_ref is None:
+        return
+    # Say a brief thinking phrase immediately so user knows we heard them
+    phrase = THINKING_PHRASES[_thinking_index % len(THINKING_PHRASES)]
+    _thinking_index += 1
+    try:
+        await _session_ref.generate_reply(
+            user_input=f"[SYSTEM: Say ONLY this exact phrase and nothing else: '{phrase}']"
+        )
+    except Exception as e:
+        log(f"Thinking phrase error: {e}")
+    # Now do the actual search and answer
+    await _handle_user_question(transcript)
+
+
 async def entrypoint(ctx: JobContext):
     global _room_ref, _session_ref
     try:
@@ -443,7 +469,7 @@ async def entrypoint(ctx: JobContext):
                 return
             log(f"USER SAID: {transcript[:80]}")
             asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
-            asyncio.create_task(_handle_user_question(transcript))
+            asyncio.create_task(_handle_user_question_with_thinking(transcript))
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
@@ -474,7 +500,7 @@ if __name__ == "__main__":
     logger.info("APB Voice Agent v12 (generate_reply with full context)")
     logger.info("=" * 50)
 
-    agent_name = os.environ.get("AGENT_NAME")
+    agent_name = os.environ.get("AGENT_NAME", "")
     if agent_name:
         logger.info(f"Registering with agent_name: {agent_name}")
     else:
