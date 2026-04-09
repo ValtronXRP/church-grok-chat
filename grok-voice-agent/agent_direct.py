@@ -466,16 +466,17 @@ async def entrypoint(ctx: JobContext):
         raise
 
 
-def request_handler(req):
+async def request_handler(req):
     """Reject staging rooms — they belong to the dedicated ElevenLabs worker pool."""
     try:
         room_name = req.job.room.name or ''
         if room_name.startswith('staging-'):
             logger.info(f"Rejecting staging room (belongs to elevenlabs worker): {room_name}")
-            return False
+            await req.reject()
+            return
     except Exception as e:
         logger.warning(f"request_handler error — accepting job: {e}")
-    return True
+    await req.accept()
 
 
 if __name__ == "__main__":
