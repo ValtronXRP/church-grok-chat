@@ -466,20 +466,22 @@ async def entrypoint(ctx: JobContext):
         raise
 
 
+def request_handler(req):
+    """Reject staging rooms — they belong to the dedicated ElevenLabs worker pool."""
+    try:
+        room_name = req.job.room.name or ''
+        if room_name.startswith('staging-'):
+            logger.info(f"Rejecting staging room (belongs to elevenlabs worker): {room_name}")
+            return False
+    except Exception as e:
+        logger.warning(f"request_handler error — accepting job: {e}")
+    return True
+
+
 if __name__ == "__main__":
     logger.info("=" * 50)
     logger.info("APB Voice Agent v12 (generate_reply with full context)")
     logger.info("=" * 50)
-
-    def request_handler(req):
-        try:
-            room_name = req.job.room.name or ''
-            if room_name.startswith('staging-'):
-                logger.info(f"Rejecting staging room (belongs to elevenlabs worker): {room_name}")
-                return False
-        except Exception as e:
-            logger.warning(f"request_handler error — accepting job: {e}")
-        return True
 
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
