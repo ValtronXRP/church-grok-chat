@@ -466,19 +466,6 @@ async def entrypoint(ctx: JobContext):
         raise
 
 
-async def request_handler(req):
-    """Reject staging rooms — they belong to the dedicated ElevenLabs worker pool."""
-    try:
-        room_name = req.job.room.name or ''
-        if room_name.startswith('staging-'):
-            logger.info(f"Rejecting staging room (belongs to elevenlabs worker): {room_name}")
-            await req.reject()
-            return
-    except Exception as e:
-        logger.warning(f"request_handler error — accepting job: {e}")
-    await req.accept()
-
-
 if __name__ == "__main__":
     logger.info("=" * 50)
     logger.info("APB Voice Agent v12 (generate_reply with full context)")
@@ -486,7 +473,6 @@ if __name__ == "__main__":
 
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
-        request_fnc=request_handler,
         num_idle_processes=50,
         job_memory_warn_mb=28000,
     ))
