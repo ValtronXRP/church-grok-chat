@@ -315,6 +315,12 @@ async def _handle_user_question(transcript):
         return
     _searching = True
     try:
+        # Cancel any auto-response the pipeline started before our sermon search finishes
+        if _session_ref:
+            try:
+                await _session_ref.interrupt(force=True)
+            except Exception:
+                pass
         log(f"SEARCHING for: {transcript[:80]}")
         results, website_results = await _search_reranker(transcript)
 
