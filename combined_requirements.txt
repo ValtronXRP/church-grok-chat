@@ -11,10 +11,11 @@ flask-cors==4.0.0
 onnxruntime
 
 # Voice agent — Deepgram STT + Grok LLM + ElevenLabs TTS
-livekit-agents>=1.2.0
-livekit-plugins-deepgram>=1.0.0
-livekit-plugins-openai>=1.0.0
-livekit-plugins-elevenlabs>=1.0.0
+# Pinned to 1.2.18 — 1.4+ has breaking protobuf changes
+livekit-agents==1.2.18
+livekit-plugins-deepgram==1.2.18
+livekit-plugins-openai==1.2.18
+livekit-plugins-elevenlabs==1.2.18
 aiohttp>=3.9.0
 python-dotenv>=1.0.0
 
