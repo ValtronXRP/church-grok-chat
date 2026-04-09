@@ -473,9 +473,13 @@ if __name__ == "__main__":
 
     def request_handler(req):
         # Reject staging rooms — staging uses its own dedicated worker
-        if req.job.room.name.startswith('staging-'):
-            logger.info(f"Rejecting staging room: {req.job.room.name}")
-            return False
+        try:
+            room_name = (req.job.room.name or '') if req.job and req.job.room else ''
+            if room_name.startswith('staging-'):
+                logger.info(f"Rejecting staging room: {room_name}")
+                return False
+        except Exception as e:
+            logger.warning(f"request_handler error (defaulting to accept): {e}")
         return True
 
     cli.run_app(WorkerOptions(
