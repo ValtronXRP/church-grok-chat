@@ -308,21 +308,6 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-THINKING_OPENERS = [
-    "That's a great question.",
-    "I love that question.",
-    "What a wonderful question.",
-    "I'm glad you asked that.",
-]
-_thinking_index = 0
-
-def _next_opener():
-    global _thinking_index
-    opener = THINKING_OPENERS[_thinking_index % len(THINKING_OPENERS)]
-    _thinking_index += 1
-    return opener
-
-
 async def _handle_user_question(transcript):
     global _searching
     if _searching:
@@ -332,7 +317,6 @@ async def _handle_user_question(transcript):
     try:
         log(f"SEARCHING for: {transcript[:80]}")
         results, website_results = await _search_reranker(transcript)
-        opener = _next_opener()
 
         if results or website_results:
             context_text = "\n\n".join(results[:3])
@@ -342,7 +326,7 @@ async def _handle_user_question(transcript):
                 website_text = "\n\n".join(website_results[:6])
                 today_str = date.today().strftime('%B %d, %Y')
                 injected_input = (
-                    f"[SYSTEM: Today is {today_str}. Start your response with '{opener}' then answer using ONLY the relevant data below. "
+                    f"[SYSTEM: Today is {today_str}. Answer the user's question using ONLY the relevant data below. "
                     f"NEVER mention past events — only current and upcoming ones. "
                     f"Be CONCISE — 2-4 sentences max. "
                     f"Do NOT say URLs out loud — links appear in chat automatically.]\n\n"
@@ -356,7 +340,7 @@ async def _handle_user_question(transcript):
             else:
                 injected_sermon = (
                     f"[SYSTEM: You ARE Pastor Bob. First person only. "
-                    f"Start your response with '{opener}' then synthesize these sermon transcripts into a warm 3-5 sentence answer. "
+                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
                     f"NEVER say 'Pastor Bob teaches' — say 'I'. NEVER say you lack info.]\n\n"
                     f"Question: \"{transcript}\"\n\n"
                     f"YOUR SERMON TRANSCRIPTS:\n{context_text}\n\n"
@@ -373,7 +357,7 @@ async def _handle_user_question(transcript):
                 await _session_ref.generate_reply(
                     user_input=(
                         f"[SYSTEM: You ARE Pastor Bob. First person. "
-                        f"Start with '{opener}' then answer from the Bible and your Christian knowledge. "
+                        f"Answer from the Bible and your Christian knowledge. "
                         f"3-5 sentences. NEVER say you lack info.]\n\nQuestion: \"{transcript}\""
                     )
                 )

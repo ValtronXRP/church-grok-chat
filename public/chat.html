@@ -1569,6 +1569,70 @@
         const GROK_API_URL = '/api/chat';  // Use relative URL for local development
         
         // ============================================
+        // THINKING HUM — plays while agent is searching
+        // ============================================
+        let thinkingAudioCtx = null;
+        let thinkingNodes = null;
+
+        function startThinkingHum() {
+            try {
+                if (thinkingNodes) return; // already playing
+                thinkingAudioCtx = thinkingAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = thinkingAudioCtx;
+
+                // Low rumble oscillator
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(68, ctx.currentTime);
+
+                // Slight harmonic for depth
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(102, ctx.currentTime);
+
+                // Slow tremolo LFO
+                const lfo = ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.setValueAtTime(0.4, ctx.currentTime);
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.setValueAtTime(0.15, ctx.currentTime);
+                lfo.connect(lfoGain);
+
+                const masterGain = ctx.createGain();
+                masterGain.gain.setValueAtTime(0, ctx.currentTime);
+                masterGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.6); // fade in
+
+                const osc2Gain = ctx.createGain();
+                osc2Gain.gain.setValueAtTime(0.4, ctx.currentTime);
+
+                lfoGain.connect(masterGain.gain);
+                osc1.connect(masterGain);
+                osc2.connect(osc2Gain);
+                osc2Gain.connect(masterGain);
+                masterGain.connect(ctx.destination);
+
+                osc1.start();
+                osc2.start();
+                lfo.start();
+
+                thinkingNodes = { osc1, osc2, lfo, masterGain };
+            } catch(e) {}
+        }
+
+        function stopThinkingHum() {
+            try {
+                if (!thinkingNodes) return;
+                const { osc1, osc2, lfo, masterGain } = thinkingNodes;
+                const ctx = thinkingAudioCtx;
+                masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4); // fade out
+                setTimeout(() => {
+                    try { osc1.stop(); osc2.stop(); lfo.stop(); } catch(e) {}
+                }, 500);
+                thinkingNodes = null;
+            } catch(e) {}
+        }
+
+        // ============================================
         // STATE
         // ============================================
         let room = null;
@@ -2699,6 +2763,7 @@ When asked about theological topics listed above, use these verified positions a
                 }
                 agentIsSpeaking = agentSpeaking;
                 if (agentSpeaking) {
+                    stopThinkingHum();
                     stopCountdown();
                 }
             });
@@ -2753,6 +2818,7 @@ When asked about theological topics listed above, use these verified positions a
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
                         log(`User transcript (data msg, dedup skip): ${message.text?.substring(0, 50)}`, 'info');
+                        startThinkingHum();
                         stopCountdown();
                         if (autoDisconnectTimer) {
                             clearTimeout(autoDisconnectTimer);
