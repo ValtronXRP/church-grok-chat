@@ -1972,6 +1972,32 @@ app.get('/api/ingest/status', (req, res) => {
   res.json({ running: ingestRunning, lastResult: lastIngestResult });
 });
 
+let dedupeRunning = false;
+let lastDedupeResult = null;
+
+app.post('/api/dedup/run', (req, res) => {
+  if (dedupeRunning) return res.json({ status: 'already_running' });
+  const dryRun = req.query.dry_run === '1' || req.body?.dry_run === true;
+  dedupeRunning = true;
+  lastDedupeResult = { status: 'running', startedAt: Date.now(), dryRun };
+  const { spawn } = require('child_process');
+  const args = ['deduplicate_sermons.py'];
+  if (!dryRun) args.push('--execute');
+  const proc = spawn('python', args, { cwd: __dirname });
+  let output = '';
+  proc.stdout.on('data', d => { output += d.toString(); });
+  proc.stderr.on('data', d => { output += d.toString(); });
+  proc.on('close', code => {
+    dedupeRunning = false;
+    lastDedupeResult = { status: code === 0 ? 'success' : 'error', code, output: output.slice(-3000), finishedAt: Date.now(), dryRun };
+  });
+  res.json({ status: 'started', dryRun });
+});
+
+app.get('/api/dedup/status', (req, res) => {
+  res.json({ running: dedupeRunning, lastResult: lastDedupeResult });
+});
+
 app.get('/api/ingest/history', (req, res) => {
   try {
     const historyFile = path.join(DATA_DIR, 'ingest_history.json');
