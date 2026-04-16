@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 CHROMA_API_KEY  = os.environ.get('CHROMA_API_KEY',  'ck-Ci7fQVMx8Q6nENxr8daGNYYNj22wmTazd9hXkAPWNVPd')
 CHROMA_TENANT   = os.environ.get('CHROMA_TENANT',   '4b12a7c7-2fb4-4edc-9b6e-c2a77305136b')
 CHROMA_DATABASE = os.environ.get('CHROMA_DATABASE', 'APB')
-PAGE_SIZE = 1000
+PAGE_SIZE = 250  # Chroma Cloud limit is 300 per get() request
 DELETE_BATCH = 100
 
 
