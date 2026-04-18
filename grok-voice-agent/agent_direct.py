@@ -351,7 +351,8 @@ async def _handle_user_question(transcript):
                 injected_sermon = (
                     f"[SYSTEM: You ARE Pastor Bob. First person only. "
                     f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
-                    f"NEVER say 'Pastor Bob teaches' — say 'I'. NEVER say you lack info.]\n\n"
+                    f"NEVER say 'Pastor Bob teaches' — say 'I'. NEVER say you lack info. "
+                    f"IMPORTANT: Always begin your response with a short natural opener like 'Well,' or 'Yes,' or 'Great question.' — this prevents audio clipping at the start.]\n\n"
                     f"Question: \"{transcript}\"\n\n"
                     f"YOUR SERMON TRANSCRIPTS:\n{context_text}\n\n"
                     f"Answer warmly in first person."
@@ -368,7 +369,8 @@ async def _handle_user_question(transcript):
                     user_input=(
                         f"[SYSTEM: You ARE Pastor Bob. First person. "
                         f"Answer from the Bible and your Christian knowledge. "
-                        f"3-5 sentences. NEVER say you lack info.]\n\nQuestion: \"{transcript}\""
+                        f"3-5 sentences. NEVER say you lack info. "
+                        f"Always begin with a short opener like 'Well,' or 'Yes,' to prevent audio clipping.]\n\nQuestion: \"{transcript}\""
                     )
                 )
                 log("Fallback reply generated")
