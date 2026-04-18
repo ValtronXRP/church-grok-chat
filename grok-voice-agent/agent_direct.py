@@ -318,64 +318,26 @@ async def _handle_user_question(transcript):
         return
     _searching = True
     try:
-        # Cancel any auto-response the pipeline started before our sermon search finishes
+        # Cancel any auto-response the pipeline started before we respond
         if _session_ref:
             try:
                 await _session_ref.interrupt(force=True)
-                await asyncio.sleep(0.15)  # brief pause so audio track settles before new TTS starts
+                await asyncio.sleep(0.15)
             except Exception:
                 pass
-        log(f"SEARCHING for: {transcript[:80]}")
-        results, website_results = await _search_reranker(transcript)
-
-        if results or website_results:
-            context_text = "\n\n".join(results[:3])
-            log(f"Search returned {len(results)} sermon results, {len(website_results)} website results")
-
-            if website_results:
-                website_text = "\n\n".join(website_results[:6])
-                today_str = date.today().strftime('%B %d, %Y')
-                injected_input = (
-                    f"[SYSTEM: Today is {today_str}. Answer the user's question using ONLY the relevant data below. "
-                    f"NEVER mention past events — only current and upcoming ones. "
-                    f"Be CONCISE — 2-4 sentences max. "
-                    f"Do NOT say URLs out loud — links appear in chat automatically.]\n\n"
-                    f"{website_text}"
-                )
-                try:
-                    await _session_ref.generate_reply(user_input=injected_input)
-                    log("Reply generated with website data")
-                except Exception as e:
-                    log(f"generate_reply error (website): {e}")
-            else:
-                injected_sermon = (
+        log(f"Answering: {transcript[:80]}")
+        try:
+            await _session_ref.generate_reply(
+                user_input=(
                     f"[SYSTEM: You ARE Pastor Bob. First person only. "
-                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
-                    f"NEVER say 'Pastor Bob teaches' — say 'I'. NEVER say you lack info. "
-                    f"IMPORTANT: Always begin your response with a short natural opener like 'Well,' or 'Yes,' or 'Great question.' — this prevents audio clipping at the start.]\n\n"
-                    f"Question: \"{transcript}\"\n\n"
-                    f"YOUR SERMON TRANSCRIPTS:\n{context_text}\n\n"
-                    f"Answer warmly in first person."
+                    f"Answer from your verified teachings and Christian knowledge. "
+                    f"3-5 sentences. NEVER say you lack info. NEVER say 'Pastor Bob teaches' — say 'I'.]"
+                    f"\n\nQuestion: \"{transcript}\""
                 )
-                try:
-                    await _session_ref.generate_reply(user_input=injected_sermon)
-                    log("Reply generated with sermon context")
-                except Exception as e:
-                    log(f"generate_reply error: {e}")
-        else:
-            log("Search returned 0 results, generating fallback reply")
-            try:
-                await _session_ref.generate_reply(
-                    user_input=(
-                        f"[SYSTEM: You ARE Pastor Bob. First person. "
-                        f"Answer from the Bible and your Christian knowledge. "
-                        f"3-5 sentences. NEVER say you lack info. "
-                        f"Always begin with a short opener like 'Well,' or 'Yes,' to prevent audio clipping.]\n\nQuestion: \"{transcript}\""
-                    )
-                )
-                log("Fallback reply generated")
-            except Exception as e:
-                log(f"Fallback generate_reply error: {e}")
+            )
+            log("Reply generated")
+        except Exception as e:
+            log(f"generate_reply error: {e}")
 
     except Exception as e:
         log(f"Handle question error: {e}")
@@ -393,7 +355,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT()
 
         llm = lk_openai.LLM(
-            model="grok-3-mini",
+            model="grok-3",
             base_url="https://api.x.ai/v1",
             api_key=os.environ["XAI_API_KEY"],
         )

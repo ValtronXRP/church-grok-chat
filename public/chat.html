@@ -2787,14 +2787,10 @@ When asked about theological topics listed above, use these verified positions a
                 const isAgent = participant && participant.identity && participant.identity !== room.localParticipant.identity;
                 if (!isAgent && text.length > 2) {
                     stopCountdown();
+                    // User message display is handled by user_transcript data message to avoid
+                    // Deepgram double is_final duplicates. Only fetch clips here.
                     if (isFinal) {
-                        if (text !== lastVoiceUserMessage) {
-                            lastVoiceUserMessage = text;
-                            addMessage(text, 'user');
-                            conversationHistory.push({ role: 'user', content: text });
-                            showTyping();
-                            fetchClipsForVoiceQuery(text);
-                        }
+                        fetchClipsForVoiceQuery(text);
                     }
                 }
                 log(`Transcription (${participant?.identity}): "${text.substring(0, 50)}..." final=${isFinal}`, 'info');
@@ -2817,13 +2813,19 @@ When asked about theological topics listed above, use these verified positions a
                     if (message.type === 'context_update') {
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
-                        log(`User transcript (data msg, dedup skip): ${message.text?.substring(0, 50)}`, 'info');
-                        startThinkingHum();
+                        log(`User transcript: ${message.text?.substring(0, 50)}`, 'info');
                         stopCountdown();
                         if (autoDisconnectTimer) {
                             clearTimeout(autoDisconnectTimer);
                             autoDisconnectTimer = null;
                             log('Auto-disconnect cancelled - user speaking', 'info');
+                        }
+                        // Display user question exactly once (agent sends this only once due to _searching guard)
+                        if (message.text && message.text !== lastVoiceUserMessage) {
+                            lastVoiceUserMessage = message.text;
+                            addMessage(message.text, 'user');
+                            conversationHistory.push({ role: 'user', content: message.text });
+                            showTyping();
                         }
                     } else if (message.type === 'agent_transcript') {
                         stopCountdown();
