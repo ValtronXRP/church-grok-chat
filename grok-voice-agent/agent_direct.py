@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import json
+import time
 import aiohttp
 from datetime import date
 from dotenv import load_dotenv
@@ -296,6 +297,8 @@ async def _search_reranker(query, n=10):
 _room_ref = None
 _session_ref = None
 _searching = False
+_speaking_until = 0.0
+_last_transcript = ""
 
 
 async def _send_data_message(message_type, data):
@@ -311,39 +314,59 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
+async def _call_grok_direct(transcript: str) -> str:
+    url = "https://api.x.ai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {os.environ['XAI_API_KEY']}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "grok-3",
+        "messages": [
+            {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
+            {"role": "user", "content": transcript},
+        ],
+        "max_tokens": 150,
+        "temperature": 0.7,
+    }
+    async with aiohttp.ClientSession() as http:
+        async with http.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            data = await resp.json()
+            if "choices" not in data:
+                log(f"Grok API error (status={resp.status}): {data}")
+                raise ValueError(f"Grok API error: {data}")
+            return data["choices"][0]["message"]["content"].strip()
+
+
 async def _handle_user_question(transcript):
-    global _searching
+    global _searching, _speaking_until, _last_transcript
+    now = time.monotonic()
+    # Guard 1: already processing a question
     if _searching:
         log(f"Already searching, skipping: {transcript[:40]}")
         return
+    # Guard 2: still speaking the last answer
+    if now < _speaking_until:
+        log(f"Still speaking, skipping: {transcript[:40]}")
+        return
+    # Guard 3: exact same transcript just processed
+    if transcript == _last_transcript and now < _speaking_until + 5.0:
+        log(f"Duplicate transcript, skipping: {transcript[:40]}")
+        return
     _searching = True
-    t_start = time.monotonic()
-    # Send user transcript exactly once — after the guard so Deepgram duplicate
-    # is_final events don't cause the question to appear multiple times on screen
+    _last_transcript = transcript
+    # Send user transcript exactly once — after all guards
     await _send_data_message("user_transcript", {"text": transcript})
+    t_start = time.monotonic()
     try:
-        # Cancel any auto-response the pipeline started before we respond
-        if _session_ref:
-            try:
-                await _session_ref.interrupt(force=True)
-                await asyncio.sleep(0.15)
-            except Exception:
-                pass
-        log(f"Answering: {transcript[:80]}")
-        try:
-            await _session_ref.generate_reply(
-                user_input=(
-                    f"[SYSTEM: You ARE Pastor Bob. First person only. "
-                    f"Answer from your verified teachings and Christian knowledge. "
-                    f"3-5 sentences. NEVER say you lack info. NEVER say 'Pastor Bob teaches' — say 'I'.]"
-                    f"\n\nQuestion: \"{transcript}\""
-                )
-            )
-            elapsed = time.monotonic() - t_start
-            log(f"Reply generated in {elapsed:.2f}s (question→generate_reply complete)")
-        except Exception as e:
-            log(f"generate_reply error: {e}")
-
+        log(f"Calling Grok for: {transcript[:80]}")
+        answer = await _call_grok_direct(transcript)
+        elapsed_llm = time.monotonic() - t_start
+        words = len(answer.split())
+        _speaking_until = time.monotonic() + max(5.0, words / 2.5) + 3.0
+        log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
+        await _session_ref.say(answer)
+        await _send_data_message("agent_transcript", {"text": answer})
     except Exception as e:
         log(f"Handle question error: {e}")
     finally:
@@ -355,15 +378,7 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        last_sent_message = {"text": None}
-
         stt = deepgram.STT()
-
-        llm = lk_openai.LLM(
-            model="grok-3",
-            base_url="https://api.x.ai/v1",
-            api_key=os.environ["XAI_API_KEY"],
-        )
 
         tts = elevenlabs.TTS(
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
@@ -371,11 +386,9 @@ async def entrypoint(ctx: JobContext):
             api_key=os.environ["ELEVENLABS_API_KEY"],
         )
 
-        session = AgentSession(stt=stt, llm=llm, tts=tts)
+        # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
+        session = AgentSession(stt=stt, tts=tts)
         _session_ref = session
-        apb_agent = Agent(
-            instructions=PASTOR_BOB_INSTRUCTIONS,
-        )
 
         await fetch_dynamic_keywords()
 
@@ -383,35 +396,6 @@ async def entrypoint(ctx: JobContext):
         await ctx.connect()
         _room_ref = ctx.room
         log(f"Connected to room: {ctx.room.name}")
-
-        @session.on("conversation_item_added")
-        def on_conversation_item(event):
-            try:
-                item = event.item
-                role = getattr(item, 'role', None)
-                if role == 'assistant':
-                    text = ""
-                    content = getattr(item, 'content', None)
-                    if content:
-                        if isinstance(content, list):
-                            for c in content:
-                                if isinstance(c, str):
-                                    text += c
-                                elif hasattr(c, 'text'):
-                                    text += (c.text or '')
-                                elif hasattr(c, 'transcript'):
-                                    text += (c.transcript or '')
-                        elif isinstance(content, str):
-                            text = content
-                    if not text and hasattr(item, 'text'):
-                        text = item.text or ''
-                    text = text.strip()
-                    if text and text != last_sent_message["text"]:
-                        last_sent_message["text"] = text
-                        logger.info(f"AGENT SAID: {text[:100]}...")
-                        asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
-            except Exception as e:
-                logger.error(f"Error in conversation_item_added: {e}")
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
@@ -421,19 +405,16 @@ async def entrypoint(ctx: JobContext):
             if not transcript or len(transcript) < 3:
                 return
             log(f"USER SAID: {transcript[:80]}")
-            # NOTE: user_transcript data message is sent inside _handle_user_question
-            # AFTER the _searching guard — this ensures it's sent only once even if
-            # Deepgram fires is_final multiple times with partial/full text variants
             asyncio.create_task(_handle_user_question(transcript))
 
         log("Starting session...")
-        await session.start(room=ctx.room, agent=apb_agent)
-        log(f"Session started (reranker: {RERANKER_URL})")
+        await session.start(room=ctx.room, agent=None)
+        log("Session started — LISTENING")
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(user_input=f"Please greet the user by saying exactly: '{greeting}'")
-            log("Greeting sent - LISTENING")
+            await session.say(greeting)
+            log("Greeting sent")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
 
