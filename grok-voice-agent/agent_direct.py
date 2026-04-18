@@ -317,6 +317,9 @@ async def _handle_user_question(transcript):
         log(f"Already searching, skipping: {transcript[:40]}")
         return
     _searching = True
+    # Send user transcript exactly once — after the guard so Deepgram duplicate
+    # is_final events don't cause the question to appear multiple times on screen
+    await _send_data_message("user_transcript", {"text": transcript})
     try:
         # Cancel any auto-response the pipeline started before we respond
         if _session_ref:
@@ -416,7 +419,9 @@ async def entrypoint(ctx: JobContext):
             if not transcript or len(transcript) < 3:
                 return
             log(f"USER SAID: {transcript[:80]}")
-            asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
+            # NOTE: user_transcript data message is sent inside _handle_user_question
+            # AFTER the _searching guard — this ensures it's sent only once even if
+            # Deepgram fires is_final multiple times with partial/full text variants
             asyncio.create_task(_handle_user_question(transcript))
 
         log("Starting session...")
