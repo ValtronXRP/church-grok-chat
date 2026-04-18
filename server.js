@@ -1411,8 +1411,12 @@ app.post('/token', async (req, res) => {
   try {
     const clientRoom = req.body.roomName;
     const sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const prefix = process.env.AGENT_NAME ? 'staging' : 'apb';
-    const roomName = clientRoom && (clientRoom.startsWith('apb-session-') || clientRoom.startsWith('staging-session-')) ? clientRoom : `${prefix}-session-${sessionId}`;
+    const isStaging = !!process.env.AGENT_NAME;
+    const prefix = isStaging ? 'staging' : 'apb';
+    const acceptedPrefix = isStaging ? 'staging-session-' : 'apb-session-';
+    // Only accept room names matching the current environment's prefix — prevents
+    // staging from reusing an apb-session-* room (which the production Aria agent handles)
+    const roomName = clientRoom && clientRoom.startsWith(acceptedPrefix) ? clientRoom : `${prefix}-session-${sessionId}`;
     const participantName = `user_${sessionId}`;
     const context = req.body.context || [];
 
