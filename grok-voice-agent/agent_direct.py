@@ -317,6 +317,7 @@ async def _handle_user_question(transcript):
         log(f"Already searching, skipping: {transcript[:40]}")
         return
     _searching = True
+    t_start = time.monotonic()
     # Send user transcript exactly once — after the guard so Deepgram duplicate
     # is_final events don't cause the question to appear multiple times on screen
     await _send_data_message("user_transcript", {"text": transcript})
@@ -338,7 +339,8 @@ async def _handle_user_question(transcript):
                     f"\n\nQuestion: \"{transcript}\""
                 )
             )
-            log("Reply generated")
+            elapsed = time.monotonic() - t_start
+            log(f"Reply generated in {elapsed:.2f}s (question→generate_reply complete)")
         except Exception as e:
             log(f"generate_reply error: {e}")
 
