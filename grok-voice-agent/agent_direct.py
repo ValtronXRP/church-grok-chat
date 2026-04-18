@@ -322,6 +322,7 @@ async def _handle_user_question(transcript):
         if _session_ref:
             try:
                 await _session_ref.interrupt(force=True)
+                await asyncio.sleep(0.15)  # brief pause so audio track settles before new TTS starts
             except Exception:
                 pass
         log(f"SEARCHING for: {transcript[:80]}")
@@ -399,6 +400,7 @@ async def entrypoint(ctx: JobContext):
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
             model="eleven_turbo_v2_5",
             api_key=os.environ["ELEVENLABS_API_KEY"],
+            streaming_latency=0,  # 0 = stable/buffered mode, prevents start-of-audio clipping
         )
 
         session = AgentSession(stt=stt, llm=llm, tts=tts)
