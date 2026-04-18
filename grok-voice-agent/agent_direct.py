@@ -389,6 +389,8 @@ async def entrypoint(ctx: JobContext):
         # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
         session = AgentSession(stt=stt, tts=tts)
         _session_ref = session
+        # Agent is needed for TTS context even without LLM
+        apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
         await fetch_dynamic_keywords()
 
@@ -408,7 +410,7 @@ async def entrypoint(ctx: JobContext):
             asyncio.create_task(_handle_user_question(transcript))
 
         log("Starting session...")
-        await session.start(room=ctx.room, agent=None)
+        await session.start(room=ctx.room, agent=apb_agent)
         log("Session started — LISTENING")
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
