@@ -363,12 +363,15 @@ async def _handle_user_question(transcript):
         answer = await _call_grok_direct(transcript)
         elapsed_llm = time.monotonic() - t_start
         words = len(answer.split())
-        _speaking_until = time.monotonic() + max(5.0, words / 2.5) + 3.0
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
         await _session_ref.say(answer)
+        # Only set _speaking_until AFTER say() succeeds — prevents blocking
+        # future questions when say() fails or gets interrupted
+        _speaking_until = time.monotonic() + max(3.0, words / 2.5) + 2.0
         await _send_data_message("agent_transcript", {"text": answer})
     except Exception as e:
         log(f"Handle question error: {e}")
+        _speaking_until = 0.0  # reset so next question isn't blocked
     finally:
         _searching = False
 
@@ -378,7 +381,8 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        stt = deepgram.STT()
+        # endpointing=400ms — wait longer at pauses so full question is captured
+        stt = deepgram.STT(endpointing=400)
 
         tts = elevenlabs.TTS(
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
@@ -413,6 +417,8 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log("Session started — LISTENING")
 
+        # Brief delay so audio pipeline is fully ready before greeting
+        await asyncio.sleep(1.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
             await session.say(greeting)
