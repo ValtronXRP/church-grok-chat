@@ -1593,6 +1593,7 @@
                     stopCountdown();
                     if (isConnected) {
                         log('Countdown reached 0 - disconnecting', 'info');
+                        addMessage('Voice session ended (timeout)', 'system');
                         disconnect();
                     }
                 } else {
@@ -2471,9 +2472,22 @@ When asked about theological topics listed above, use these verified positions a
                 await new Promise(r => setTimeout(r, 1000));
             }
             log('Starting connection...', 'info');
+            addMessage('Connecting to voice assistant...', 'system');
 
             try {
-                // Step 1: Get token — reuse room name within same tab to avoid exhausting idle processes
+                // Step 1: Check microphone
+                log('Requesting microphone access...', 'info');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                log('Microphone access granted', 'success');
+                stream.getTracks().forEach(t => t.stop()); // Release for now
+
+                // Step 2: Get token — reuse room name within same tab to avoid exhausting idle processes
                 log('Fetching token from server...', 'info');
                 let roomName = sessionStorage.getItem('apb-room-name');
                 if (!roomName) {
@@ -2615,6 +2629,7 @@ When asked about theological topics listed above, use these verified positions a
                     status.textContent = 'Connected — Speak now!';
                     log('Voice connection ready!', 'success');
                     log('Speak or continue typing messages', 'info');
+                    addMessage('Voice connected! Speak now or continue typing.', 'system');
                 } else {
                     // UI update for text-to-speech connections
                     status.textContent = 'Speaking response...';
@@ -2781,6 +2796,7 @@ When asked about theological topics listed above, use these verified positions a
             // Disconnection
             room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
                 log(`Disconnected: ${reason || 'unknown'}`, 'warning');
+                addMessage('Disconnected from voice assistant', 'system');
                 disconnect();
             });
 
@@ -2986,6 +3002,7 @@ When asked about theological topics listed above, use these verified positions a
             
             // Add message to chat if this was a user-initiated stop
             if (isConnected) {
+                addMessage('Voice assistant stopped', 'system');
             }
             
             if (audioMonitorInterval) {
@@ -3015,6 +3032,7 @@ When asked about theological topics listed above, use these verified positions a
             hideTyping();
             
             log('Disconnected', 'info');
+            addMessage('Conversation ended', 'system');
         }
 
         // ============================================
