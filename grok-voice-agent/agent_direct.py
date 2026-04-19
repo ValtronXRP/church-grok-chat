@@ -378,7 +378,9 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        stt = deepgram.STT()
+        # endpointing=400ms — wait longer before declaring end of utterance so
+        # Deepgram doesn't cut off the question at natural mid-sentence pauses
+        stt = deepgram.STT(endpointing=400)
 
         tts = elevenlabs.TTS(
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
@@ -387,7 +389,8 @@ async def entrypoint(ctx: JobContext):
         )
 
         # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
-        session = AgentSession(stt=stt, tts=tts)
+        # allow_interruptions=False — prevents user audio from cutting off TTS mid-answer
+        session = AgentSession(stt=stt, tts=tts, allow_interruptions=False)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
