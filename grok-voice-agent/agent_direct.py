@@ -381,7 +381,9 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        stt = deepgram.STT()
+        # endpointing_ms=400 — wait 400ms of silence before declaring end of utterance
+        # (default is 25ms which cuts off questions mid-sentence at natural pauses)
+        stt = deepgram.STT(endpointing_ms=400)
 
         tts = elevenlabs.TTS(
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
