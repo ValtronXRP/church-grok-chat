@@ -393,8 +393,7 @@ async def entrypoint(ctx: JobContext):
         )
 
         # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
-        # allow_interruptions=False — prevents follow-up questions from cutting off the answer
-        session = AgentSession(stt=stt, tts=tts, allow_interruptions=False)
+        session = AgentSession(stt=stt, tts=tts)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
