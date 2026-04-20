@@ -1643,6 +1643,7 @@
         let autoDisconnectTimer = null;
         let countdownInterval = null;
         let countdownSeconds = 0;
+        let hasExchanged = false; // Only start countdown after user has asked at least one question
         const AUTO_DISCONNECT_DELAY = 10000;
 
         function startCountdown() {
@@ -2756,7 +2757,7 @@ When asked about theological topics listed above, use these verified positions a
                 if (agentIsSpeaking && !agentSpeaking) {
                     log('Agent stopped speaking - starting countdown', 'info');
                     setTimeout(() => {
-                        if (isConnected && !agentIsSpeaking) {
+                        if (isConnected && !agentIsSpeaking && hasExchanged) {
                             startCountdown();
                         }
                     }, 2000);
@@ -2814,6 +2815,7 @@ When asked about theological topics listed above, use these verified positions a
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
                         log(`User transcript: ${message.text?.substring(0, 50)}`, 'info');
+                        hasExchanged = true;
                         stopCountdown();
                         if (autoDisconnectTimer) {
                             clearTimeout(autoDisconnectTimer);
@@ -3061,7 +3063,7 @@ When asked about theological topics listed above, use these verified positions a
         function disconnect() {
             log('Disconnecting...', 'info');
             sessionStorage.removeItem('apb-room-name');
-            
+            hasExchanged = false;
             stopCountdown();
             if (autoDisconnectTimer) {
                 clearTimeout(autoDisconnectTimer);
