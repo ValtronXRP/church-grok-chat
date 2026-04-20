@@ -418,8 +418,8 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log("Session started — LISTENING")
 
-        # Brief delay so audio pipeline is fully ready before greeting
-        await asyncio.sleep(1.0)
+        # Wait for frontend to subscribe to audio track before greeting
+        await asyncio.sleep(3.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
             await session.say(greeting)
