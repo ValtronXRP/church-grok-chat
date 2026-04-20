@@ -383,8 +383,8 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=800 — wait 800ms of silence before declaring end of utterance
-        stt = deepgram.STT(endpointing_ms=800)
+        # endpointing_ms=1500 — wait 1.5s of silence before declaring end of utterance
+        stt = deepgram.STT(endpointing_ms=1500)
 
         tts = elevenlabs.TTS(
             voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
@@ -410,7 +410,8 @@ async def entrypoint(ctx: JobContext):
             if not event.is_final:
                 return
             transcript = event.transcript.strip()
-            if not transcript or len(transcript) < 3:
+            # Require at least 4 words — filters fragments like "what does" mid-sentence
+            if not transcript or len(transcript.split()) < 4:
                 return
             log(f"USER SAID: {transcript[:80]}")
             asyncio.create_task(_handle_user_question(transcript))
