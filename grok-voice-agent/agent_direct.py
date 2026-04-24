@@ -300,7 +300,6 @@ async def _search_reranker(query, n=10):
 _room_ref = None
 _session_ref = None
 _audio_source = None
-_tts_ref = None
 _searching = False
 _speaking_until = 0.0
 _last_transcript = ""
@@ -344,20 +343,52 @@ async def _call_grok_direct(transcript: str) -> str:
 
 
 async def _speak_direct(text: str):
-    """Push ElevenLabs TTS audio directly to LiveKit room via rtc.AudioSource.
-    Bypasses session.say() entirely — avoids AgentSession speech-scheduling freeze."""
-    global _audio_source, _tts_ref
-    if not _audio_source or not _tts_ref:
-        log("_speak_direct: audio source or TTS not initialised — skipping")
+    """Synthesize via ElevenLabs HTTP REST (pcm_24000) and push to LiveKit AudioSource.
+    No session.say() — bypasses AgentSession TTS pipeline entirely."""
+    global _audio_source
+    if not _audio_source:
+        log("_speak_direct: audio source not ready")
         return
     try:
-        stream = _tts_ref.synthesize(text)
-        async for audio_event in stream:
-            # livekit-agents v1.x: SynthesizedAudio.frame
-            # older: SynthesisEvent.audio — handle both
-            frame = getattr(audio_event, 'frame', None) or getattr(audio_event, 'audio', None)
-            if frame:
-                await _audio_source.capture_frame(frame)
+        voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "xi-api-key": os.environ["ELEVENLABS_API_KEY"],
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "text": text,
+            "model_id": "eleven_turbo_v2_5",
+            "output_format": "pcm_24000",  # raw 16-bit signed PCM at 24000 Hz, mono
+        }
+        async with aiohttp.ClientSession() as http:
+            async with http.post(url, json=payload, headers=headers,
+                                 timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    log(f"ElevenLabs TTS error {resp.status}: {body[:200]}")
+                    return
+                pcm_data = await resp.read()
+
+        log(f"_speak_direct: got {len(pcm_data)} bytes PCM — pushing to AudioSource")
+
+        # Slice into 20ms frames and push
+        SAMPLE_RATE = 24000
+        SAMPLES_PER_FRAME = 480          # 20 ms at 24000 Hz
+        BYTES_PER_FRAME = SAMPLES_PER_FRAME * 2  # 16-bit = 2 bytes per sample
+
+        for i in range(0, len(pcm_data), BYTES_PER_FRAME):
+            chunk = pcm_data[i:i + BYTES_PER_FRAME]
+            if len(chunk) < BYTES_PER_FRAME:
+                chunk = chunk + b'\x00' * (BYTES_PER_FRAME - len(chunk))
+            frame = rtc.AudioFrame(
+                data=chunk,
+                sample_rate=SAMPLE_RATE,
+                num_channels=1,
+                samples_per_channel=SAMPLES_PER_FRAME,
+            )
+            await _audio_source.capture_frame(frame)
+
         log("_speak_direct: finished")
     except Exception as e:
         log(f"_speak_direct error: {e}")
@@ -402,23 +433,17 @@ async def _handle_user_question(transcript):
 
 
 async def entrypoint(ctx: JobContext):
-    global _room_ref, _session_ref, _audio_source, _tts_ref
+    global _room_ref, _session_ref, _audio_source
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
         # endpointing_ms=1500 — wait 1.5s of silence before declaring end of utterance
         stt = deepgram.STT(endpointing_ms=1500)
 
-        tts = elevenlabs.TTS(
-            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
-            model="eleven_turbo_v2_5",
-            api_key=os.environ["ELEVENLABS_API_KEY"],
-        )
-        _tts_ref = tts
-
-        # No LLM in AgentSession — we only use it for STT (user_input_transcribed events)
+        # tts=None — AgentSession is STT-only. TTS is handled by _speak_direct() via
+        # ElevenLabs HTTP REST + rtc.AudioSource, bypassing AgentSession's audio pipeline.
         # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
-        session = AgentSession(stt=stt, tts=tts, min_endpointing_delay=2.0)
+        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=2.0)
         _session_ref = session
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
@@ -428,14 +453,6 @@ async def entrypoint(ctx: JobContext):
         await ctx.connect()
         _room_ref = ctx.room
         log(f"Connected to room: {ctx.room.name}")
-
-        # Publish a direct audio track so _speak_direct() can push TTS frames
-        # without going through session.say() (which freezes AgentSession pipeline)
-        _audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
-        audio_track = rtc.LocalAudioTrack.create_audio_track("voice", _audio_source)
-        publish_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
-        await ctx.room.local_participant.publish_track(audio_track, publish_options)
-        log("Direct audio track published")
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
@@ -451,6 +468,15 @@ async def entrypoint(ctx: JobContext):
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
         log("Session started — LISTENING")
+
+        # Publish audio track AFTER session.start() so AgentSession pipeline is fully
+        # initialised. With tts=None, session.start() sets up no audio output pipeline,
+        # so our AudioSource is the sole audio output. Sample rate must match exactly.
+        _audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
+        audio_track = rtc.LocalAudioTrack.create_audio_track("voice", _audio_source)
+        publish_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+        await ctx.room.local_participant.publish_track(audio_track, publish_options)
+        log("Direct audio track published")
 
         # Wait for frontend to subscribe to audio track before greeting
         await asyncio.sleep(3.0)
