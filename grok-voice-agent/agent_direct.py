@@ -22,6 +22,7 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
+from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import deepgram, elevenlabs
 from livekit.plugins import openai as lk_openai
@@ -298,6 +299,8 @@ async def _search_reranker(query, n=10):
 
 _room_ref = None
 _session_ref = None
+_audio_source = None
+_tts_ref = None
 _searching = False
 _speaking_until = 0.0
 _last_transcript = ""
@@ -340,6 +343,28 @@ async def _call_grok_direct(transcript: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
 
 
+async def _speak_direct(text: str):
+    """Push ElevenLabs TTS audio directly to LiveKit room via rtc.AudioSource.
+    Bypasses session.say() entirely — avoids AgentSession speech-scheduling freeze."""
+    global _audio_source, _tts_ref
+    if not _audio_source or not _tts_ref:
+        log("_speak_direct: audio source or TTS not initialised — skipping")
+        return
+    try:
+        stream = _tts_ref.synthesize(text)
+        async for audio_event in stream:
+            # livekit-agents v1.x: SynthesizedAudio.frame
+            # older: SynthesisEvent.audio — handle both
+            frame = getattr(audio_event, 'frame', None) or getattr(audio_event, 'audio', None)
+            if frame:
+                await _audio_source.capture_frame(frame)
+        log("_speak_direct: finished")
+    except Exception as e:
+        log(f"_speak_direct error: {e}")
+        import traceback
+        log(traceback.format_exc())
+
+
 async def _handle_user_question(transcript):
     global _searching, _speaking_until, _last_transcript
     now = time.monotonic()
@@ -367,10 +392,7 @@ async def _handle_user_question(transcript):
         words = len(answer.split())
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
         await _send_data_message("agent_transcript", {"text": answer})
-        try:
-            await asyncio.wait_for(_session_ref.say(answer), timeout=30.0)
-        except asyncio.TimeoutError:
-            log("session.say() timed out after 30s — resetting")
+        await _speak_direct(answer)
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
@@ -380,7 +402,7 @@ async def _handle_user_question(transcript):
 
 
 async def entrypoint(ctx: JobContext):
-    global _room_ref, _session_ref
+    global _room_ref, _session_ref, _audio_source, _tts_ref
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
@@ -392,12 +414,12 @@ async def entrypoint(ctx: JobContext):
             model="eleven_turbo_v2_5",
             api_key=os.environ["ELEVENLABS_API_KEY"],
         )
+        _tts_ref = tts
 
-        # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
+        # No LLM in AgentSession — we only use it for STT (user_input_transcribed events)
         # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
         session = AgentSession(stt=stt, tts=tts, min_endpointing_delay=2.0)
         _session_ref = session
-        # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
         await fetch_dynamic_keywords()
@@ -406,6 +428,14 @@ async def entrypoint(ctx: JobContext):
         await ctx.connect()
         _room_ref = ctx.room
         log(f"Connected to room: {ctx.room.name}")
+
+        # Publish a direct audio track so _speak_direct() can push TTS frames
+        # without going through session.say() (which freezes AgentSession pipeline)
+        _audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
+        audio_track = rtc.LocalAudioTrack.create_audio_track("voice", _audio_source)
+        publish_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+        await ctx.room.local_participant.publish_track(audio_track, publish_options)
+        log("Direct audio track published")
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
@@ -425,11 +455,8 @@ async def entrypoint(ctx: JobContext):
         # Wait for frontend to subscribe to audio track before greeting
         await asyncio.sleep(3.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
-        try:
-            await session.say(greeting)
-            log("Greeting sent")
-        except Exception as e:
-            log(f"Greeting error: {e} - continuing anyway")
+        await _speak_direct(greeting)
+        log("Greeting sent")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
