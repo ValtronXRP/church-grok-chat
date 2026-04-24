@@ -366,11 +366,12 @@ async def _handle_user_question(transcript):
         elapsed_llm = time.monotonic() - t_start
         words = len(answer.split())
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
-        await _session_ref.say(answer)
-        # Brief cooldown after speaking to prevent echo — say() completes when
-        # TTS audio is done, so 2s flat is enough to avoid self-triggering
-        _speaking_until = time.monotonic() + 2.0
         await _send_data_message("agent_transcript", {"text": answer})
+        try:
+            await asyncio.wait_for(_session_ref.say(answer), timeout=30.0)
+        except asyncio.TimeoutError:
+            log("session.say() timed out after 30s — resetting")
+        _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
         _speaking_until = 0.0  # reset so next question isn't blocked
@@ -393,7 +394,8 @@ async def entrypoint(ctx: JobContext):
         )
 
         # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
-        session = AgentSession(stt=stt, tts=tts)
+        # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
+        session = AgentSession(stt=stt, tts=tts, min_endpointing_delay=2.0)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
