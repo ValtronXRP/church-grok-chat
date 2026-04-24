@@ -22,10 +22,65 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
-from livekit import rtc
+import uuid
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.plugins import deepgram, elevenlabs
+from livekit.agents.tts import TTS as BaseTTS, TTSCapabilities, ChunkedStream, DEFAULT_API_CONNECT_OPTIONS
+from livekit.plugins import deepgram
 from livekit.plugins import openai as lk_openai
+
+
+class ElevenLabsRestTTS(BaseTTS):
+    """ElevenLabs TTS via HTTP REST (pcm_24000). No WebSocket — no timeout/close issues."""
+
+    def __init__(self, voice_id: str, api_key: str, model: str = "eleven_turbo_v2_5"):
+        super().__init__(
+            capabilities=TTSCapabilities(streaming=False),
+            sample_rate=24000,
+            num_channels=1,
+        )
+        self._voice_id = voice_id
+        self._api_key = api_key
+        self._model = model
+
+    def synthesize(self, text: str, *, conn_options=DEFAULT_API_CONNECT_OPTIONS) -> "ElevenLabsRestStream":
+        return ElevenLabsRestStream(
+            tts=self,
+            input_text=text,
+            conn_options=conn_options,
+        )
+
+
+class ElevenLabsRestStream(ChunkedStream):
+    async def _run(self, output_emitter) -> None:
+        tts: ElevenLabsRestTTS = self._tts  # type: ignore
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{tts._voice_id}"
+        headers = {
+            "xi-api-key": tts._api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "text": self._input_text,
+            "model_id": tts._model,
+            "output_format": "pcm_24000",
+        }
+        async with aiohttp.ClientSession() as http:
+            async with http.post(
+                url, json=payload, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"ElevenLabs HTTP {resp.status}: {body[:200]}")
+                pcm_data = await resp.read()
+
+        output_emitter.initialize(
+            request_id=str(uuid.uuid4()),
+            sample_rate=24000,
+            num_channels=1,
+            mime_type="audio/pcm",
+        )
+        output_emitter.push(pcm_data)
+        output_emitter.end_input()
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
@@ -299,7 +354,6 @@ async def _search_reranker(query, n=10):
 
 _room_ref = None
 _session_ref = None
-_audio_source = None
 _searching = False
 _speaking_until = 0.0
 _last_transcript = ""
@@ -342,108 +396,52 @@ async def _call_grok_direct(transcript: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
 
 
-async def _speak_direct(text: str):
-    """Synthesize via ElevenLabs HTTP REST (pcm_24000) and push to LiveKit AudioSource.
-    No session.say() — bypasses AgentSession TTS pipeline entirely."""
-    global _audio_source
-    if not _audio_source:
-        log("_speak_direct: audio source not ready")
-        return
-    try:
-        voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = {
-            "xi-api-key": os.environ["ELEVENLABS_API_KEY"],
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "text": text,
-            "model_id": "eleven_turbo_v2_5",
-            "output_format": "pcm_24000",  # raw 16-bit signed PCM at 24000 Hz, mono
-        }
-        async with aiohttp.ClientSession() as http:
-            async with http.post(url, json=payload, headers=headers,
-                                 timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    log(f"ElevenLabs TTS error {resp.status}: {body[:200]}")
-                    return
-                pcm_data = await resp.read()
-
-        log(f"_speak_direct: got {len(pcm_data)} bytes PCM — pushing to AudioSource")
-
-        # Slice into 20ms frames and push
-        SAMPLE_RATE = 24000
-        SAMPLES_PER_FRAME = 480          # 20 ms at 24000 Hz
-        BYTES_PER_FRAME = SAMPLES_PER_FRAME * 2  # 16-bit = 2 bytes per sample
-
-        for i in range(0, len(pcm_data), BYTES_PER_FRAME):
-            chunk = pcm_data[i:i + BYTES_PER_FRAME]
-            if len(chunk) < BYTES_PER_FRAME:
-                chunk = chunk + b'\x00' * (BYTES_PER_FRAME - len(chunk))
-            frame = rtc.AudioFrame(
-                data=chunk,
-                sample_rate=SAMPLE_RATE,
-                num_channels=1,
-                samples_per_channel=SAMPLES_PER_FRAME,
-            )
-            await _audio_source.capture_frame(frame)
-
-        log("_speak_direct: finished")
-    except Exception as e:
-        log(f"_speak_direct error: {e}")
-        import traceback
-        log(traceback.format_exc())
-
-
 async def _handle_user_question(transcript):
     global _searching, _speaking_until, _last_transcript
     now = time.monotonic()
-    # Guard 1: already processing a question
     if _searching:
         log(f"Already searching, skipping: {transcript[:40]}")
         return
-    # Guard 2: still speaking the last answer
     if now < _speaking_until:
         log(f"Still speaking, skipping: {transcript[:40]}")
         return
-    # Guard 3: exact same transcript just processed
     if transcript == _last_transcript and now < _speaking_until + 5.0:
         log(f"Duplicate transcript, skipping: {transcript[:40]}")
         return
     _searching = True
     _last_transcript = transcript
-    # Send user transcript exactly once — after all guards
     await _send_data_message("user_transcript", {"text": transcript})
     t_start = time.monotonic()
     try:
         log(f"Calling Grok for: {transcript[:80]}")
         answer = await _call_grok_direct(transcript)
-        elapsed_llm = time.monotonic() - t_start
-        words = len(answer.split())
-        log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
+        log(f"Grok responded in {time.monotonic()-t_start:.2f}s — speaking now")
         await _send_data_message("agent_transcript", {"text": answer})
-        await _speak_direct(answer)
+        await _session_ref.say(answer)
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
-        _speaking_until = 0.0  # reset so next question isn't blocked
+        _speaking_until = 0.0
     finally:
         _searching = False
 
 
 async def entrypoint(ctx: JobContext):
-    global _room_ref, _session_ref, _audio_source
+    global _room_ref, _session_ref
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=1500 — wait 1.5s of silence before declaring end of utterance
         stt = deepgram.STT(endpointing_ms=1500)
 
-        # tts=None — AgentSession is STT-only. TTS is handled by _speak_direct() via
-        # ElevenLabs HTTP REST + rtc.AudioSource, bypassing AgentSession's audio pipeline.
+        # Custom TTS using ElevenLabs HTTP REST (pcm_24000) — no WebSocket, no timeouts.
+        # AgentSession manages the audio track so the browser subscribes correctly.
+        tts = ElevenLabsRestTTS(
+            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
+            api_key=os.environ["ELEVENLABS_API_KEY"],
+        )
+
         # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
-        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=2.0)
+        session = AgentSession(stt=stt, tts=tts, min_endpointing_delay=2.0)
         _session_ref = session
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
@@ -459,7 +457,6 @@ async def entrypoint(ctx: JobContext):
             if not event.is_final:
                 return
             transcript = event.transcript.strip()
-            # Require at least 4 words — filters fragments like "what does" mid-sentence
             if not transcript or len(transcript.split()) < 4:
                 return
             log(f"USER SAID: {transcript[:80]}")
@@ -469,19 +466,9 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log("Session started — LISTENING")
 
-        # Publish audio track AFTER session.start() so AgentSession pipeline is fully
-        # initialised. With tts=None, session.start() sets up no audio output pipeline,
-        # so our AudioSource is the sole audio output. Sample rate must match exactly.
-        _audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
-        audio_track = rtc.LocalAudioTrack.create_audio_track("voice", _audio_source)
-        publish_options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
-        await ctx.room.local_participant.publish_track(audio_track, publish_options)
-        log("Direct audio track published")
-
-        # Wait for frontend to subscribe to audio track before greeting
         await asyncio.sleep(3.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
-        await _speak_direct(greeting)
+        await session.say(greeting)
         log("Greeting sent")
 
         shutdown_event = asyncio.Event()
