@@ -32,9 +32,9 @@ async def _elevenlabs_frames(text: str):
     """Fetch audio from ElevenLabs HTTP REST (pcm_24000) and yield rtc.AudioFrame objects.
     Passed directly to session.say(audio=...) — no WebSocket, no timeout, no truncation."""
     voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=pcm_24000"
     headers = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"}
-    payload = {"text": text, "model_id": "eleven_turbo_v2_5", "output_format": "pcm_24000"}
+    payload = {"text": text, "model_id": "eleven_turbo_v2_5"}
     try:
         async with aiohttp.ClientSession() as http:
             async with http.post(url, json=payload, headers=headers,
