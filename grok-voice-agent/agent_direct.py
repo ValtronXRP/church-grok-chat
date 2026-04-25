@@ -328,7 +328,7 @@ async def _call_grok_direct(transcript: str) -> str:
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
         ],
-        "max_tokens": 150,
+        "max_tokens": 350,
         "temperature": 0.7,
     }
     async with aiohttp.ClientSession() as http:
