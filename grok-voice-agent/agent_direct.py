@@ -24,7 +24,11 @@ def log(msg):
 
 import uuid
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.agents.tts import TTS as BaseTTS, TTSCapabilities, ChunkedStream, DEFAULT_API_CONNECT_OPTIONS
+from livekit.agents.tts import TTS as BaseTTS, TTSCapabilities, ChunkedStream
+try:
+    from livekit.agents.tts import DEFAULT_API_CONNECT_OPTIONS as _DEFAULT_CONN_OPTIONS
+except ImportError:
+    _DEFAULT_CONN_OPTIONS = None
 from livekit.plugins import deepgram
 from livekit.plugins import openai as lk_openai
 
@@ -42,7 +46,7 @@ class ElevenLabsRestTTS(BaseTTS):
         self._api_key = api_key
         self._model = model
 
-    def synthesize(self, text: str, *, conn_options=DEFAULT_API_CONNECT_OPTIONS) -> "ElevenLabsRestStream":
+    def synthesize(self, text: str, *, conn_options=_DEFAULT_CONN_OPTIONS) -> "ElevenLabsRestStream":
         return ElevenLabsRestStream(
             tts=self,
             input_text=text,
