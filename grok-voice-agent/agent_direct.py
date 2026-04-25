@@ -414,15 +414,10 @@ async def entrypoint(ctx: JobContext):
         # endpointing_ms=1500 — wait 1.5s of silence before declaring end of utterance
         stt = deepgram.STT(endpointing_ms=1500)
 
-        tts = elevenlabs.TTS(
-            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh"),
-            model="eleven_turbo_v2_5",
-            api_key=os.environ["ELEVENLABS_API_KEY"],
-        )
-
-        # No LLM in AgentSession — prevents auto-pipeline conflicts with session.say()
+        # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
+        # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
         # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
-        session = AgentSession(stt=stt, tts=tts, min_endpointing_delay=2.0)
+        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=2.0)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
