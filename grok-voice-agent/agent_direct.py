@@ -22,9 +22,39 @@ logger.addHandler(handler)
 def log(msg):
     print(f"[APB] {msg}", flush=True)
 
+from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import deepgram, elevenlabs
 from livekit.plugins import openai as lk_openai
+
+
+async def _elevenlabs_frames(text: str):
+    """Fetch audio from ElevenLabs HTTP REST (pcm_24000) and yield rtc.AudioFrame objects.
+    Passed directly to session.say(audio=...) — no WebSocket, no timeout, no truncation."""
+    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"}
+    payload = {"text": text, "model_id": "eleven_turbo_v2_5", "output_format": "pcm_24000"}
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.post(url, json=payload, headers=headers,
+                                 timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    log(f"ElevenLabs REST {resp.status}: {body[:200]}")
+                    return
+                pcm_data = await resp.read()
+        log(f"ElevenLabs REST: {len(pcm_data)} bytes PCM")
+        SAMPLES = 480           # 20 ms @ 24 kHz
+        BYTES   = SAMPLES * 2   # s16le
+        for i in range(0, len(pcm_data), BYTES):
+            chunk = pcm_data[i:i + BYTES]
+            if len(chunk) < BYTES:
+                chunk += b'\x00' * (BYTES - len(chunk))
+            yield rtc.AudioFrame(data=chunk, sample_rate=24000,
+                                 num_channels=1, samples_per_channel=SAMPLES)
+    except Exception as e:
+        log(f"ElevenLabs REST error: {e}")
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
@@ -367,10 +397,7 @@ async def _handle_user_question(transcript):
         words = len(answer.split())
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
         await _send_data_message("agent_transcript", {"text": answer})
-        try:
-            await asyncio.wait_for(_session_ref.say(answer), timeout=30.0)
-        except asyncio.TimeoutError:
-            log("session.say() timed out after 30s — resetting")
+        await _session_ref.say(answer, audio=_elevenlabs_frames(answer))
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
@@ -426,7 +453,7 @@ async def entrypoint(ctx: JobContext):
         await asyncio.sleep(3.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.say(greeting)
+            await session.say(greeting, audio=_elevenlabs_frames(greeting))
             log("Greeting sent")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
