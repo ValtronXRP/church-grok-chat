@@ -23,12 +23,9 @@ def log(msg):
     print(f"[APB] {msg}", flush=True)
 
 import uuid
+from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
-from livekit.agents.tts import TTS as BaseTTS, TTSCapabilities, ChunkedStream
-try:
-    from livekit.agents.tts import DEFAULT_API_CONNECT_OPTIONS as _DEFAULT_CONN_OPTIONS
-except ImportError:
-    _DEFAULT_CONN_OPTIONS = None
+from livekit.agents.tts import TTS as BaseTTS, TTSCapabilities, ChunkedStream, SynthesizedAudio
 from livekit.plugins import deepgram
 from livekit.plugins import openai as lk_openai
 
@@ -46,7 +43,8 @@ class ElevenLabsRestTTS(BaseTTS):
         self._api_key = api_key
         self._model = model
 
-    def synthesize(self, text: str, *, conn_options=_DEFAULT_CONN_OPTIONS) -> "ElevenLabsRestStream":
+    def synthesize(self, text: str, **kwargs) -> "ElevenLabsRestStream":
+        conn_options = kwargs.get("conn_options", None)
         return ElevenLabsRestStream(
             tts=self,
             input_text=text,
@@ -55,36 +53,55 @@ class ElevenLabsRestTTS(BaseTTS):
 
 
 class ElevenLabsRestStream(ChunkedStream):
-    async def _run(self, output_emitter) -> None:
+    async def _main_task(self) -> None:
+        """Override entirely — build rtc.AudioFrame objects directly, skip output_emitter.
+        Avoids PCM format guessing and resampling issues inside AudioEmitter."""
         tts: ElevenLabsRestTTS = self._tts  # type: ignore
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{tts._voice_id}"
-        headers = {
-            "xi-api-key": tts._api_key,
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "text": self._input_text,
-            "model_id": tts._model,
-            "output_format": "pcm_24000",
-        }
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                url, json=payload, headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    raise RuntimeError(f"ElevenLabs HTTP {resp.status}: {body[:200]}")
-                pcm_data = await resp.read()
+        request_id = str(uuid.uuid4())
+        try:
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{tts._voice_id}"
+            headers = {"xi-api-key": tts._api_key, "Content-Type": "application/json"}
+            payload = {
+                "text": self._input_text,
+                "model_id": tts._model,
+                "output_format": "pcm_24000",  # raw s16le, 24 kHz, mono
+            }
+            async with aiohttp.ClientSession() as http:
+                async with http.post(url, json=payload, headers=headers,
+                                     timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        log(f"ElevenLabs REST {resp.status}: {body[:200]}")
+                        return
+                    pcm_data = await resp.read()
 
-        output_emitter.initialize(
-            request_id=str(uuid.uuid4()),
-            sample_rate=24000,
-            num_channels=1,
-            mime_type="audio/pcm",
-        )
-        output_emitter.push(pcm_data)
-        output_emitter.end_input()
+            log(f"ElevenLabs REST TTS: {len(pcm_data)} bytes — building frames")
+            SAMPLE_RATE = 24000
+            SAMPLES_PER_FRAME = 480          # 20 ms @ 24 kHz
+            BYTES_PER_FRAME = SAMPLES_PER_FRAME * 2  # s16le = 2 bytes/sample
+            frames_total = (len(pcm_data) + BYTES_PER_FRAME - 1) // BYTES_PER_FRAME
+
+            for idx in range(frames_total):
+                start = idx * BYTES_PER_FRAME
+                chunk = pcm_data[start:start + BYTES_PER_FRAME]
+                if len(chunk) < BYTES_PER_FRAME:
+                    chunk += b'\x00' * (BYTES_PER_FRAME - len(chunk))
+                frame = rtc.AudioFrame(
+                    data=chunk,
+                    sample_rate=SAMPLE_RATE,
+                    num_channels=1,
+                    samples_per_channel=SAMPLES_PER_FRAME,
+                )
+                self._event_ch.send_nowait(SynthesizedAudio(
+                    frame=frame,
+                    request_id=request_id,
+                    is_final=(idx == frames_total - 1),
+                ))
+            log(f"ElevenLabs REST TTS: {frames_total} frames queued")
+        except Exception as e:
+            log(f"ElevenLabsRestStream error: {e}")
+            import traceback
+            log(traceback.format_exc())
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
