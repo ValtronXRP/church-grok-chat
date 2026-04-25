@@ -397,7 +397,7 @@ async def _handle_user_question(transcript):
         words = len(answer.split())
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
         await _send_data_message("agent_transcript", {"text": answer})
-        await _session_ref.say(answer, audio=_elevenlabs_frames(answer))
+        await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
@@ -448,7 +448,7 @@ async def entrypoint(ctx: JobContext):
         await asyncio.sleep(3.0)
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.say(greeting, audio=_elevenlabs_frames(greeting))
+            await session.say(greeting, audio=_elevenlabs_frames(greeting), allow_interruptions=False)
             log("Greeting sent")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
