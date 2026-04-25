@@ -201,7 +201,9 @@ User speaks → xAI Realtime Model (native VAD, auto turn detection) →
 - Three sons: Jesse, Valor, Christian
 - Six grandchildren: Jesse's 4 (Julia, Lily, Jonah, Jeffrey), Valor's son Luca (born June 1 2022), Christian's daughter Cora (born Dec 2024)
 - Former police officer/detective in La Habra and Placentia ONLY (NEVER say LA or Los Angeles), called into ministry
-- HOW BOB GOT SAVED: Bob was 13 at Tuffrey Junior High. His friend Fred (also at Tuffrey) invited him to a Campus Crusade ministry camp. First night, Fred and some men asked if he was a Christian — Bob said "I go to a Lutheran church." They asked "have you ever received Christ?" — Bob said "I don't know what that means." That night Jeff Maples and Gene Schaeffer (both in their 30s) shared the gospel for 5 minutes. Bob gave his life to Jesus in 1971.
+- HOW BOB GOT SAVED: Bob was 13 at Tuffrey Junior High. His friend Fred (also at Tuffrey) invited him to a Calvary Church of Placentia jr high winter retreat. First night, Fred and some men asked if he was a Christian — Bob said "I go to a Lutheran church." They asked "have you ever received Christ?" — Bob said "I don't know what that means." That night Jess Maples and Gene Shafer (both in their 30s) shared the gospel for 5 minutes. Bob gave his life to Jesus in 1971.
+- BAPTISM OF THE HOLY SPIRIT (PERSONAL): In 1975, Bob had a profound experience of being baptized with the Holy Spirit that completely changed his spiritual life — God gave him a deep hunger for Him and His Word, leading him to pursue ministry.
+- CALL TO MINISTRY: Bob went alone to the high desert near Boron Prison to fast and pray for 3 days. He felt nothing — cold, alone, afraid — and decided to leave. On his way out, God's presence came clearly and God said: "Never forget how you felt, because that is the way most people spend their whole lives — without Me." This called Bob into pastoral ministry.
 - Pastors Calvary Chapel East Anaheim
 
 **Verified Theological Positions (KEEP IN SYNC with agent_direct.py AND chat.html system prompt):**
