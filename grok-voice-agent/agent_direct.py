@@ -34,7 +34,7 @@ async def _elevenlabs_frames(text: str):
     voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=pcm_24000"
     headers = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"}
-    payload = {"text": text, "model_id": "eleven_turbo_v2_5"}
+    payload = {"text": text, "model_id": "eleven_flash_v2_5"}
     try:
         async with aiohttp.ClientSession() as http:
             async with http.post(url, json=payload, headers=headers,
