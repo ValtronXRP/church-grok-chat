@@ -1588,70 +1588,73 @@
         const GROK_API_URL = '/api/chat';  // Use relative URL for local development
         
         // ============================================
-        // BACKGROUND MUSIC — soft Cmaj7 pad, plays after verbal bridge
+        // BACKGROUND MUSIC — gentle pentatonic arpeggio, plays after verbal bridge
         // ============================================
         let bgMusicCtx = null;
-        let bgMusicNodes = null;
+        let bgMusicActive = false;
+        let bgMusicTimerId = null;
+        let bgMusicMasterGain = null;
 
         function startBackgroundMusic() {
             try {
-                if (bgMusicNodes) return; // already playing
+                if (bgMusicActive) return;
                 bgMusicCtx = bgMusicCtx || new (window.AudioContext || window.webkitAudioContext)();
                 const ctx = bgMusicCtx;
+                bgMusicActive = true;
 
-                // Cmaj7 chord: C3, E3, G3, B3 (triangle waves — warm and soft)
-                const freqs = [130.81, 164.81, 196.00, 246.94];
-                const oscs = freqs.map(freq => {
-                    const osc = ctx.createOscillator();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-                    return osc;
-                });
-
-                // Low-pass filter to keep it gentle
-                const filter = ctx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(900, ctx.currentTime);
-                filter.Q.setValueAtTime(0.5, ctx.currentTime);
-
-                // Slow tremolo for a breathing feel
-                const lfo = ctx.createOscillator();
-                lfo.type = 'sine';
-                lfo.frequency.setValueAtTime(0.3, ctx.currentTime);
-                const lfoGain = ctx.createGain();
-                lfoGain.gain.setValueAtTime(0.012, ctx.currentTime);
-                lfo.connect(lfoGain);
-
-                // Master gain — fade in over 2s to quiet level
+                // Master gain — fade in gently over 1.5s
                 const masterGain = ctx.createGain();
                 masterGain.gain.setValueAtTime(0, ctx.currentTime);
-                masterGain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 2.0);
-
-                lfoGain.connect(masterGain.gain);
-                oscs.forEach(osc => osc.connect(filter));
-                filter.connect(masterGain);
+                masterGain.gain.linearRampToValueAtTime(0.055, ctx.currentTime + 1.5);
                 masterGain.connect(ctx.destination);
+                bgMusicMasterGain = masterGain;
 
-                oscs.forEach(osc => osc.start());
-                lfo.start();
+                // Pentatonic C major: C4, E4, G4, A4, C5 — always sounds pleasant
+                const notes = [261.63, 329.63, 392.00, 440.00, 523.25];
+                let noteIndex = 0;
 
-                bgMusicNodes = { oscs, lfo, masterGain };
+                function playNextNote() {
+                    if (!bgMusicActive) return;
+                    const t = ctx.currentTime;
+                    const freq = notes[noteIndex % notes.length];
+                    noteIndex++;
+
+                    // Each note: soft sine wave with attack/decay (sounds like a gentle pluck)
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, t);
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, t);
+                    env.gain.linearRampToValueAtTime(1.0, t + 0.04);   // quick attack
+                    env.gain.linearRampToValueAtTime(0.3, t + 0.18);   // decay
+                    env.gain.linearRampToValueAtTime(0, t + 0.6);      // release
+
+                    osc.connect(env);
+                    env.connect(masterGain);
+                    osc.start(t);
+                    osc.stop(t + 0.65);
+
+                    bgMusicTimerId = setTimeout(playNextNote, 700);
+                }
+
+                playNextNote();
             } catch(e) {}
         }
 
         function stopBackgroundMusic() {
             try {
-                if (!bgMusicNodes) return;
-                const { oscs, lfo, masterGain } = bgMusicNodes;
-                const ctx = bgMusicCtx;
-                // Fade out over 1.5s
-                masterGain.gain.cancelScheduledValues(ctx.currentTime);
-                masterGain.gain.setValueAtTime(masterGain.gain.value, ctx.currentTime);
-                masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
-                setTimeout(() => {
-                    try { oscs.forEach(osc => osc.stop()); lfo.stop(); } catch(e) {}
-                }, 1800);
-                bgMusicNodes = null;
+                bgMusicActive = false;
+                clearTimeout(bgMusicTimerId);
+                bgMusicTimerId = null;
+                if (bgMusicMasterGain && bgMusicCtx) {
+                    const gain = bgMusicMasterGain;
+                    const ctx = bgMusicCtx;
+                    gain.gain.cancelScheduledValues(ctx.currentTime);
+                    gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
+                }
+                bgMusicMasterGain = null;
             } catch(e) {}
         }
 

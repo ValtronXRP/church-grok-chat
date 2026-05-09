@@ -68,11 +68,10 @@ THINKING_TEXTS = [
 ]
 
 VERBAL_BRIDGES = [
-    "Let me pull up what I've taught on that.",
     "Good question. Let me think about that.",
-    "Let me see what I've said about this.",
-    "Interesting. Give me a moment on that one.",
-    "Let me find the answer for you.",
+    "Let me pull up what I've taught on that.",
+    "Interesting. Let me see.",
+    "Let me think about that for a moment.",
 ]
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
@@ -417,6 +416,8 @@ async def _handle_user_question(transcript):
         log(f"Calling Grok + playing bridge in parallel: {transcript[:60]}")
         # Run Grok and verbal bridge fetch in parallel
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
+        # Wait 1.2s after question ends before playing bridge (feels more natural)
+        await asyncio.sleep(1.2)
         # Play verbal bridge while Grok is running (both happen at same time)
         await _session_ref.say(bridge_text, audio=_elevenlabs_frames(bridge_text), allow_interruptions=False)
         # Signal frontend that bridge is done — triggers background music
@@ -440,8 +441,8 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=1500 — wait 1.5s of silence before declaring end of utterance
-        stt = deepgram.STT(endpointing_ms=1500)
+        # endpointing_ms=2500 — wait 2.5s of silence before declaring end of utterance (prevents early cutoff)
+        stt = deepgram.STT(endpointing_ms=2500)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
