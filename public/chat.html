@@ -684,6 +684,25 @@
             40% { transform: scale(1.2); }
         }
 
+        /* Thinking text bubble — replaces dots when backend sends thinking_text */
+        .thinking-bubble {
+            align-self: flex-start;
+            background: #2d2d2d;
+            border-radius: 18px;
+            border-bottom-left-radius: 6px;
+            padding: 12px 18px;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 14px;
+            max-width: 75%;
+            animation: fadeInThinking 0.3s ease;
+        }
+
+        @keyframes fadeInThinking {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
         /* Voice Button */
         #voiceBtn {
             width: 140px;
@@ -2290,6 +2309,22 @@ When asked about theological topics listed above, use these verified positions a
             if (typingTimeout) clearTimeout(typingTimeout);
         }
 
+        function showThinkingBubble(text) {
+            hideThinkingBubble(); // remove any existing one first
+            const chatMessages = document.getElementById('chatMessages');
+            const bubble = document.createElement('div');
+            bubble.className = 'thinking-bubble';
+            bubble.id = 'thinkingBubble';
+            bubble.textContent = text;
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideThinkingBubble() {
+            const bubble = document.getElementById('thinkingBubble');
+            if (bubble) bubble.remove();
+        }
+
         // ============================================
         // TEXT INPUT FUNCTIONS
         // ============================================
@@ -2831,11 +2866,18 @@ When asked about theological topics listed above, use these verified positions a
                             conversationHistory.push({ role: 'user', content: message.text });
                             showTyping();
                         }
+                    } else if (message.type === 'thinking_text') {
+                        // Replace dots with a thinking text bubble and start ambient hum
+                        hideTyping();
+                        showThinkingBubble(message.text || 'Let me think about that…');
+                        startThinkingHum();
                     } else if (message.type === 'agent_transcript') {
                         stopCountdown();
                         if (message.text && message.text !== lastAgentMessage) {
                             lastAgentMessage = message.text;
+                            hideThinkingBubble();
                             hideTyping();
+                            stopThinkingHum();
                             const agentMsg = addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
                             if (agentMsg) {

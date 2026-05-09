@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 import sys
 import json
 import time
@@ -57,6 +58,22 @@ async def _elevenlabs_frames(text: str):
         log(f"ElevenLabs REST error: {e}")
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
+
+THINKING_TEXTS = [
+    "Let me think about that…",
+    "Good question. Let me pull that up…",
+    "Interesting. Give me a moment…",
+    "Looking through my teachings on this…",
+    "Let's see what I've taught about that…",
+]
+
+VERBAL_BRIDGES = [
+    "Good question. Let me think about that for you.",
+    "I'm glad you asked that. Let me see.",
+    "Let me pull up what I've taught on this.",
+    "That's a great question. Give me just a moment.",
+    "I remember talking about this. Let me find it.",
+]
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
 
@@ -391,13 +408,21 @@ async def _handle_user_question(transcript):
     _last_transcript = transcript
     # Send user transcript exactly once — after all guards
     await _send_data_message("user_transcript", {"text": transcript})
+    # Send thinking text immediately so frontend can display it
+    thinking_text = random.choice(THINKING_TEXTS)
+    bridge_text = random.choice(VERBAL_BRIDGES)
+    await _send_data_message("thinking_text", {"text": thinking_text})
     t_start = time.monotonic()
     try:
-        log(f"Calling Grok for: {transcript[:80]}")
-        answer = await _call_grok_direct(transcript)
+        log(f"Calling Grok + playing bridge in parallel: {transcript[:60]}")
+        # Run Grok and verbal bridge fetch in parallel
+        grok_task = asyncio.create_task(_call_grok_direct(transcript))
+        # Play verbal bridge while Grok is running (both happen at same time)
+        await _session_ref.say(bridge_text, audio=_elevenlabs_frames(bridge_text), allow_interruptions=False)
+        # Grok should be done (or nearly done) by the time bridge finishes
+        answer = await grok_task
         elapsed_llm = time.monotonic() - t_start
-        words = len(answer.split())
-        log(f"Grok responded in {elapsed_llm:.2f}s — speaking now")
+        log(f"Grok responded in {elapsed_llm:.2f}s — speaking answer now")
         await _send_data_message("agent_transcript", {"text": answer})
         await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
         _speaking_until = time.monotonic() + 2.0
