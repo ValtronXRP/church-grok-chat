@@ -1587,76 +1587,7 @@
         const TOKEN_URL = '/token';  // Relative URL for local server
         const GROK_API_URL = '/api/chat';  // Use relative URL for local development
         
-        // ============================================
-        // BACKGROUND MUSIC — gentle pentatonic arpeggio, plays after verbal bridge
-        // ============================================
-        let bgMusicCtx = null;
-        let bgMusicActive = false;
-        let bgMusicTimerId = null;
-        let bgMusicMasterGain = null;
-
-        function startBackgroundMusic() {
-            try {
-                if (bgMusicActive) return;
-                bgMusicCtx = bgMusicCtx || new (window.AudioContext || window.webkitAudioContext)();
-                const ctx = bgMusicCtx;
-                bgMusicActive = true;
-
-                // Master gain — fade in gently over 1.5s
-                const masterGain = ctx.createGain();
-                masterGain.gain.setValueAtTime(0, ctx.currentTime);
-                masterGain.gain.linearRampToValueAtTime(0.055, ctx.currentTime + 1.5);
-                masterGain.connect(ctx.destination);
-                bgMusicMasterGain = masterGain;
-
-                // Pentatonic C major: C4, E4, G4, A4, C5 — always sounds pleasant
-                const notes = [261.63, 329.63, 392.00, 440.00, 523.25];
-                let noteIndex = 0;
-
-                function playNextNote() {
-                    if (!bgMusicActive) return;
-                    const t = ctx.currentTime;
-                    const freq = notes[noteIndex % notes.length];
-                    noteIndex++;
-
-                    // Each note: soft sine wave with attack/decay (sounds like a gentle pluck)
-                    const osc = ctx.createOscillator();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, t);
-
-                    const env = ctx.createGain();
-                    env.gain.setValueAtTime(0, t);
-                    env.gain.linearRampToValueAtTime(1.0, t + 0.04);   // quick attack
-                    env.gain.linearRampToValueAtTime(0.3, t + 0.18);   // decay
-                    env.gain.linearRampToValueAtTime(0, t + 0.6);      // release
-
-                    osc.connect(env);
-                    env.connect(masterGain);
-                    osc.start(t);
-                    osc.stop(t + 0.65);
-
-                    bgMusicTimerId = setTimeout(playNextNote, 700);
-                }
-
-                playNextNote();
-            } catch(e) {}
-        }
-
-        function stopBackgroundMusic() {
-            try {
-                bgMusicActive = false;
-                clearTimeout(bgMusicTimerId);
-                bgMusicTimerId = null;
-                if (bgMusicMasterGain && bgMusicCtx) {
-                    const gain = bgMusicMasterGain;
-                    const ctx = bgMusicCtx;
-                    gain.gain.cancelScheduledValues(ctx.currentTime);
-                    gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
-                    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
-                }
-                bgMusicMasterGain = null;
-            } catch(e) {}
-        }
+        // No background music or sound effects — verbal bridge only
 
         // ============================================
         // STATE
@@ -2808,7 +2739,6 @@ When asked about theological topics listed above, use these verified positions a
                 }
                 agentIsSpeaking = agentSpeaking;
                 if (agentSpeaking) {
-                    stopBackgroundMusic();
                     stopCountdown();
                 }
             });
@@ -2873,9 +2803,6 @@ When asked about theological topics listed above, use these verified positions a
                             conversationHistory.push({ role: 'user', content: message.text });
                             showTyping();
                         }
-                    } else if (message.type === 'bridge_complete') {
-                        // Verbal bridge finished — start soft background music
-                        startBackgroundMusic();
                     } else if (message.type === 'thinking_text') {
                         // Replace dots with a thinking text bubble
                         hideTyping();
@@ -2886,7 +2813,6 @@ When asked about theological topics listed above, use these verified positions a
                             lastAgentMessage = message.text;
                             hideThinkingBubble();
                             hideTyping();
-                            stopBackgroundMusic();
                             const agentMsg = addMessage(message.text, 'agent');
                             conversationHistory.push({ role: 'assistant', content: message.text });
                             if (agentMsg) {

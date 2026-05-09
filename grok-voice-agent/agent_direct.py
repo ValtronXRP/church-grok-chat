@@ -72,6 +72,7 @@ VERBAL_BRIDGES = [
     "Let me pull up what I've taught on that.",
     "Interesting. Let me see.",
     "Let me think about that for a moment.",
+    "Let me find the answer for you.",
 ]
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
@@ -414,15 +415,13 @@ async def _handle_user_question(transcript):
     t_start = time.monotonic()
     try:
         log(f"Calling Grok + playing bridge in parallel: {transcript[:60]}")
-        # Run Grok and verbal bridge fetch in parallel
+        # Run Grok in parallel with bridge
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
-        # Wait 1.2s after question ends before playing bridge (feels more natural)
-        await asyncio.sleep(1.2)
-        # Play verbal bridge while Grok is running (both happen at same time)
+        # Play verbal bridge immediately
         await _session_ref.say(bridge_text, audio=_elevenlabs_frames(bridge_text), allow_interruptions=False)
-        # Signal frontend that bridge is done — triggers background music
-        await _send_data_message("bridge_complete", {})
-        # Grok should be done (or nearly done) by the time bridge finishes
+        # 1.2s of silence after bridge, before answer
+        await asyncio.sleep(1.2)
+        # Grok should be done by now
         answer = await grok_task
         elapsed_llm = time.monotonic() - t_start
         log(f"Grok responded in {elapsed_llm:.2f}s — speaking answer now")
