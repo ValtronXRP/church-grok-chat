@@ -68,11 +68,11 @@ THINKING_TEXTS = [
 ]
 
 VERBAL_BRIDGES = [
-    "Good question. Let me think about that for you.",
-    "I'm glad you asked that. Let me see.",
-    "Let me pull up what I've taught on this.",
-    "That's a great question. Give me just a moment.",
-    "I remember talking about this. Let me find it.",
+    "Let me pull up what I've taught on that.",
+    "Good question. Let me think about that.",
+    "Let me see what I've said about this.",
+    "Interesting. Give me a moment on that one.",
+    "Let me find the answer for you.",
 ]
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
@@ -419,6 +419,8 @@ async def _handle_user_question(transcript):
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
         # Play verbal bridge while Grok is running (both happen at same time)
         await _session_ref.say(bridge_text, audio=_elevenlabs_frames(bridge_text), allow_interruptions=False)
+        # Signal frontend that bridge is done — triggers background music
+        await _send_data_message("bridge_complete", {})
         # Grok should be done (or nearly done) by the time bridge finishes
         answer = await grok_task
         elapsed_llm = time.monotonic() - t_start
