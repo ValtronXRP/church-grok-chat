@@ -351,6 +351,26 @@ _searching = False
 _speaking_until = 0.0
 _last_transcript = ""
 
+# Transcript accumulator — prevents mid-sentence cutoff
+# Collects is_final fragments, waits TRANSCRIPT_DEBOUNCE seconds of silence, then processes
+_pending_transcript = ""
+_pending_seq = 0
+TRANSCRIPT_DEBOUNCE = 1.5  # seconds to wait after last fragment before processing
+
+
+async def _schedule_question(seq: int):
+    """Wait TRANSCRIPT_DEBOUNCE seconds, then process if no newer transcript arrived."""
+    global _pending_transcript, _pending_seq
+    await asyncio.sleep(TRANSCRIPT_DEBOUNCE)
+    if _pending_seq != seq:
+        return  # a newer fragment came in — that task will handle it
+    transcript = _pending_transcript.strip()
+    _pending_transcript = ""
+    if not transcript or len(transcript.split()) < 3:
+        return
+    log(f"USER QUESTION (final): {transcript[:80]}")
+    asyncio.create_task(_handle_user_question(transcript))
+
 
 async def _send_data_message(message_type, data):
     if not _room_ref:
@@ -440,13 +460,14 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=4000 — wait 4s of silence before declaring end of utterance
-        stt = deepgram.STT(endpointing_ms=4000)
+        # endpointing_ms=2000 — Deepgram waits 2s of silence before finalizing a fragment
+        # The debounce accumulator in _schedule_question handles mid-sentence pauses
+        stt = deepgram.STT(endpointing_ms=2000)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
-        # min_endpointing_delay=3.5 — agent-level VAD waits 3.5s before cutting user speech
-        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=3.5)
+        # min_endpointing_delay=1.5 — agent VAD delay (debounce accumulator adds another 1.5s on top)
+        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=1.5, max_endpointing_delay=6.0)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
@@ -460,14 +481,17 @@ async def entrypoint(ctx: JobContext):
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
+            global _pending_transcript, _pending_seq
             if not event.is_final:
                 return
-            transcript = event.transcript.strip()
-            # Require at least 4 words — filters fragments like "what does" mid-sentence
-            if not transcript or len(transcript.split()) < 4:
+            fragment = event.transcript.strip()
+            if not fragment:
                 return
-            log(f"USER SAID: {transcript[:80]}")
-            asyncio.create_task(_handle_user_question(transcript))
+            # Accumulate — if another is_final arrives before debounce expires, concatenate
+            _pending_transcript = (_pending_transcript + " " + fragment).strip() if _pending_transcript else fragment
+            _pending_seq += 1
+            log(f"USER FRAGMENT: {fragment[:80]}")
+            asyncio.create_task(_schedule_question(_pending_seq))
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
