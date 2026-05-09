@@ -351,25 +351,26 @@ _searching = False
 _speaking_until = 0.0
 _last_transcript = ""
 
-# Transcript accumulator — prevents mid-sentence cutoff
-# Collects is_final fragments, waits TRANSCRIPT_DEBOUNCE seconds of silence, then processes
-_pending_transcript = ""
-_pending_seq = 0
-TRANSCRIPT_DEBOUNCE = 1.5  # seconds to wait after last fragment before processing
+# Silence-based turn detection
+# Resets on EVERY transcript event (interim or final) — only fires after
+# TRUE_SILENCE_SECS of complete silence with zero speech activity.
+_speech_buffer = ""         # accumulated final-transcript text
+_speech_timer: asyncio.Task | None = None  # cancellable silence timer
+TRUE_SILENCE_SECS = 3.0     # seconds of no speech before processing question
 
 
-async def _schedule_question(seq: int):
-    """Wait TRANSCRIPT_DEBOUNCE seconds, then process if no newer transcript arrived."""
-    global _pending_transcript, _pending_seq
-    await asyncio.sleep(TRANSCRIPT_DEBOUNCE)
-    if _pending_seq != seq:
-        return  # a newer fragment came in — that task will handle it
-    transcript = _pending_transcript.strip()
-    _pending_transcript = ""
-    if not transcript or len(transcript.split()) < 3:
-        return
-    log(f"USER QUESTION (final): {transcript[:80]}")
-    asyncio.create_task(_handle_user_question(transcript))
+async def _silence_timer():
+    """Fire when no new transcript arrives for TRUE_SILENCE_SECS seconds."""
+    global _speech_buffer
+    try:
+        await asyncio.sleep(TRUE_SILENCE_SECS)
+        transcript = _speech_buffer.strip()
+        _speech_buffer = ""
+        if transcript and len(transcript.split()) >= 3:
+            log(f"USER QUESTION (after {TRUE_SILENCE_SECS}s silence): {transcript[:80]}")
+            asyncio.create_task(_handle_user_question(transcript))
+    except asyncio.CancelledError:
+        pass
 
 
 async def _send_data_message(message_type, data):
@@ -460,14 +461,14 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=2000 — Deepgram waits 2s of silence before finalizing a fragment
-        # The debounce accumulator in _schedule_question handles mid-sentence pauses
-        stt = deepgram.STT(endpointing_ms=2000)
+        # endpointing_ms=500 — Deepgram finalizes segments quickly so interim transcripts
+        # keep flowing; our _silence_timer (3s) does the real turn detection.
+        stt = deepgram.STT(endpointing_ms=500)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
-        # min_endpointing_delay=1.5 — agent VAD delay (debounce accumulator adds another 1.5s on top)
-        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=1.5, max_endpointing_delay=6.0)
+        # Disable agent-level VAD turn detection — we handle it ourselves in _silence_timer.
+        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=0.1, max_endpointing_delay=30.0)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
@@ -481,17 +482,18 @@ async def entrypoint(ctx: JobContext):
 
         @session.on("user_input_transcribed")
         def on_user_input(event):
-            global _pending_transcript, _pending_seq
-            if not event.is_final:
+            global _speech_buffer, _speech_timer
+            text = event.transcript.strip()
+            if not text:
                 return
-            fragment = event.transcript.strip()
-            if not fragment:
-                return
-            # Accumulate — if another is_final arrives before debounce expires, concatenate
-            _pending_transcript = (_pending_transcript + " " + fragment).strip() if _pending_transcript else fragment
-            _pending_seq += 1
-            log(f"USER FRAGMENT: {fragment[:80]}")
-            asyncio.create_task(_schedule_question(_pending_seq))
+            # Accumulate final transcripts into the buffer (finals are more accurate)
+            if event.is_final:
+                _speech_buffer = (_speech_buffer + " " + text).strip() if _speech_buffer else text
+                log(f"TRANSCRIPT FINAL: {text[:60]}")
+            # Cancel existing silence timer and restart — any speech activity resets the clock
+            if _speech_timer and not _speech_timer.done():
+                _speech_timer.cancel()
+            _speech_timer = asyncio.create_task(_silence_timer())
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
