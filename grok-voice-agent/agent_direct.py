@@ -440,13 +440,13 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=2500 — wait 2.5s of silence before declaring end of utterance (prevents early cutoff)
-        stt = deepgram.STT(endpointing_ms=2500)
+        # endpointing_ms=4000 — wait 4s of silence before declaring end of utterance
+        stt = deepgram.STT(endpointing_ms=4000)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
-        # min_endpointing_delay=2.0 — agent-level VAD waits 2s before cutting user speech
-        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=2.0)
+        # min_endpointing_delay=3.5 — agent-level VAD waits 3.5s before cutting user speech
+        session = AgentSession(stt=stt, tts=None, min_endpointing_delay=3.5)
         _session_ref = session
         # Agent is needed for TTS context even without LLM
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
