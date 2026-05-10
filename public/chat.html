@@ -1587,7 +1587,106 @@
         const TOKEN_URL = '/token';  // Relative URL for local server
         const GROK_API_URL = '/api/chat';  // Use relative URL for local development
         
-        // No background music or sound effects — verbal bridge only
+        // ============================================================
+        // BACKGROUND MUSIC — soft piano melody with reverb
+        // Starts after verbal bridge, fades out when answer begins
+        // ============================================================
+        let bgMusicCtx = null;
+        let bgMusicActive = false;
+        let bgMusicMasterGain = null;
+        let bgMusicTimerId = null;
+
+        function _createReverb(ctx) {
+            // Noise-based impulse response — gives notes a spacious, room-like quality
+            const duration = 2.8, decay = 2.2;
+            const len = ctx.sampleRate * duration;
+            const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+            for (let ch = 0; ch < 2; ch++) {
+                const d = buf.getChannelData(ch);
+                for (let i = 0; i < len; i++) {
+                    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+                }
+            }
+            const conv = ctx.createConvolver();
+            conv.buffer = buf;
+            return conv;
+        }
+
+        function startBackgroundMusic() {
+            try {
+                if (bgMusicActive) return;
+                bgMusicCtx = bgMusicCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = bgMusicCtx;
+                bgMusicActive = true;
+
+                // Reverb send
+                const reverb = _createReverb(ctx);
+                const reverbGain = ctx.createGain();
+                reverbGain.gain.setValueAtTime(0.55, ctx.currentTime);
+                reverb.connect(reverbGain);
+
+                // Master — fade in gently over 2s
+                const master = ctx.createGain();
+                master.gain.setValueAtTime(0, ctx.currentTime);
+                master.gain.linearRampToValueAtTime(0.09, ctx.currentTime + 2.0);
+                reverbGain.connect(master);
+                master.connect(ctx.destination);
+                bgMusicMasterGain = master;
+
+                // Gentle C-major pentatonic melody, slow and peaceful
+                const melody = [
+                    261.63, 329.63, 392.00, 440.00,
+                    392.00, 329.63, 293.66, 329.63,
+                    261.63, 329.63, 392.00, 523.25,
+                    493.88, 392.00, 329.63, 261.63
+                ];
+                let idx = 0;
+                const step = 950; // ms per note
+
+                function playNote() {
+                    if (!bgMusicActive) return;
+                    const t = ctx.currentTime;
+                    const freq = melody[idx % melody.length];
+                    idx++;
+
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, t);
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, t);
+                    env.gain.linearRampToValueAtTime(1.0, t + 0.025); // attack
+                    env.gain.setTargetAtTime(0.25, t + 0.04, 0.12);   // decay
+                    env.gain.linearRampToValueAtTime(0, t + step / 1000 * 0.82); // release
+
+                    osc.connect(env);
+                    env.connect(master);   // dry
+                    env.connect(reverb);   // wet → reverbGain → master
+                    osc.start(t);
+                    osc.stop(t + step / 1000);
+
+                    bgMusicTimerId = setTimeout(playNote, step);
+                }
+
+                playNote();
+            } catch(e) { console.error('music error', e); }
+        }
+
+        function stopBackgroundMusic() {
+            try {
+                bgMusicActive = false;
+                clearTimeout(bgMusicTimerId);
+                bgMusicTimerId = null;
+                if (bgMusicMasterGain && bgMusicCtx) {
+                    const g = bgMusicMasterGain;
+                    const ctx = bgMusicCtx;
+                    g.gain.cancelScheduledValues(ctx.currentTime);
+                    g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+                    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0); // smooth fade out
+                }
+                bgMusicMasterGain = null;
+            } catch(e) {}
+        }
 
         // ============================================
         // STATE
@@ -2739,6 +2838,7 @@ When asked about theological topics listed above, use these verified positions a
                 }
                 agentIsSpeaking = agentSpeaking;
                 if (agentSpeaking) {
+                    stopBackgroundMusic();
                     stopCountdown();
                 }
             });
@@ -2803,12 +2903,14 @@ When asked about theological topics listed above, use these verified positions a
                             conversationHistory.push({ role: 'user', content: message.text });
                             showTyping();
                         }
+                    } else if (message.type === 'bridge_complete') {
+                        startBackgroundMusic();
                     } else if (message.type === 'thinking_text') {
-                        // Replace dots with a thinking text bubble
                         hideTyping();
                         showThinkingBubble('Preparing answer…');
                     } else if (message.type === 'agent_transcript') {
                         stopCountdown();
+                        stopBackgroundMusic();
                         if (message.text && message.text !== lastAgentMessage) {
                             lastAgentMessage = message.text;
                             hideThinkingBubble();

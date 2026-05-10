@@ -467,6 +467,8 @@ async def _handle_user_question(transcript):
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
         # Play verbal bridge instantly using pre-cached audio
         await _session_ref.say(bridge_text, audio=_cached_bridge_frames(bridge_text), allow_interruptions=False)
+        # Signal frontend to start music now that bridge is done
+        await _send_data_message("bridge_complete", {})
         # 1.2s of silence after bridge, before answer
         await asyncio.sleep(1.2)
         # Grok should be done by now
