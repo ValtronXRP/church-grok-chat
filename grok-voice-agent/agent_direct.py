@@ -356,7 +356,34 @@ _last_transcript = ""
 # TRUE_SILENCE_SECS of complete silence with zero speech activity.
 _speech_buffer = ""         # accumulated final-transcript text
 _speech_timer: asyncio.Task | None = None  # cancellable silence timer
-TRUE_SILENCE_SECS = 3.0     # seconds of no speech before processing question
+TRUE_SILENCE_SECS = 2.0     # seconds of no speech before processing question
+
+# Pre-cached bridge audio — fetched at startup so bridge plays INSTANTLY
+_bridge_cache: dict[str, list[rtc.AudioFrame]] = {}
+
+
+async def _precache_bridges():
+    """Fetch all bridge phrases from ElevenLabs at startup and cache the frames."""
+    global _bridge_cache
+    log("Pre-caching bridge audio...")
+    for phrase in VERBAL_BRIDGES:
+        frames = []
+        async for frame in _elevenlabs_frames(phrase):
+            frames.append(frame)
+        if frames:
+            _bridge_cache[phrase] = frames
+            log(f"Cached bridge: '{phrase[:45]}' ({len(frames)} frames)")
+    log(f"Bridge cache ready: {len(_bridge_cache)}/{len(VERBAL_BRIDGES)} phrases")
+
+
+async def _cached_bridge_frames(phrase: str):
+    """Yield pre-cached frames instantly, or fall back to live fetch."""
+    if phrase in _bridge_cache:
+        for frame in _bridge_cache[phrase]:
+            yield frame
+    else:
+        async for frame in _elevenlabs_frames(phrase):
+            yield frame
 
 
 async def _silence_timer():
@@ -438,8 +465,8 @@ async def _handle_user_question(transcript):
         log(f"Calling Grok + playing bridge in parallel: {transcript[:60]}")
         # Run Grok in parallel with bridge
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
-        # Play verbal bridge immediately
-        await _session_ref.say(bridge_text, audio=_elevenlabs_frames(bridge_text), allow_interruptions=False)
+        # Play verbal bridge instantly using pre-cached audio
+        await _session_ref.say(bridge_text, audio=_cached_bridge_frames(bridge_text), allow_interruptions=False)
         # 1.2s of silence after bridge, before answer
         await asyncio.sleep(1.2)
         # Grok should be done by now
@@ -474,6 +501,7 @@ async def entrypoint(ctx: JobContext):
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
         await fetch_dynamic_keywords()
+        await _precache_bridges()
 
         log("Connecting to room...")
         await ctx.connect()
