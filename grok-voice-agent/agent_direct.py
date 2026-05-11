@@ -437,6 +437,22 @@ async def _call_grok_direct(transcript: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
 
 
+async def _prefetch_answer(grok_task: asyncio.Task):
+    """Wait for Grok, then immediately synthesize answer audio — all in one task.
+    Returns (answer_text, [frames]) so both are ready when awaited."""
+    answer = await grok_task
+    frames = []
+    async for frame in _elevenlabs_frames(answer):
+        frames.append(frame)
+    return answer, frames
+
+
+async def _iter_frames(frames: list):
+    """Yield pre-fetched AudioFrames as an async generator for session.say()."""
+    for frame in frames:
+        yield frame
+
+
 async def _handle_user_question(transcript):
     global _searching, _speaking_until, _last_transcript
     now = time.monotonic()
@@ -454,33 +470,34 @@ async def _handle_user_question(transcript):
         return
     _searching = True
     _last_transcript = transcript
-    # Send user transcript exactly once — after all guards
     await _send_data_message("user_transcript", {"text": transcript})
-    # Send thinking text immediately so frontend can display it
-    thinking_text = random.choice(THINKING_TEXTS)
+    await _send_data_message("thinking_text", {"text": random.choice(THINKING_TEXTS)})
     bridge_text = random.choice(VERBAL_BRIDGES)
-    await _send_data_message("thinking_text", {"text": thinking_text})
     t_start = time.monotonic()
     try:
-        log(f"Calling Grok + playing bridge in parallel: {transcript[:60]}")
-        # Run Grok in parallel with bridge
+        # THREE things run in parallel:
+        #   1. Grok generates the answer text
+        #   2. As soon as Grok is done, ElevenLabs synthesizes the answer audio
+        #   3. Bridge plays from pre-cached audio right now
+        # By the time bridge + 0.8s silence is over, answer audio is usually ready.
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
-        # Play verbal bridge instantly using pre-cached audio
+        answer_task = asyncio.create_task(_prefetch_answer(grok_task))
+
+        log(f"Bridge + Grok + ElevenLabs pipeline started: {transcript[:60]}")
         await _session_ref.say(bridge_text, audio=_cached_bridge_frames(bridge_text), allow_interruptions=False)
-        # Signal frontend to start music now that bridge is done
         await _send_data_message("bridge_complete", {})
-        # 1.2s of silence after bridge, before answer
-        await asyncio.sleep(1.2)
-        # Grok should be done by now
-        answer = await grok_task
-        elapsed_llm = time.monotonic() - t_start
-        log(f"Grok responded in {elapsed_llm:.2f}s — speaking answer now")
+        await asyncio.sleep(0.8)   # brief pause — answer audio synthesizing in background
+
+        answer, frames = await answer_task
+        elapsed = time.monotonic() - t_start
+        log(f"Answer ready in {elapsed:.2f}s total — speaking now")
+
         await _send_data_message("agent_transcript", {"text": answer})
-        await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
+        await _session_ref.say(answer, audio=_iter_frames(frames), allow_interruptions=False)
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
-        _speaking_until = 0.0  # reset so next question isn't blocked
+        _speaking_until = 0.0
     finally:
         _searching = False
 
