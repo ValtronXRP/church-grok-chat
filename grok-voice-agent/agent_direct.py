@@ -30,32 +30,37 @@ from livekit.plugins import openai as lk_openai
 
 
 async def _elevenlabs_frames(text: str):
-    """Fetch audio from ElevenLabs HTTP REST (pcm_24000) and yield rtc.AudioFrame objects.
-    Passed directly to session.say(audio=...) — no WebSocket, no timeout, no truncation."""
+    """Stream PCM from ElevenLabs /stream endpoint — yields frames as chunks arrive.
+    First audio plays within ~0.5s instead of waiting for full synthesis."""
     voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "bop3cpAWfblVLtKmcqMh")
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=pcm_24000"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream?output_format=pcm_24000"
     headers = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json"}
     payload = {"text": text, "model_id": "eleven_flash_v2_5"}
+    SAMPLES = 480           # 20 ms @ 24 kHz
+    BYTES   = SAMPLES * 2   # s16le
+    buf = b""
     try:
         async with aiohttp.ClientSession() as http:
             async with http.post(url, json=payload, headers=headers,
                                  timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    log(f"ElevenLabs REST {resp.status}: {body[:200]}")
+                    log(f"ElevenLabs stream {resp.status}: {body[:200]}")
                     return
-                pcm_data = await resp.read()
-        log(f"ElevenLabs REST: {len(pcm_data)} bytes PCM")
-        SAMPLES = 480           # 20 ms @ 24 kHz
-        BYTES   = SAMPLES * 2   # s16le
-        for i in range(0, len(pcm_data), BYTES):
-            chunk = pcm_data[i:i + BYTES]
-            if len(chunk) < BYTES:
-                chunk += b'\x00' * (BYTES - len(chunk))
-            yield rtc.AudioFrame(data=chunk, sample_rate=24000,
-                                 num_channels=1, samples_per_channel=SAMPLES)
+                log(f"ElevenLabs stream started for: {text[:40]}")
+                async for chunk in resp.content.iter_chunked(2048):
+                    buf += chunk
+                    while len(buf) >= BYTES:
+                        yield rtc.AudioFrame(data=buf[:BYTES], sample_rate=24000,
+                                             num_channels=1, samples_per_channel=SAMPLES)
+                        buf = buf[BYTES:]
+                # flush remainder
+                if buf:
+                    buf += b'\x00' * (BYTES - len(buf))
+                    yield rtc.AudioFrame(data=buf, sample_rate=24000,
+                                         num_channels=1, samples_per_channel=SAMPLES)
     except Exception as e:
-        log(f"ElevenLabs REST error: {e}")
+        log(f"ElevenLabs stream error: {e}")
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
@@ -425,7 +430,7 @@ async def _call_grok_direct(transcript: str) -> str:
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
         ],
-        "max_tokens": 350,
+        "max_tokens": 220,
         "temperature": 0.7,
     }
     async with aiohttp.ClientSession() as http:
@@ -437,34 +442,15 @@ async def _call_grok_direct(transcript: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
 
 
-async def _prefetch_answer(grok_task: asyncio.Task):
-    """Wait for Grok, then immediately synthesize answer audio — all in one task.
-    Returns (answer_text, [frames]) so both are ready when awaited."""
-    answer = await grok_task
-    frames = []
-    async for frame in _elevenlabs_frames(answer):
-        frames.append(frame)
-    return answer, frames
-
-
-async def _iter_frames(frames: list):
-    """Yield pre-fetched AudioFrames as an async generator for session.say()."""
-    for frame in frames:
-        yield frame
-
-
 async def _handle_user_question(transcript):
     global _searching, _speaking_until, _last_transcript
     now = time.monotonic()
-    # Guard 1: already processing a question
     if _searching:
         log(f"Already searching, skipping: {transcript[:40]}")
         return
-    # Guard 2: still speaking the last answer
     if now < _speaking_until:
         log(f"Still speaking, skipping: {transcript[:40]}")
         return
-    # Guard 3: exact same transcript just processed
     if transcript == _last_transcript and now < _speaking_until + 5.0:
         log(f"Duplicate transcript, skipping: {transcript[:40]}")
         return
@@ -475,25 +461,22 @@ async def _handle_user_question(transcript):
     bridge_text = random.choice(VERBAL_BRIDGES)
     t_start = time.monotonic()
     try:
-        # THREE things run in parallel:
-        #   1. Grok generates the answer text
-        #   2. As soon as Grok is done, ElevenLabs synthesizes the answer audio
-        #   3. Bridge plays from pre-cached audio right now
-        # By the time bridge + 0.8s silence is over, answer audio is usually ready.
+        # Grok runs in parallel with the bridge
         grok_task = asyncio.create_task(_call_grok_direct(transcript))
-        answer_task = asyncio.create_task(_prefetch_answer(grok_task))
 
-        log(f"Bridge + Grok + ElevenLabs pipeline started: {transcript[:60]}")
+        # Bridge plays instantly from cache
         await _session_ref.say(bridge_text, audio=_cached_bridge_frames(bridge_text), allow_interruptions=False)
         await _send_data_message("bridge_complete", {})
-        await asyncio.sleep(0.8)   # brief pause — answer audio synthesizing in background
+        await asyncio.sleep(0.8)
 
-        answer, frames = await answer_task
+        # Wait for Grok answer, then stream directly to speaker —
+        # ElevenLabs /stream returns first audio chunk in ~0.5s, no full-synthesis wait
+        answer = await grok_task
         elapsed = time.monotonic() - t_start
-        log(f"Answer ready in {elapsed:.2f}s total — speaking now")
+        log(f"Grok done in {elapsed:.2f}s — streaming answer via ElevenLabs")
 
         await _send_data_message("agent_transcript", {"text": answer})
-        await _session_ref.say(answer, audio=_iter_frames(frames), allow_interruptions=False)
+        await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
         _speaking_until = time.monotonic() + 2.0
     except Exception as e:
         log(f"Handle question error: {e}")
