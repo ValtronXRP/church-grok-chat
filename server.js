@@ -1400,7 +1400,12 @@ app.post('/api/chat', async (req, res) => {
     }
     
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Chat endpoint error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    } else {
+      res.end();
+    }
   }
 });
 
