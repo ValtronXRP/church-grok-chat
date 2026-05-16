@@ -318,22 +318,22 @@ def chunk_segments(segments, video_id, youtube_url, title, target_words=TARGET_W
 
 def get_existing_video_ids(collection):
     try:
-        results = collection.get(limit=1, include=['metadatas'])
         count = collection.count()
         if count == 0:
             return set()
         all_ids = set()
         offset = 0
-        page_size = 1000
+        page_size = 200
         while offset < count:
             batch = collection.get(limit=page_size, offset=offset, include=['metadatas'])
             for meta in batch['metadatas']:
                 vid = meta.get('video_id', '')
                 if vid:
                     all_ids.add(vid)
-            offset += page_size
             if len(batch['ids']) < page_size:
                 break
+            offset += page_size
+        logger.info(f"Found {len(all_ids)} unique video IDs already in ChromaDB")
         return all_ids
     except Exception as e:
         logger.warning(f"Could not fetch existing video IDs from collection: {e}")
@@ -346,36 +346,26 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
     skip_list = load_skip_list()
     playlist_videos = fetch_playlist_videos(full_scan=full_scan)
 
-    # First pass: filter by title_map and skip_list
-    candidate_videos = {vid: title for vid, title in playlist_videos.items()
-                        if vid not in title_map and vid not in skip_list}
+    client = get_chroma_client()
+    collection = client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={'description': 'Pastor Bob sermons - enriched with titles + timestamps', 'hnsw:space': 'cosine'}
+    )
+    db_video_ids = get_existing_video_ids(collection)
 
-    # Second pass: verify against ChromaDB — skip any video already present in the collection
-    _shared_collection = None
+    synced = 0
+    for vid in db_video_ids:
+        if vid and vid not in title_map:
+            title_map[vid] = playlist_videos.get(vid, 'Sermon')
+            synced += 1
+    if synced > 0:
+        save_title_map(title_map)
+        logger.info(f"Synced {synced} video IDs from ChromaDB into title_map")
+
     new_videos = {}
-    if candidate_videos:
-        try:
-            _chroma_client = get_chroma_client()
-            _shared_collection = _chroma_client.get_or_create_collection(
-                name=COLLECTION_NAME,
-                metadata={'description': 'Pastor Bob sermons - enriched with titles + timestamps', 'hnsw:space': 'cosine'}
-            )
-            already_in_db = 0
-            for vid, title in candidate_videos.items():
-                check = _shared_collection.get(where={"video_id": vid}, limit=1, include=[])
-                if check['ids']:
-                    logger.info(f"  Already in ChromaDB (skipping): {vid} — {title}")
-                    title_map[vid] = title  # heal the title_map so we don't check again next run
-                    already_in_db += 1
-                else:
-                    new_videos[vid] = title
-            if already_in_db:
-                save_title_map(title_map)
-                logger.info(f"  Healed title_map: {already_in_db} videos already in DB were missing from title_map")
-        except Exception as e:
-            logger.warning(f"ChromaDB pre-check failed ({e}), falling back to title_map only")
-            new_videos = candidate_videos
-
+    for vid, title in playlist_videos.items():
+        if vid not in title_map and vid not in skip_list and vid not in db_video_ids:
+            new_videos[vid] = title
 
     if not new_videos:
         logger.info("No new sermons found. Database is up to date.")
@@ -406,15 +396,6 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
         return len(new_videos)
 
     model = get_embedder()
-    # Reuse collection from pre-check if available, otherwise create fresh
-    if _shared_collection is not None:
-        collection = _shared_collection
-    else:
-        client = get_chroma_client()
-        collection = client.get_or_create_collection(
-            name=COLLECTION_NAME,
-            metadata={'description': 'Pastor Bob sermons - enriched with titles + timestamps', 'hnsw:space': 'cosine'}
-        )
     existing_count = collection.count()
     logger.info(f"Collection '{COLLECTION_NAME}' has {existing_count} existing chunks")
 
@@ -461,8 +442,7 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
         batch_embs = []
 
         for j, c in enumerate(chunks):
-            # Deterministic ID based only on video_id + start_sec so re-runs are idempotent
-            doc_id = hashlib.md5(f"{c['video_id']}_{c['start_sec']:.3f}".encode()).hexdigest()
+            doc_id = hashlib.md5(f"{c['video_id']}_{c['start_sec']}_{j}".encode()).hexdigest()
             clip_url = f"https://www.youtube.com/watch?v={c['video_id']}&t={int(c['start_sec'])}s"
 
             batch_ids.append(doc_id)
@@ -483,7 +463,7 @@ def ingest_new_sermons(dry_run=False, full_scan=False):
         try:
             for i in range(0, len(batch_ids), 200):
                 end = min(i + 200, len(batch_ids))
-                collection.upsert(
+                collection.add(
                     ids=batch_ids[i:end],
                     documents=batch_docs[i:end],
                     metadatas=batch_metas[i:end],
