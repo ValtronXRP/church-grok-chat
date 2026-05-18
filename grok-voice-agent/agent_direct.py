@@ -23,6 +23,7 @@ def log(msg):
 
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins.xai.realtime import RealtimeModel
+from openai.types.realtime import AudioTranscription
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
@@ -395,6 +396,28 @@ async def entrypoint(ctx: JobContext):
                 "create_response": True,
                 "interrupt_response": True,
             },
+        )
+        model.update_options(
+            input_audio_transcription=AudioTranscription(
+                language="en",
+                prompt=(
+                    "Calvary Chapel, Pastor Bob, sermon, theology, eschatology, soteriology, "
+                    "pneumatology, ecclesiology, hermeneutics, sanctification, justification, "
+                    "atonement, resurrection, rapture, tribulation, millennium, dispensationalism, "
+                    "covenant theology, replacement theology, supersessionism, cessationism, "
+                    "continuationism, cessationist, charismatic, Pentecostal, Holy Spirit, "
+                    "baptism of the Holy Spirit, speaking in tongues, spiritual gifts, "
+                    "predestination, election, free will, grace, redemption, propitiation, "
+                    "expiation, imputation, sanctification, glorification, dispensation, "
+                    "apologetics, exegesis, eisegesis, homiletics, exposition, "
+                    "Genesis, Exodus, Leviticus, Deuteronomy, Joshua, Judges, "
+                    "First Samuel, Second Samuel, First Kings, Second Kings, "
+                    "Psalms, Proverbs, Isaiah, Jeremiah, Ezekiel, Daniel, "
+                    "Matthew, Mark, Luke, John, Acts, Romans, Galatians, "
+                    "Ephesians, Philippians, Colossians, Thessalonians, Hebrews, "
+                    "James, First Peter, Second Peter, First John, Revelation"
+                ),
+            )
         )
         session = AgentSession(llm=model)
         _session_ref = session
