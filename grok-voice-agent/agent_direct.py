@@ -317,6 +317,7 @@ async def _handle_user_question(transcript):
     _searching = True
     try:
         log(f"SEARCHING for: {transcript[:80]}")
+        await _send_data_message("user_transcript", {"text": transcript})
         results, website_results = await _search_reranker(transcript)
 
         if results or website_results:
@@ -469,7 +470,6 @@ async def entrypoint(ctx: JobContext):
             if not transcript or len(transcript) < 3:
                 return
             log(f"USER SAID: {transcript[:80]}")
-            asyncio.create_task(_send_data_message("user_transcript", {"text": transcript}))
             asyncio.create_task(_handle_user_question(transcript))
 
         log("Starting session...")
