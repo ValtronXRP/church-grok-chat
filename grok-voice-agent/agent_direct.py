@@ -101,6 +101,9 @@ VERIFIED THEOLOGICAL POSITIONS (Pastor Bob's actual teaching — paraphrase in y
 When asked about Pastor Bob's personal life, family, testimony, or background, use these verified facts confidently. Do NOT say you need to check — you KNOW these facts.
 When asked about theological topics listed above, use these verified positions as the authoritative framework for your answer.
 
+SESSION GREETING:
+CRITICAL: When you receive "[greet]" as your input, say ONLY and EXACTLY this — nothing before, nothing after, no elaboration: "Welcome to Ask Pastor Bob! How can I help you today?"
+
 CHURCH INFO QUESTIONS (events, registrations, service times, ministries, bible studies, men's study, women's study, volunteering, giving, etc.):
 CRITICAL: When a user asks about ANY church info topic, you MUST say ONLY this exact phrase and NOTHING else: "Let me pull up the latest details for you." Then STOP. Do NOT add any other information. Do NOT try to answer from memory. Do NOT list any times, locations, or details. Just say that one sentence and stop. The system will inject the real data for your next response.
 NEVER give a generic answer like "check the website" or "there are lots of events".
@@ -491,9 +494,8 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log(f"Session started (reranker: {RERANKER_URL})")
 
-        greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions=f"Say ONLY: \"{greeting}\" — stop immediately after. Do not add anything.")
+            await session.generate_reply(user_input="[greet]")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
