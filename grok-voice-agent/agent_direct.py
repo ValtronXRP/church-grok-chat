@@ -494,9 +494,12 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log(f"Session started (reranker: {RERANKER_URL})")
 
-        # Greeting shown as text in chat.html (voice-connected event) — no generate_reply
-        await _send_data_message("agent_transcript", {"text": "Welcome to Ask Pastor Bob! How can I help you today?"})
-        log("Greeting displayed - LISTENING")
+        greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
+        try:
+            await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
+            log("Greeting sent - LISTENING")
+        except Exception as e:
+            log(f"Greeting error: {e} - continuing anyway")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():

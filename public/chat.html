@@ -2630,7 +2630,7 @@ When asked about theological topics listed above, use these verified positions a
                     status.textContent = 'Connected — Speak now!';
                     log('Voice connection ready!', 'success');
                     log('Speak or continue typing messages', 'info');
-                    // Greeting comes from agent via agent_transcript data message
+                    addMessage('Voice connected! Speak now or continue typing.', 'system');
                 } else {
                     // UI update for text-to-speech connections
                     status.textContent = 'Speaking response...';
