@@ -294,6 +294,7 @@ async def _search_reranker(query, n=10):
 _room_ref = None
 _session_ref = None
 _searching = False
+_pending_question_task = None
 
 
 async def _send_data_message(message_type, data):
@@ -309,10 +310,11 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-async def _handle_user_question(transcript):
+async def _debounced_question(transcript):
+    """Called after 2s debounce — cancels if a newer transcript arrives first."""
     global _searching
     if _searching:
-        log(f"Already searching, skipping: {transcript[:40]}")
+        log(f"Already searching (debounced), skipping: {transcript[:40]}")
         return
     _searching = True
     try:
@@ -374,10 +376,23 @@ async def _handle_user_question(transcript):
                 log("Fallback reply generated")
             except Exception as e:
                 log(f"Fallback generate_reply error: {e}")
+    except asyncio.CancelledError:
+        log(f"Question cancelled (newer transcript arrived): {transcript[:40]}")
     except Exception as e:
         log(f"Handle question error: {e}")
     finally:
         _searching = False
+
+
+async def _handle_user_question(transcript):
+    """Debounce: wait 2s for speech to finish, cancel if a newer transcript arrives."""
+    global _pending_question_task
+    if _pending_question_task and not _pending_question_task.done():
+        _pending_question_task.cancel()
+    async def _delayed():
+        await asyncio.sleep(2.0)
+        await _debounced_question(transcript)
+    _pending_question_task = asyncio.create_task(_delayed())
 
 
 async def entrypoint(ctx: JobContext):
@@ -478,7 +493,7 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions=f"Output ONLY these exact words with no additions, no elaboration, and nothing else: \"{greeting}\"")
+            await session.generate_reply(instructions=f"Say ONLY: \"{greeting}\" — stop immediately after. Do not add anything.")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
