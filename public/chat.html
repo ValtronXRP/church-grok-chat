@@ -2723,15 +2723,6 @@ When asked about theological topics listed above, use these verified positions a
                 const isAgent = participant && participant.identity && participant.identity !== room.localParticipant.identity;
                 if (!isAgent && text.length > 2) {
                     stopCountdown();
-                    if (isFinal) {
-                        if (text !== lastVoiceUserMessage) {
-                            lastVoiceUserMessage = text;
-                            addMessage(text, 'user');
-                            conversationHistory.push({ role: 'user', content: text });
-                            showTyping();
-                            fetchClipsForVoiceQuery(text);
-                        }
-                    }
                 }
                 log(`Transcription (${participant?.identity}): "${text.substring(0, 50)}..." final=${isFinal}`, 'info');
             });
@@ -2753,13 +2744,21 @@ When asked about theological topics listed above, use these verified positions a
                     if (message.type === 'context_update') {
                         log('Received context update from agent', 'info');
                     } else if (message.type === 'user_transcript') {
-                        log(`User transcript (data msg, dedup skip): ${message.text?.substring(0, 50)}`, 'info');
+                        const userText = message.text?.trim();
+                        log(`User transcript (data msg): ${userText?.substring(0, 50)}`, 'info');
                         hasExchanged = true;
                         stopCountdown();
                         if (autoDisconnectTimer) {
                             clearTimeout(autoDisconnectTimer);
                             autoDisconnectTimer = null;
                             log('Auto-disconnect cancelled - user speaking', 'info');
+                        }
+                        if (userText && userText !== lastVoiceUserMessage) {
+                            lastVoiceUserMessage = userText;
+                            addMessage(userText, 'user');
+                            conversationHistory.push({ role: 'user', content: userText });
+                            showTyping();
+                            fetchClipsForVoiceQuery(userText);
                         }
                     } else if (message.type === 'agent_transcript') {
                         stopCountdown();
