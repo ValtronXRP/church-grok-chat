@@ -495,7 +495,7 @@ async def entrypoint(ctx: JobContext):
         log(f"Session started (reranker: {RERANKER_URL})")
 
         try:
-            await session.generate_reply(user_input="[greet]")
+            await session.generate_reply(instructions="Welcome to Ask Pastor Bob! How can I help you today?")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
