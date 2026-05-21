@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>APB</title>
+    <title>Ask Pastor Bob</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -1455,6 +1458,10 @@
     <div class="app-container">
         <header class="header">
             <h1>APB</h1>
+            <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+                <a href="/bio" style="color:#a78bfa;font-size:13px;font-weight:500;text-decoration:none;opacity:0.85;">About Pastor Bob</a>
+                <button id="installBtn" style="display:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;">+ Add to Home Screen</button>
+            </div>
         </header>
         
         <div class="main-content-wrapper">
@@ -3257,6 +3264,64 @@ This should show an embedded video above.`;
 
         console.log('💡 Debug: Run testVideoEmbed() in console to test video embedding');
         console.log('💡 Debug: Run testRegex("your-url") to test if a URL matches the pattern');
+
+        // ── PWA Install Prompt ──────────────────────────────────────────
+        const installBtn = document.getElementById('installBtn');
+        let deferredPrompt = null;
+
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isInStandaloneMode = window.navigator.standalone === true ||
+            window.matchMedia('(display-mode: standalone)').matches;
+
+        if (!isInStandaloneMode) {
+            if (isIOS) {
+                // iOS: show the button, tapping shows instructions
+                installBtn.style.display = 'block';
+                installBtn.addEventListener('click', () => {
+                    showIOSInstallTip();
+                });
+            } else {
+                // Android/Chrome: intercept browser prompt
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    installBtn.style.display = 'block';
+                });
+                installBtn.addEventListener('click', async () => {
+                    if (!deferredPrompt) return;
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') installBtn.style.display = 'none';
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        function showIOSInstallTip() {
+            const existing = document.getElementById('iosTip');
+            if (existing) { existing.remove(); return; }
+            const tip = document.createElement('div');
+            tip.id = 'iosTip';
+            tip.style.cssText = `
+                position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+                background:#1e1e3a;border:1px solid rgba(167,139,250,0.4);
+                border-radius:14px;padding:16px 20px;max-width:320px;width:90%;
+                box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:9999;
+                font-family:Inter,sans-serif;color:#e0e0e0;font-size:14px;line-height:1.6;
+            `;
+            tip.innerHTML = `
+                <div style="font-weight:600;color:#a78bfa;margin-bottom:8px;">Add to Home Screen</div>
+                <div>1. Tap the <strong>Share</strong> button <span style="font-size:18px;">⎋</span> at the bottom of Safari</div>
+                <div style="margin-top:6px;">2. Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+                <div style="margin-top:6px;">3. Tap <strong>Add</strong> — it will appear as an app icon!</div>
+                <div style="text-align:right;margin-top:12px;">
+                    <button onclick="document.getElementById('iosTip').remove()"
+                        style="background:rgba(124,58,237,0.3);border:none;color:#a78bfa;
+                               padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Got it</button>
+                </div>
+            `;
+            document.body.appendChild(tip);
+        }
     </script>
 </body>
 </html>

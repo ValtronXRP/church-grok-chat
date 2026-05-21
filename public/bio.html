@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>About Pastor Bob — Ask Pastor Bob</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .back-btn {
+            color: #a78bfa;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .back-btn:hover { color: #c4b5fd; }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .content {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 32px 20px 60px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .hero .initials {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #4f46e5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 700;
+            color: white;
+            margin: 0 auto 20px;
+        }
+
+        .hero h2 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+
+        .hero .subtitle {
+            font-size: 16px;
+            color: #a78bfa;
+            font-weight: 500;
+        }
+
+        .hero .church {
+            font-size: 14px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        section {
+            margin-bottom: 36px;
+        }
+
+        section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #a78bfa;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(167,139,250,0.2);
+        }
+
+        p {
+            font-size: 15px;
+            line-height: 1.75;
+            color: #ccc;
+            margin-bottom: 14px;
+        }
+
+        p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: rgba(124,58,237,0.1);
+            border-left: 3px solid #7c3aed;
+            padding: 14px 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 16px 0;
+            font-style: italic;
+            color: #d4d4d4;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 24px 0;
+        }
+
+        .stat {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+        }
+
+        .stat .num {
+            font-size: 26px;
+            font-weight: 700;
+            color: #a78bfa;
+        }
+
+        .stat .label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .ask-btn {
+            display: block;
+            background: linear-gradient(135deg, #7c3aed, #4f46e5);
+            color: white;
+            text-align: center;
+            padding: 16px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 40px;
+            transition: opacity 0.2s;
+        }
+
+        .ask-btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+<header>
+    <a href="/chat.html" class="back-btn">← Back</a>
+    <h1>About Pastor Bob</h1>
+</header>
+
+<div class="content">
+
+    <div class="hero">
+        <div class="initials">PB</div>
+        <h2>Pastor Bob Kopeny</h2>
+        <div class="subtitle">Senior Pastor</div>
+        <div class="church">Calvary Chapel East Anaheim</div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="num">29+</div>
+            <div class="label">Years of Teaching</div>
+        </div>
+        <div class="stat">
+            <div class="num">2,200+</div>
+            <div class="label">Sermons Indexed</div>
+        </div>
+        <div class="stat">
+            <div class="num">100K+</div>
+            <div class="label">Searchable Passages</div>
+        </div>
+    </div>
+
+    <section>
+        <h3>How He Came to Faith</h3>
+        <p>Bob was 13 years old when his friend Fred — a classmate at Tuffrey Junior High — invited him to a Calvary Church of Placentia junior high winter retreat. On the first night, Fred and some men asked Bob if he was a Christian. Bob answered, "Oh yeah, I go to a Lutheran church." They asked, "Have you ever received Christ?" Bob said, "I don't know what that means."</p>
+        <p>That night, two men named Jess Maples and Gene Shafer — both in their 30s — shared the gospel with Bob for about five minutes. Bob gave his life to Jesus Christ in 1971.</p>
+        <div class="highlight">"I didn't know what receiving Christ meant — but that night I found out, and everything changed."</div>
+    </section>
+
+    <section>
+        <h3>The Holy Spirit & Call to Ministry</h3>
+        <p>In 1975, Pastor Bob had a profound personal experience of being baptized with the Holy Spirit that completely transformed his spiritual life. God gave him a deep, overwhelming hunger for Scripture and for God Himself that he had never felt before — a hunger that led him toward full-time ministry.</p>
+        <p>Seeking God's direction, Bob went alone to the high desert near Boron Prison to fast and pray for three days. God was completely silent. After three days, Bob decided to abandon his plans and head home. But on the way out, God's presence came clearly with a question: <em>"What did you feel for these past three days?"</em></p>
+        <p>Bob said he felt cold, alone, and afraid. God's response: <em>"Never forget how you felt — because that is the way most people spend their whole lives, without Me."</em> In that moment, Bob knew God was calling him to share his relationship with Jesus with as many people as he could.</p>
+    </section>
+
+    <section>
+        <h3>Before Ministry — Law Enforcement</h3>
+        <p>Before entering full-time pastoral ministry, Bob Kopeny served as a police officer and detective in La Habra and Placentia, California. His years in law enforcement gave him a deep understanding of human struggle, brokenness, and the desperate need people have for hope and redemption.</p>
+        <p>It was out of that context that God called him away from his badge and into the pulpit — to bring the same directness and integrity from law enforcement to biblical teaching.</p>
+    </section>
+
+    <section>
+        <h3>How He Met Becky</h3>
+        <p>Bob first met Becky Olson at Calvary Church on Chapman and Bradford in Placentia, after a Sunday service. He invited her to the Sunday school college class he was teaching, but she declined — her boyfriend was waiting in the car. They had a brief conversation: she was studying at Cal State Fullerton and working at the Placentia Library.</p>
+        <p>Years later, while driving to Talbot Seminary, God brought Becky's name to Bob's mind at the intersection of Chapman and Kraemer. He drove to the library and learned she was in the AV department. A month later, at that same intersection, he felt prompted again. He called her — but she wasn't interested, until Bob told her that the Lord had revealed something to him that He wanted her to hear.</p>
+        <p>Becky only agreed to meet for breakfast because of those words. And it was at breakfast — not on the phone — that Bob shared what God had revealed: that she had gotten engaged the night before. Something no one could have known. That moment changed everything, and they were married shortly after. Bob was about 25.</p>
+    </section>
+
+    <section>
+        <h3>Family</h3>
+        <p>Bob and Becky have three sons: Jesse, Valor, and Christian. They are blessed with six grandchildren — Julia, Lily, Jonah, and Jeffrey (Jesse's children), Luca (Valor and Stacy's son, born June 2022), and Cora (Christian and Hayley's daughter, born December 2024).</p>
+    </section>
+
+    <section>
+        <h3>Education</h3>
+        <p>Pastor Bob attended Fullerton College, then Biola University, and went on to earn his degree from Talbot School of Theology (Talbot Seminary) at Biola University — where God confirmed his calling during those long drives to campus.</p>
+    </section>
+
+    <section>
+        <h3>Calvary Chapel East Anaheim</h3>
+        <p>Pastor Bob serves as senior pastor of Calvary Chapel East Anaheim, located at 5605 East La Palma Avenue in Anaheim, California. Services are held Sundays at 9am and 11am, and Wednesdays at 7pm.</p>
+        <p>Over nearly three decades, his expository verse-by-verse teaching through the Bible has built a congregation grounded in Scripture — and an archive of over 2,200 sermons that now powers Ask Pastor Bob.</p>
+    </section>
+
+    <a href="/chat.html" class="ask-btn">Ask Pastor Bob a Question →</a>
+
+</div>
+
+</body>
+</html>

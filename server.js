@@ -1992,6 +1992,10 @@ app.get('/api/ingest/history', (req, res) => {
   }
 });
 
+app.get('/bio', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'bio.html'));
+});
+
 app.get('/chat.html/a', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
 });

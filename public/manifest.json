@@ -1,0 +1,24 @@
+{
+  "name": "Ask Pastor Bob",
+  "short_name": "Ask Pastor Bob",
+  "description": "Ask questions and get answers from Pastor Bob Kopeny's 29 years of biblical teaching.",
+  "start_url": "/chat.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
