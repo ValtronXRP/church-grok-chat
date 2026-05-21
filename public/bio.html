@@ -60,18 +60,16 @@
             margin-bottom: 40px;
         }
 
-        .hero .initials {
-            width: 100px;
-            height: 100px;
+        .hero .photo {
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #7c3aed, #4f46e5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            font-weight: 700;
-            color: white;
+            object-fit: cover;
+            object-position: center top;
             margin: 0 auto 20px;
+            display: block;
+            border: 3px solid rgba(124,58,237,0.5);
+            box-shadow: 0 0 0 6px rgba(124,58,237,0.1);
         }
 
         .hero h2 {
@@ -183,7 +181,7 @@
 <div class="content">
 
     <div class="hero">
-        <div class="initials">PB</div>
+        <img src="/pastor-bob.jpg" alt="Pastor Bob Kopeny" class="photo">
         <h2>Pastor Bob Kopeny</h2>
         <div class="subtitle">Senior Pastor</div>
         <div class="church">Calvary Chapel East Anaheim</div>
