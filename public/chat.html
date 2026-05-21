@@ -3270,54 +3270,91 @@ This should show an embedded video above.`;
         let deferredPrompt = null;
 
         const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isChrome = /CriOS|Chrome/i.test(navigator.userAgent) && !/Edge/i.test(navigator.userAgent);
+        const isChromeIOS = /CriOS/i.test(navigator.userAgent);
         const isInStandaloneMode = window.navigator.standalone === true ||
             window.matchMedia('(display-mode: standalone)').matches;
 
         if (!isInStandaloneMode) {
             if (isIOS) {
-                // iOS: show the button, tapping shows instructions
+                // iOS (Safari or Chrome): always show button with instructions
                 installBtn.style.display = 'block';
-                installBtn.addEventListener('click', () => {
-                    showIOSInstallTip();
-                });
+                installBtn.addEventListener('click', () => showInstallTip());
             } else {
-                // Android/Chrome: intercept browser prompt
+                // Android — try native prompt first, fall back to manual instructions
                 window.addEventListener('beforeinstallprompt', (e) => {
                     e.preventDefault();
                     deferredPrompt = e;
                     installBtn.style.display = 'block';
                 });
                 installBtn.addEventListener('click', async () => {
-                    if (!deferredPrompt) return;
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    if (outcome === 'accepted') installBtn.style.display = 'none';
-                    deferredPrompt = null;
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        if (outcome === 'accepted') installBtn.style.display = 'none';
+                        deferredPrompt = null;
+                    } else {
+                        showInstallTip(); // fallback for browsers without prompt support
+                    }
                 });
+                // Show button even if beforeinstallprompt doesn't fire (some Android browsers)
+                setTimeout(() => {
+                    if (!deferredPrompt) installBtn.style.display = 'block';
+                }, 2000);
             }
         }
 
-        function showIOSInstallTip() {
-            const existing = document.getElementById('iosTip');
+        function showInstallTip() {
+            const existing = document.getElementById('installTip');
             if (existing) { existing.remove(); return; }
+
+            const safari_ios = `
+                <div style="margin-bottom:14px;">
+                    <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">iPhone / iPad — Safari</div>
+                    <div>1. Tap the <strong>Share</strong> button ⬆ at the bottom of the screen</div>
+                    <div style="margin-top:5px;">2. Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+                    <div style="margin-top:5px;">3. Tap <strong>Add</strong> in the top right corner</div>
+                </div>`;
+
+            const chrome_ios = `
+                <div style="margin-bottom:14px;">
+                    <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">iPhone / iPad — Chrome</div>
+                    <div>1. Tap the <strong>⋯</strong> menu button at the bottom right</div>
+                    <div style="margin-top:5px;">2. Tap <strong>"Add to Home Screen"</strong></div>
+                    <div style="margin-top:5px;">3. Tap <strong>Add</strong> to confirm</div>
+                </div>`;
+
+            const android_chrome = `
+                <div style="margin-bottom:14px;">
+                    <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Android — Chrome</div>
+                    <div>1. Tap the <strong>⋮</strong> menu in the top right corner</div>
+                    <div style="margin-top:5px;">2. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></div>
+                    <div style="margin-top:5px;">3. Tap <strong>Add</strong> to confirm</div>
+                </div>`;
+
+            let content = '';
+            if (isIOS) {
+                content = safari_ios + chrome_ios;
+            } else {
+                content = android_chrome;
+            }
+
             const tip = document.createElement('div');
-            tip.id = 'iosTip';
+            tip.id = 'installTip';
             tip.style.cssText = `
                 position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
                 background:#1e1e3a;border:1px solid rgba(167,139,250,0.4);
-                border-radius:14px;padding:16px 20px;max-width:320px;width:90%;
-                box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:9999;
-                font-family:Inter,sans-serif;color:#e0e0e0;font-size:14px;line-height:1.6;
+                border-radius:14px;padding:18px 20px;max-width:340px;width:92%;
+                box-shadow:0 8px 32px rgba(0,0,0,0.7);z-index:9999;
+                font-family:Inter,sans-serif;color:#d4d4d4;font-size:14px;line-height:1.65;
             `;
             tip.innerHTML = `
-                <div style="font-weight:600;color:#a78bfa;margin-bottom:8px;">Add to Home Screen</div>
-                <div>1. Tap the <strong>Share</strong> button <span style="font-size:18px;">⎋</span> at the bottom of Safari</div>
-                <div style="margin-top:6px;">2. Scroll down and tap <strong>"Add to Home Screen"</strong></div>
-                <div style="margin-top:6px;">3. Tap <strong>Add</strong> — it will appear as an app icon!</div>
-                <div style="text-align:right;margin-top:12px;">
-                    <button onclick="document.getElementById('iosTip').remove()"
+                <div style="font-weight:700;color:#ffffff;font-size:15px;margin-bottom:14px;">Add to Home Screen</div>
+                ${content}
+                <div style="text-align:right;margin-top:4px;">
+                    <button onclick="document.getElementById('installTip').remove()"
                         style="background:rgba(124,58,237,0.3);border:none;color:#a78bfa;
-                               padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Got it</button>
+                               padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Got it</button>
                 </div>
             `;
             document.body.appendChild(tip);
