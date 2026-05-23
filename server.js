@@ -1427,7 +1427,7 @@ app.post('/api/alexa', async (req, res) => {
         n_sermons: 3,
         n_illustrations: 0,
         n_website: 0
-      }, { timeout: 4000 });
+      }, { timeout: 1500 });
 
       if (searchRes.data && searchRes.data.sermons && searchRes.data.sermons.length > 0) {
         const sermons = searchRes.data.sermons.slice(0, 3);
@@ -1460,7 +1460,7 @@ app.post('/api/alexa', async (req, res) => {
       body: JSON.stringify({
         model: 'grok-3',
         temperature: 0.7,
-        max_tokens: 150,
+        max_tokens: 100,
         stream: false,
         messages: [
           { role: 'user', content: systemPrompt + '\n\n' + userContent }
