@@ -1447,8 +1447,12 @@ app.post('/api/alexa', async (req, res) => {
       ? sermonContext + '\nUSER QUESTION: ' + question
       : question;
 
+    const xaiController = new AbortController();
+    const xaiTimeout = setTimeout(() => xaiController.abort(), 20000);
+
     const xaiRes = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
+      signal: xaiController.signal,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${XAI_API_KEY}`
@@ -1456,13 +1460,14 @@ app.post('/api/alexa', async (req, res) => {
       body: JSON.stringify({
         model: 'grok-3',
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: 150,
         stream: false,
         messages: [
           { role: 'user', content: systemPrompt + '\n\n' + userContent }
         ]
       })
     });
+    clearTimeout(xaiTimeout);
 
     if (!xaiRes.ok) {
       const err = await xaiRes.text();
