@@ -1410,6 +1410,81 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // ============================================
+// ALEXA ENDPOINT - Fast non-streaming response for Alexa skill
+// ============================================
+app.post('/api/alexa', async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question) return res.status(400).json({ error: 'No question provided' });
+
+    console.log(`Alexa question: ${question}`);
+
+    // Search reranker with 4-second timeout
+    let sermonContext = '';
+    try {
+      const searchRes = await axios.post(`${RERANKER_URL}/search/fast-all`, {
+        query: question,
+        n_sermons: 3,
+        n_illustrations: 0,
+        n_website: 0
+      }, { timeout: 4000 });
+
+      if (searchRes.data && searchRes.data.sermons && searchRes.data.sermons.length > 0) {
+        const sermons = searchRes.data.sermons.slice(0, 3);
+        sermonContext = '=== PASTOR BOB SERMON TRANSCRIPTS ===\n\n';
+        sermons.forEach((s, i) => {
+          sermonContext += `[${i+1}] "${s.title || 'Sermon'}":\n"${(s.text || '').substring(0, 600)}"\n\n`;
+        });
+        console.log(`Alexa: found ${sermons.length} sermon segments`);
+      }
+    } catch (searchErr) {
+      console.log(`Alexa reranker timeout/error: ${searchErr.message} - proceeding without sermon context`);
+    }
+
+    const systemPrompt = `You are Ask Pastor Bob, an AI assistant for Calvary Chapel East Anaheim. Answer questions based on Pastor Bob Kopeny's Bible teachings. Say "Pastor Bob teaches..." and answer in 3-4 sentences suitable for voice. Never say you lack information. Never mention searching or transcripts.`;
+
+    const userContent = sermonContext
+      ? sermonContext + '\nUSER QUESTION: ' + question
+      : question;
+
+    const xaiRes = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${XAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'grok-3',
+        temperature: 0.7,
+        max_tokens: 300,
+        stream: false,
+        messages: [
+          { role: 'user', content: systemPrompt + '\n\n' + userContent }
+        ]
+      })
+    });
+
+    if (!xaiRes.ok) {
+      const err = await xaiRes.text();
+      console.error('Alexa xAI error:', err);
+      return res.status(500).json({ error: 'xAI error' });
+    }
+
+    const xaiData = await xaiRes.json();
+    const answer = xaiData.choices && xaiData.choices[0] && xaiData.choices[0].message && xaiData.choices[0].message.content
+      ? xaiData.choices[0].message.content.trim()
+      : 'I was unable to find an answer to that question.';
+
+    console.log(`Alexa answer (${answer.length} chars): ${answer.substring(0, 80)}`);
+    res.json({ answer });
+
+  } catch (err) {
+    console.error('Alexa endpoint error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
 // TOKEN ENDPOINT - Creates unique room per user session
 // ============================================
 app.post('/token', async (req, res) => {
