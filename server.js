@@ -1480,8 +1480,19 @@ app.post('/api/alexa', async (req, res) => {
       ? xaiData.choices[0].message.content.trim()
       : 'I was unable to find an answer to that question.';
 
-    console.log(`Alexa answer (${answer.length} chars): ${answer.substring(0, 80)}`);
-    res.json({ answer });
+    // Trim to last complete sentence so it never cuts off mid-sentence
+    let cleanAnswer = answer;
+    const lastPunct = Math.max(
+      cleanAnswer.lastIndexOf('.'),
+      cleanAnswer.lastIndexOf('!'),
+      cleanAnswer.lastIndexOf('?')
+    );
+    if (lastPunct > 0 && lastPunct < cleanAnswer.length - 1) {
+      cleanAnswer = cleanAnswer.substring(0, lastPunct + 1);
+    }
+
+    console.log(`Alexa answer (${cleanAnswer.length} chars): ${cleanAnswer.substring(0, 80)}`);
+    res.json({ answer: cleanAnswer });
 
   } catch (err) {
     console.error('Alexa endpoint error:', err);
