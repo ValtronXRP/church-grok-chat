@@ -1460,7 +1460,7 @@ app.post('/api/alexa', async (req, res) => {
       body: JSON.stringify({
         model: 'grok-3',
         temperature: 0.7,
-        max_tokens: 100,
+        max_tokens: 250,
         stream: false,
         messages: [
           { role: 'user', content: systemPrompt + '\n\n' + userContent }
