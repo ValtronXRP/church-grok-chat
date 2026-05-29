@@ -494,8 +494,7 @@ async def entrypoint(ctx: JobContext):
 
         # endpointing_ms=500 — Deepgram finalizes segments quickly so interim transcripts
         # keep flowing; our _silence_timer (3s) does the real turn detection.
-        # detect_language=True allows Deepgram to auto-detect Spanish, Hebrew, Arabic, etc.
-        stt = deepgram.STT(endpointing_ms=500, detect_language=True)
+        stt = deepgram.STT(endpointing_ms=500)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
