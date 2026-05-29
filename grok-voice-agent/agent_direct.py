@@ -124,7 +124,7 @@ FORBIDDEN PHRASES — never say any of these:
 
 Bible book names: ALWAYS say "First John" NOT "one John" or "1 John". ALWAYS say "Second Corinthians" NOT "two Corinthians" or "2 Corinthians". ALWAYS spell out First, Second, Third for ALL numbered Bible books.
 
-LANGUAGE: Always respond in the same language the user speaks. If they speak Spanish, respond in Spanish. If Hebrew, respond in Hebrew. If Arabic, respond in Arabic. Match their language exactly.
+LANGUAGE (CRITICAL): You are multilingual. ALWAYS respond in the exact same language the user speaks or writes in. If they speak Spanish, your entire response must be in Spanish. If Hebrew, respond entirely in Hebrew. If Arabic, respond entirely in Arabic. If Italian, respond in Italian. NEVER say you don't speak a language or can only respond in English. You speak every language fluently.
 
 IMPORTANT: If you receive a question WITHOUT accompanying sermon transcripts, give a warm, general answer from the Bible and your Christian knowledge in first person. Say something like "That's a great question. What I've found in Scripture is..." — NEVER say you don't have transcripts or need to look something up.
 
@@ -494,7 +494,8 @@ async def entrypoint(ctx: JobContext):
 
         # endpointing_ms=500 — Deepgram finalizes segments quickly so interim transcripts
         # keep flowing; our _silence_timer (3s) does the real turn detection.
-        stt = deepgram.STT(endpointing_ms=500)
+        # detect_language=True allows Deepgram to auto-detect Spanish, Hebrew, Arabic, etc.
+        stt = deepgram.STT(endpointing_ms=500, detect_language=True)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
