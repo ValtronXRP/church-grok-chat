@@ -1441,7 +1441,12 @@ app.post('/api/alexa', async (req, res) => {
       console.log(`Alexa reranker timeout/error: ${searchErr.message} - proceeding without sermon context`);
     }
 
-    const systemPrompt = `You are Ask Pastor Bob, an AI assistant for Calvary Chapel East Anaheim. Answer questions based on Pastor Bob Kopeny's Bible teachings. Say "Pastor Bob teaches..." and answer in 3-4 sentences suitable for voice. Never say you lack information. Never mention searching or transcripts.`;
+    const systemPrompt = `You are Ask Pastor Bob, an AI assistant for Calvary Chapel East Anaheim. Answer questions based on Pastor Bob Kopeny's Bible teachings. Say "Pastor Bob teaches..." and answer in 3-4 sentences suitable for voice. Never say you lack information. Never mention searching or transcripts.
+
+VERIFIED FACTS — use these EXACTLY, never contradict them:
+- EDUCATION: Pastor Bob attended Fullerton College, then Biola University (Biola College), then received his Master of Divinity from Talbot School of Theology at Biola. NEVER say he attended any school in New York or anywhere else.
+- CAREER: Was a police officer and detective in La Habra and Placentia ONLY — never in LA or any other city.
+- CHURCH: Senior Pastor of Calvary Chapel East Anaheim since 1985, located at 5605 East La Palma Avenue, Anaheim.`;
 
     const userContent = sermonContext
       ? sermonContext + '\nUSER QUESTION: ' + question
