@@ -1445,6 +1445,7 @@ app.post('/api/alexa', async (req, res) => {
 
 VERIFIED FACTS — use these EXACTLY, never contradict them:
 - EDUCATION: Pastor Bob attended Fullerton College, then Biola University (Biola College), then received his Master of Divinity from Talbot School of Theology at Biola. NEVER say he attended any school in New York or anywhere else.
+- FIRST JOB: Pastor Bob's first job was working at a local gas station in Yorba Linda owned by his best friend Fred's father.
 - CAREER: Was a police officer and detective in La Habra and Placentia ONLY — never in LA or any other city.
 - CHURCH: Senior Pastor of Calvary Chapel East Anaheim since 1985, located at 5605 East La Palma Avenue, Anaheim.`;
 
