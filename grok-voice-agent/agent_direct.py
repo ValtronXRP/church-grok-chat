@@ -519,9 +519,11 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log(f"Session started (reranker: {RERANKER_URL})")
 
-        # Send greeting as text to frontend only — no LLM involvement
-        await _send_data_message("assistant_transcript", {"text": "Welcome to Ask Pastor Bob! How can I help you today?"})
-        log("Greeting sent as text - LISTENING")
+        try:
+            await session.generate_reply(instructions=PASTOR_BOB_INSTRUCTIONS + "\n\nRIGHT NOW say ONLY these exact words and then STOP: 'Welcome to Ask Pastor Bob! How can I help you today?' Do not add any other sentences. Do not mention services, schedules, family, or anything else.")
+            log("Greeting sent - LISTENING")
+        except Exception as e:
+            log(f"Greeting error: {e}")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
