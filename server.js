@@ -1190,8 +1190,13 @@ app.post('/api/chat', async (req, res) => {
     console.log(`Chat request - Model: ${model}, Messages: ${messages.length}`);
 
     // Log question for analytics (fire and forget)
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg && lastMsg.role === 'user') logQuestion(lastMsg.content, 'text');
+    // Find the last user message in the array (skipping system/assistant messages)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' && messages[i].content) {
+        logQuestion(messages[i].content, 'text');
+        break;
+      }
+    }
 
     // Check if we should search for relevant sermons
     let enhancedMessages = [...messages];
