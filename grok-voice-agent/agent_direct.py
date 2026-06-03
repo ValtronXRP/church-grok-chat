@@ -521,7 +521,7 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions=f"Say ONLY these exact words, nothing else, no introduction, no family details, no elaboration: '{greeting}'")
+            await session.generate_reply(instructions=f"Say ONLY and EXACTLY these words with no additions whatsoever: '{greeting}'. Stop immediately after 'today?' — do not add any other sentences.")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
