@@ -2140,8 +2140,9 @@ app.get('/chat.html/a', (req, res) => {
 app.get('/api/db-test', async (req, res) => {
   if (!pgPool) return res.json({ status: 'no pool', DATABASE_URL: !!process.env.DATABASE_URL });
   try {
+    await pgPool.query('INSERT INTO questions (question, source) VALUES ($1, $2)', ['test question', 'test']);
     const result = await pgPool.query('SELECT COUNT(*) FROM questions');
-    res.json({ status: 'connected', row_count: result.rows[0].count });
+    res.json({ status: 'connected', row_count: result.rows[0].count, insert: 'success' });
   } catch (err) {
     res.json({ status: 'error', message: err.message });
   }
