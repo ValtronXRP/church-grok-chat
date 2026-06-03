@@ -35,9 +35,12 @@ async function initDB() {
 initDB();
 
 function logQuestion(question, source = 'text') {
-  if (!pgPool || !question) return;
+  if (!pgPool) { console.log('logQuestion: no pgPool'); return; }
+  if (!question) { console.log('logQuestion: no question'); return; }
+  console.log(`logQuestion: logging "${question.substring(0, 60)}" source=${source}`);
   pgPool.query('INSERT INTO questions (question, source) VALUES ($1, $2)', [question, source])
-    .catch(err => console.error('Failed to log question:', err.message));
+    .then(() => console.log('logQuestion: insert success'))
+    .catch(err => console.error('logQuestion: insert failed:', err.message));
 }
 
 const app = express();
