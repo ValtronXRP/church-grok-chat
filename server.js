@@ -2136,6 +2136,17 @@ app.get('/chat.html/a', (req, res) => {
 });
 
 // ============================================
+// DB CONNECTION TEST
+app.get('/api/db-test', async (req, res) => {
+  if (!pgPool) return res.json({ status: 'no pool', DATABASE_URL: !!process.env.DATABASE_URL });
+  try {
+    const result = await pgPool.query('SELECT COUNT(*) FROM questions');
+    res.json({ status: 'connected', row_count: result.rows[0].count });
+  } catch (err) {
+    res.json({ status: 'error', message: err.message });
+  }
+});
+
 // QUESTION ANALYTICS ENDPOINT
 // ============================================
 app.get('/api/questions', async (req, res) => {
