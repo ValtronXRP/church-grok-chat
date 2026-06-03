@@ -8,6 +8,28 @@ from datetime import date
 from dotenv import load_dotenv
 from html import unescape
 
+# PostgreSQL logging
+try:
+    import asyncpg
+    _pg_pool = None
+    async def _get_pg_pool():
+        global _pg_pool
+        if _pg_pool is None and os.environ.get('DATABASE_URL'):
+            _pg_pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], ssl='require')
+        return _pg_pool
+
+    async def log_voice_question(question):
+        try:
+            pool = await _get_pg_pool()
+            if pool:
+                await pool.execute('INSERT INTO questions (question, source) VALUES ($1, $2)', question, 'voice')
+                log(f"Logged voice question: {question[:60]}")
+        except Exception as e:
+            log(f"Failed to log voice question: {e}")
+except ImportError:
+    async def log_voice_question(question):
+        log("asyncpg not installed, skipping voice question logging")
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', stream=sys.stdout, force=True)
@@ -324,6 +346,7 @@ async def _debounced_question(transcript):
     _searching = True
     try:
         log(f"SEARCHING for: {transcript[:80]}")
+        asyncio.create_task(log_voice_question(transcript))
         await _send_data_message("user_transcript", {"text": transcript})
         results, website_results = await _search_reranker(transcript)
 

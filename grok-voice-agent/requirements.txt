@@ -6,3 +6,6 @@ aiohttp>=3.9.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# PostgreSQL async client for question logging
+asyncpg>=0.29.0
