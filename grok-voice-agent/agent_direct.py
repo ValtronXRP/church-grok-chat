@@ -437,7 +437,7 @@ async def entrypoint(ctx: JobContext):
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
                 "silence_duration_ms": 500,
-                "create_response": False,
+                "create_response": True,
                 "interrupt_response": True,
             },
         )
@@ -519,11 +519,12 @@ async def entrypoint(ctx: JobContext):
         await session.start(room=ctx.room, agent=apb_agent)
         log(f"Session started (reranker: {RERANKER_URL})")
 
+        greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions="Say exactly this and nothing else: 'Welcome to Ask Pastor Bob! How can I help you today?' Stop after the question mark.")
+            await session.generate_reply(instructions=f"Say exactly: '{greeting}'")
             log("Greeting sent - LISTENING")
         except Exception as e:
-            log(f"Greeting error: {e}")
+            log(f"Greeting error: {e} - continuing anyway")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
