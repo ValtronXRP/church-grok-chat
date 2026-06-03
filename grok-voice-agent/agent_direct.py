@@ -521,10 +521,14 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(instructions=f"Say ONLY and EXACTLY these words with no additions whatsoever: '{greeting}'. Stop immediately after 'today?' — do not add any other sentences.")
+            await session.say(greeting)
             log("Greeting sent - LISTENING")
         except Exception as e:
-            log(f"Greeting error: {e} - continuing anyway")
+            log(f"Greeting via say() failed: {e}, trying generate_reply")
+            try:
+                await session.generate_reply(instructions=f"Say ONLY: '{greeting}'")
+            except Exception as e2:
+                log(f"Greeting generate_reply also failed: {e2}")
 
         shutdown_event = asyncio.Event()
         async def _on_shutdown():
