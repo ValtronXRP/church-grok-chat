@@ -2156,6 +2156,110 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// QUESTIONS DASHBOARD PAGE
+// ============================================
+app.get('/questions-dashboard', async (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Pastor Bob — Question Analytics</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; }
+  header { background: #1a1a2e; color: white; padding: 24px 32px; }
+  header h1 { font-size: 22px; font-weight: 600; }
+  header p { font-size: 13px; opacity: 0.6; margin-top: 4px; }
+  .container { max-width: 900px; margin: 32px auto; padding: 0 20px; }
+  .cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+  .card { background: white; border-radius: 12px; padding: 20px 24px; flex: 1; min-width: 140px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card .num { font-size: 36px; font-weight: 700; color: #1a1a2e; }
+  .card .label { font-size: 13px; color: #888; margin-top: 4px; }
+  section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  section h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: #1a1a2e; }
+  .question-row { padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; }
+  .question-row:last-child { border-bottom: none; }
+  .rank { font-size: 13px; color: #aaa; width: 24px; flex-shrink: 0; text-align: right; }
+  .q-text { flex: 1; font-size: 15px; }
+  .bar-wrap { width: 160px; flex-shrink: 0; }
+  .bar { height: 8px; background: #e8e8f0; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #1a1a2e; border-radius: 4px; }
+  .count { font-size: 13px; color: #888; width: 40px; text-align: right; flex-shrink: 0; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge.voice { background: #e8f4fd; color: #1a78c2; }
+  .badge.text { background: #e8fdf0; color: #1a7a42; }
+  .badge.alexa { background: #fdf3e8; color: #b06820; }
+  .badge.test { background: #f0f0f0; color: #888; }
+  .recent-row { padding: 10px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 12px; align-items: baseline; }
+  .recent-row:last-child { border-bottom: none; }
+  .recent-q { flex: 1; font-size: 14px; }
+  .recent-time { font-size: 12px; color: #aaa; flex-shrink: 0; }
+  .empty { color: #aaa; font-size: 14px; text-align: center; padding: 24px; }
+  .refresh { float: right; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ask Pastor Bob — Question Analytics</h1>
+  <p>What people are asking</p>
+</header>
+<div class="container">
+  <div id="cards" class="cards"></div>
+  <section>
+    <h2>Most Asked Questions <span class="refresh" onclick="load()">Refresh</span></h2>
+    <div id="top"></div>
+  </section>
+  <section>
+    <h2>Recent Questions</h2>
+    <div id="recent"></div>
+  </section>
+</div>
+<script>
+async function load() {
+  const res = await fetch('/api/questions?limit=50');
+  const data = await res.json();
+  const totalAll = data.totals.filter(r => r.source !== 'test').reduce((s, r) => s + parseInt(r.count), 0);
+  const voice = data.totals.find(r => r.source === 'voice');
+  const text = data.totals.find(r => r.source === 'text');
+  const alexa = data.totals.find(r => r.source === 'alexa');
+  document.getElementById('cards').innerHTML =
+    '<div class="card"><div class="num">' + totalAll + '</div><div class="label">Total Questions</div></div>' +
+    '<div class="card"><div class="num">' + (voice ? voice.count : 0) + '</div><div class="label">Voice</div></div>' +
+    '<div class="card"><div class="num">' + (alexa ? alexa.count : 0) + '</div><div class="label">Alexa</div></div>' +
+    '<div class="card"><div class="num">' + (text ? text.count : 0) + '</div><div class="label">Text Chat</div></div>';
+  const top = data.top_questions.filter(q => q.source !== 'test');
+  const maxCount = top.length > 0 ? parseInt(top[0].count) : 1;
+  if (top.length === 0) {
+    document.getElementById('top').innerHTML = '<div class="empty">No questions yet — ask something in the app!</div>';
+  } else {
+    document.getElementById('top').innerHTML = top.map(function(q, i) {
+      return '<div class="question-row">' +
+        '<div class="rank">' + (i+1) + '</div>' +
+        '<div class="q-text">' + q.question + '</div>' +
+        '<span class="badge ' + q.source + '">' + q.source + '</span>' +
+        '<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:' + Math.round(parseInt(q.count)/maxCount*100) + '%"></div></div></div>' +
+        '<div class="count">' + q.count + 'x</div>' +
+        '</div>';
+    }).join('');
+  }
+  const recent = data.recent.filter(q => q.source !== 'test');
+  if (recent.length === 0) {
+    document.getElementById('recent').innerHTML = '<div class="empty">No questions yet</div>';
+  } else {
+    document.getElementById('recent').innerHTML = recent.map(function(q) {
+      const d = new Date(q.asked_at);
+      const time = d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+      return '<div class="recent-row"><div class="recent-q">' + q.question + ' <span class="badge ' + q.source + '">' + q.source + '</span></div><div class="recent-time">' + time + '</div></div>';
+    }).join('');
+  }
+}
+load();
+</script>
+</body>
+</html>`);
+});
+
 // QUESTION ANALYTICS ENDPOINT
 // ============================================
 app.get('/api/questions', async (req, res) => {
