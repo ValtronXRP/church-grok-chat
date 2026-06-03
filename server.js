@@ -5,7 +5,40 @@ const { CloudClient } = require('chromadb');
 const SermonSearch = require('./sermonSearch');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
 require('dotenv').config();
+
+// ============================================
+// POSTGRES - QUESTION ANALYTICS
+// ============================================
+const pgPool = process.env.DATABASE_URL ? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+}) : null;
+
+async function initDB() {
+  if (!pgPool) return;
+  try {
+    await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS questions (
+        id SERIAL PRIMARY KEY,
+        question TEXT NOT NULL,
+        source VARCHAR(20) DEFAULT 'text',
+        asked_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('Questions table ready');
+  } catch (err) {
+    console.error('DB init error:', err.message);
+  }
+}
+initDB();
+
+function logQuestion(question, source = 'text') {
+  if (!pgPool || !question) return;
+  pgPool.query('INSERT INTO questions (question, source) VALUES ($1, $2)', [question, source])
+    .catch(err => console.error('Failed to log question:', err.message));
+}
 
 const app = express();
 app.use(express.json());
@@ -1155,7 +1188,11 @@ app.post('/api/chat', async (req, res) => {
     }
     
     console.log(`Chat request - Model: ${model}, Messages: ${messages.length}`);
-    
+
+    // Log question for analytics (fire and forget)
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === 'user') logQuestion(lastMsg.content, 'text');
+
     // Check if we should search for relevant sermons
     let enhancedMessages = [...messages];
     let sermonResults = [];
@@ -1418,6 +1455,7 @@ app.post('/api/alexa', async (req, res) => {
     if (!question) return res.status(400).json({ error: 'No question provided' });
 
     console.log(`Alexa question: ${question}`);
+    logQuestion(question, 'alexa');
 
     // Search reranker with 4-second timeout
     let sermonContext = '';
@@ -2095,6 +2133,47 @@ app.get('/bio', (req, res) => {
 
 app.get('/chat.html/a', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
+});
+
+// ============================================
+// QUESTION ANALYTICS ENDPOINT
+// ============================================
+app.get('/api/questions', async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const source = req.query.source || null;
+
+    // Most common questions (grouped by exact text)
+    const topQ = await pgPool.query(`
+      SELECT question, source, COUNT(*) as count, MAX(asked_at) as last_asked
+      FROM questions
+      ${source ? 'WHERE source = $2' : ''}
+      GROUP BY question, source
+      ORDER BY count DESC
+      LIMIT $1
+    `, source ? [limit, source] : [limit]);
+
+    // Total counts by source
+    const totals = await pgPool.query(`
+      SELECT source, COUNT(*) as count FROM questions GROUP BY source
+    `);
+
+    // Recent questions
+    const recent = await pgPool.query(`
+      SELECT question, source, asked_at FROM questions
+      ORDER BY asked_at DESC LIMIT 20
+    `);
+
+    res.json({
+      top_questions: topQ.rows,
+      totals: totals.rows,
+      recent: recent.rows
+    });
+  } catch (err) {
+    console.error('Questions analytics error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
