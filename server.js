@@ -68,6 +68,9 @@ async function getGeo(ip) {
 }
 
 function getClientIp(req) {
+  // Railway routes through Fastly CDN — real IP is in Fastly-Client-IP
+  const fastly = req.headers['fastly-client-ip'];
+  if (fastly) return fastly.trim();
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) return forwarded.split(',')[0].trim();
   return req.ip || req.connection?.remoteAddress || '';
