@@ -12,6 +12,8 @@ from html import unescape
 try:
     import asyncpg
     _pg_pool = None
+    _last_logged_question = ""
+
     async def _get_pg_pool():
         global _pg_pool
         if _pg_pool is None and os.environ.get('DATABASE_URL'):
@@ -19,6 +21,16 @@ try:
         return _pg_pool
 
     async def log_voice_question(question):
+        global _last_logged_question
+        # Skip short responses like "Sure.", "Yeah.", "Yes, that is right."
+        if len(question.split()) < 8:
+            log(f"Skipping short transcript: {question[:40]}")
+            return
+        # Skip if this is a duplicate or growing version of the last logged question
+        if question[:60] == _last_logged_question[:60]:
+            log(f"Skipping duplicate transcript: {question[:40]}")
+            return
+        _last_logged_question = question
         try:
             pool = await _get_pg_pool()
             if pool:
