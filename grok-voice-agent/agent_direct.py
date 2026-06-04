@@ -8,39 +8,30 @@ from datetime import date
 from dotenv import load_dotenv
 from html import unescape
 
-# PostgreSQL logging
-try:
-    import asyncpg
-    _pg_pool = None
-    _last_logged_question = ""
+# Question logging via server HTTP (so server can attach IP/geo)
+_last_logged_question = ""
+_SERVER_URL = os.environ.get('SERVER_URL', 'http://localhost:8080')
 
-    async def _get_pg_pool():
-        global _pg_pool
-        if _pg_pool is None and os.environ.get('DATABASE_URL'):
-            _pg_pool = await asyncpg.create_pool(os.environ['DATABASE_URL'], ssl='require')
-        return _pg_pool
-
-    async def log_voice_question(question):
-        global _last_logged_question
-        # Skip short responses like "Sure.", "Yeah.", "Yes, that is right."
-        if len(question.split()) < 8:
-            log(f"Skipping short transcript: {question[:40]}")
-            return
-        # Skip if this is a duplicate or growing version of the last logged question
-        if question[:60] == _last_logged_question[:60]:
-            log(f"Skipping duplicate transcript: {question[:40]}")
-            return
-        _last_logged_question = question
-        try:
-            pool = await _get_pg_pool()
-            if pool:
-                await pool.execute('INSERT INTO questions (question, source) VALUES ($1, $2)', question, 'voice')
-                log(f"Logged voice question: {question[:60]}")
-        except Exception as e:
-            log(f"Failed to log voice question: {e}")
-except ImportError:
-    async def log_voice_question(question):
-        log("asyncpg not installed, skipping voice question logging")
+async def log_voice_question(question):
+    global _last_logged_question
+    # Skip short responses like "Sure.", "Yeah.", "Yes, that is right."
+    if len(question.split()) < 8:
+        log(f"Skipping short transcript: {question[:40]}")
+        return
+    # Skip if duplicate or growing version of last logged question
+    if question[:60] == _last_logged_question[:60]:
+        log(f"Skipping duplicate transcript: {question[:40]}")
+        return
+    _last_logged_question = question
+    room_name = _room_ref.name if _room_ref else ''
+    try:
+        async with aiohttp.ClientSession() as http:
+            await http.post(f"{_SERVER_URL}/api/log-question",
+                json={"question": question, "source": "voice", "roomName": room_name},
+                timeout=aiohttp.ClientTimeout(total=5))
+        log(f"Logged voice question: {question[:60]}")
+    except Exception as e:
+        log(f"Failed to log voice question: {e}")
 
 load_dotenv()
 

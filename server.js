@@ -16,6 +16,9 @@ const pgPool = process.env.DATABASE_URL ? new Pool({
   ssl: { rejectUnauthorized: false }
 }) : null;
 
+// Room -> IP map for associating voice questions with IPs
+const roomIpMap = new Map();
+
 async function initDB() {
   if (!pgPool) return;
   try {
@@ -24,23 +27,53 @@ async function initDB() {
         id SERIAL PRIMARY KEY,
         question TEXT NOT NULL,
         source VARCHAR(20) DEFAULT 'text',
+        country TEXT,
+        city TEXT,
+        ip_address TEXT,
         asked_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('Questions table ready');
+    // Add geo columns if upgrading from old schema
+    await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS country TEXT`);
+    await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS city TEXT`);
+    await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS ip_address TEXT`);
+    // Clean up old bad data
+    await pgPool.query(`DELETE FROM questions WHERE source = 'test'`);
+    await pgPool.query(`DELETE FROM questions WHERE array_length(string_to_array(trim(question), ' '), 1) < 8`);
+    console.log('Questions table ready (with geo columns)');
   } catch (err) {
     console.error('DB init error:', err.message);
   }
 }
 initDB();
 
-function logQuestion(question, source = 'text') {
-  if (!pgPool) { console.log('logQuestion: no pgPool'); return; }
-  if (!question) { console.log('logQuestion: no question'); return; }
-  console.log(`logQuestion: logging "${question.substring(0, 60)}" source=${source}`);
-  pgPool.query('INSERT INTO questions (question, source) VALUES ($1, $2)', [question, source])
-    .then(() => console.log('logQuestion: insert success'))
-    .catch(err => console.error('logQuestion: insert failed:', err.message));
+async function getGeo(ip) {
+  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168') || ip.startsWith('10.')) return {};
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,regionName`);
+    if (res.ok) {
+      const data = await res.json();
+      return { country: data.country || '', city: data.city || '' };
+    }
+  } catch (e) { /* silent */ }
+  return {};
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.ip || req.connection?.remoteAddress || '';
+}
+
+function logQuestion(question, source = 'text', ip = '') {
+  if (!pgPool || !question) return;
+  if (question.trim().split(/\s+/).length < 8) return;
+  getGeo(ip).then(geo => {
+    pgPool.query(
+      'INSERT INTO questions (question, source, country, city, ip_address) VALUES ($1, $2, $3, $4, $5)',
+      [question, source, geo.country || '', geo.city || '', ip]
+    ).catch(err => console.error('logQuestion failed:', err.message));
+  });
 }
 
 const app = express();
@@ -1193,10 +1226,10 @@ app.post('/api/chat', async (req, res) => {
     console.log(`Chat request - Model: ${model}, Messages: ${messages.length}`);
 
     // Log question for analytics (fire and forget)
-    // Find the last user message in the array (skipping system/assistant messages)
+    const clientIp = getClientIp(req);
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'user' && messages[i].content) {
-        logQuestion(messages[i].content, 'text');
+        logQuestion(messages[i].content, 'text', clientIp);
         break;
       }
     }
@@ -1579,10 +1612,15 @@ app.post('/token', async (req, res) => {
     });
     const token = await at.toJwt();
 
+    // Store IP for this room so voice questions can be geo-tagged
+    const clientIp = getClientIp(req);
+    roomIpMap.set(roomName, clientIp);
+    setTimeout(() => roomIpMap.delete(roomName), 3600000); // clean up after 1 hour
+
     console.log(`Token created for room ${roomName} (auto-dispatch)`);
 
-    res.json({ 
-      token, 
+    res.json({
+      token,
       url: LIVEKIT_URL,
       roomName: roomName,
       participant: participantName
@@ -2144,6 +2182,15 @@ app.get('/chat.html/a', (req, res) => {
 });
 
 // ============================================
+// VOICE QUESTION LOGGING (called by Python voice agent)
+app.post('/api/log-question', async (req, res) => {
+  const { question, source = 'voice', roomName = '' } = req.body;
+  if (!question) return res.json({ ok: false });
+  const ip = roomIpMap.get(roomName) || '';
+  logQuestion(question, source, ip);
+  res.json({ ok: true });
+});
+
 // DB CONNECTION TEST
 app.get('/api/db-test', async (req, res) => {
   if (!pgPool) return res.json({ status: 'no pool', DATABASE_URL: !!process.env.DATABASE_URL });
@@ -2171,41 +2218,49 @@ app.get('/questions-dashboard', async (req, res) => {
   header { background: #1a1a2e; color: white; padding: 24px 32px; }
   header h1 { font-size: 22px; font-weight: 600; }
   header p { font-size: 13px; opacity: 0.6; margin-top: 4px; }
-  .container { max-width: 900px; margin: 32px auto; padding: 0 20px; }
+  .container { max-width: 960px; margin: 32px auto; padding: 0 20px; }
   .cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
-  .card { background: white; border-radius: 12px; padding: 20px 24px; flex: 1; min-width: 140px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card { background: white; border-radius: 12px; padding: 20px 24px; flex: 1; min-width: 130px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
   .card .num { font-size: 36px; font-weight: 700; color: #1a1a2e; }
   .card .label { font-size: 13px; color: #888; margin-top: 4px; }
   section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
   section h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: #1a1a2e; }
-  .question-row { padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; }
+  .question-row { padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 10px; }
   .question-row:last-child { border-bottom: none; }
-  .rank { font-size: 13px; color: #aaa; width: 24px; flex-shrink: 0; text-align: right; }
-  .q-text { flex: 1; font-size: 15px; }
-  .bar-wrap { width: 160px; flex-shrink: 0; }
+  .rank { font-size: 13px; color: #aaa; width: 22px; flex-shrink: 0; text-align: right; }
+  .q-text { flex: 1; font-size: 14px; }
+  .bar-wrap { width: 120px; flex-shrink: 0; }
   .bar { height: 8px; background: #e8e8f0; border-radius: 4px; overflow: hidden; }
   .bar-fill { height: 100%; background: #1a1a2e; border-radius: 4px; }
-  .count { font-size: 13px; color: #888; width: 40px; text-align: right; flex-shrink: 0; }
-  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .count { font-size: 13px; color: #888; width: 32px; text-align: right; flex-shrink: 0; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
   .badge.voice { background: #e8f4fd; color: #1a78c2; }
   .badge.text { background: #e8fdf0; color: #1a7a42; }
   .badge.alexa { background: #fdf3e8; color: #b06820; }
-  .badge.test { background: #f0f0f0; color: #888; }
-  .recent-row { padding: 10px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 12px; align-items: baseline; }
+  .geo { font-size: 12px; color: #888; white-space: nowrap; flex-shrink: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .recent-row { padding: 10px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 10px; align-items: flex-start; }
   .recent-row:last-child { border-bottom: none; }
-  .recent-q { flex: 1; font-size: 14px; }
-  .recent-time { font-size: 12px; color: #aaa; flex-shrink: 0; }
+  .recent-q { flex: 1; font-size: 14px; line-height: 1.4; }
+  .recent-meta { font-size: 12px; color: #aaa; flex-shrink: 0; text-align: right; min-width: 120px; }
+  .recent-geo { font-size: 11px; color: #bbb; margin-top: 2px; }
   .empty { color: #aaa; font-size: 14px; text-align: center; padding: 24px; }
   .refresh { float: right; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
+  .countries-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .country-tag { background: #f0f0f8; border-radius: 8px; padding: 8px 14px; font-size: 14px; }
+  .country-tag span { font-weight: 600; color: #1a1a2e; }
 </style>
 </head>
 <body>
 <header>
   <h1>Ask Pastor Bob — Question Analytics</h1>
-  <p>What people are asking</p>
+  <p>What people are asking and where they are</p>
 </header>
 <div class="container">
   <div id="cards" class="cards"></div>
+  <section>
+    <h2>Countries</h2>
+    <div id="countries" class="countries-grid"><div class="empty">Loading...</div></div>
+  </section>
   <section>
     <h2>Most Asked Questions <span class="refresh" onclick="load()">Refresh</span></h2>
     <div id="top"></div>
@@ -2217,9 +2272,9 @@ app.get('/questions-dashboard', async (req, res) => {
 </div>
 <script>
 async function load() {
-  const res = await fetch('/api/questions?limit=50');
+  const res = await fetch('/api/questions?limit=100');
   const data = await res.json();
-  const totalAll = data.totals.filter(r => r.source !== 'test').reduce((s, r) => s + parseInt(r.count), 0);
+  const totalAll = data.totals.reduce((s, r) => s + parseInt(r.count), 0);
   const voice = data.totals.find(r => r.source === 'voice');
   const text = data.totals.find(r => r.source === 'text');
   const alexa = data.totals.find(r => r.source === 'alexa');
@@ -2227,30 +2282,49 @@ async function load() {
     '<div class="card"><div class="num">' + totalAll + '</div><div class="label">Total Questions</div></div>' +
     '<div class="card"><div class="num">' + (voice ? voice.count : 0) + '</div><div class="label">Voice</div></div>' +
     '<div class="card"><div class="num">' + (alexa ? alexa.count : 0) + '</div><div class="label">Alexa</div></div>' +
-    '<div class="card"><div class="num">' + (text ? text.count : 0) + '</div><div class="label">Text Chat</div></div>';
-  const top = data.top_questions.filter(q => q.source !== 'test');
+    '<div class="card"><div class="num">' + (text ? text.count : 0) + '</div><div class="label">Text Chat</div></div>' +
+    '<div class="card"><div class="num">' + (data.country_count || 0) + '</div><div class="label">Countries</div></div>';
+
+  // Countries
+  if (data.countries && data.countries.length > 0) {
+    document.getElementById('countries').innerHTML = data.countries.map(function(c) {
+      return '<div class="country-tag">' + c.country + ' <span>' + c.count + '</span></div>';
+    }).join('');
+  } else {
+    document.getElementById('countries').innerHTML = '<div class="empty">Geo data coming soon — questions asked after today will show location</div>';
+  }
+
+  // Top questions
+  const top = data.top_questions;
   const maxCount = top.length > 0 ? parseInt(top[0].count) : 1;
   if (top.length === 0) {
-    document.getElementById('top').innerHTML = '<div class="empty">No questions yet — ask something in the app!</div>';
+    document.getElementById('top').innerHTML = '<div class="empty">No questions yet</div>';
   } else {
     document.getElementById('top').innerHTML = top.map(function(q, i) {
       return '<div class="question-row">' +
         '<div class="rank">' + (i+1) + '</div>' +
         '<div class="q-text">' + q.question + '</div>' +
         '<span class="badge ' + q.source + '">' + q.source + '</span>' +
+        (q.country ? '<div class="geo">' + q.country + '</div>' : '') +
         '<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:' + Math.round(parseInt(q.count)/maxCount*100) + '%"></div></div></div>' +
         '<div class="count">' + q.count + 'x</div>' +
         '</div>';
     }).join('');
   }
-  const recent = data.recent.filter(q => q.source !== 'test');
+
+  // Recent questions
+  const recent = data.recent;
   if (recent.length === 0) {
     document.getElementById('recent').innerHTML = '<div class="empty">No questions yet</div>';
   } else {
     document.getElementById('recent').innerHTML = recent.map(function(q) {
       const d = new Date(q.asked_at);
       const time = d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-      return '<div class="recent-row"><div class="recent-q">' + q.question + ' <span class="badge ' + q.source + '">' + q.source + '</span></div><div class="recent-time">' + time + '</div></div>';
+      const geo = [q.city, q.country].filter(Boolean).join(', ');
+      return '<div class="recent-row">' +
+        '<div class="recent-q">' + q.question + ' <span class="badge ' + q.source + '">' + q.source + '</span></div>' +
+        '<div class="recent-meta">' + time + (geo ? '<div class="recent-geo">' + geo + '</div>' : '') + '</div>' +
+        '</div>';
     }).join('');
   }
 }
@@ -2268,9 +2342,10 @@ app.get('/api/questions', async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const source = req.query.source || null;
 
-    // Most common questions (grouped by exact text)
+    // Most common questions (grouped by exact text, include most recent country)
     const topQ = await pgPool.query(`
-      SELECT question, source, COUNT(*) as count, MAX(asked_at) as last_asked
+      SELECT question, source, COUNT(*) as count, MAX(asked_at) as last_asked,
+             (array_agg(country ORDER BY asked_at DESC))[1] as country
       FROM questions
       ${source ? 'WHERE source = $2' : ''}
       GROUP BY question, source
@@ -2280,18 +2355,27 @@ app.get('/api/questions', async (req, res) => {
 
     // Total counts by source
     const totals = await pgPool.query(`
-      SELECT source, COUNT(*) as count FROM questions GROUP BY source
+      SELECT source, COUNT(*) as count FROM questions GROUP BY source ORDER BY count DESC
     `);
 
-    // Recent questions
+    // Countries breakdown
+    const countries = await pgPool.query(`
+      SELECT country, COUNT(*) as count FROM questions
+      WHERE country IS NOT NULL AND country != ''
+      GROUP BY country ORDER BY count DESC
+    `);
+
+    // Recent questions with geo
     const recent = await pgPool.query(`
-      SELECT question, source, asked_at FROM questions
-      ORDER BY asked_at DESC LIMIT 20
+      SELECT question, source, country, city, asked_at FROM questions
+      ORDER BY asked_at DESC LIMIT 30
     `);
 
     res.json({
       top_questions: topQ.rows,
       totals: totals.rows,
+      countries: countries.rows,
+      country_count: countries.rows.length,
       recent: recent.rows
     });
   } catch (err) {
