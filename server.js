@@ -39,8 +39,8 @@ async function initDB() {
     await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS ip_address TEXT`);
     // Clean up old bad data
     await pgPool.query(`DELETE FROM questions WHERE source = 'test'`);
-    // Use both word count AND char length — CJK text has no spaces so word count is always 1
-    await pgPool.query(`DELETE FROM questions WHERE array_length(string_to_array(trim(question), ' '), 1) < 8 AND length(trim(question)) < 20`);
+    // Only delete very short junk (under 3 words AND under 8 chars) — preserves Alexa slot values and CJK text
+    await pgPool.query(`DELETE FROM questions WHERE array_length(string_to_array(trim(question), ' '), 1) < 3 AND length(trim(question)) < 8`);
     console.log('Questions table ready (with geo columns)');
   } catch (err) {
     console.error('DB init error:', err.message);
@@ -79,8 +79,8 @@ function getClientIp(req) {
 function logQuestion(question, source = 'text', ip = '') {
   if (!pgPool || !question) return;
   const q = question.trim();
-  // Allow CJK/non-spaced languages (≥20 chars); require 8+ words for spaced languages
-  if (q.split(/\s+/).length < 8 && q.length < 20) return;
+  // Block only very short junk (under 3 words AND under 8 chars)
+  if (q.split(/\s+/).length < 3 && q.length < 8) return;
   console.log(`[log-question] source=${source} ip="${ip}" q="${q.substring(0, 60)}"`);
   getGeo(ip).then(geo => {
     pgPool.query(
