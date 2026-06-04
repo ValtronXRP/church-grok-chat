@@ -39,7 +39,8 @@ async function initDB() {
     await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS ip_address TEXT`);
     // Clean up old bad data
     await pgPool.query(`DELETE FROM questions WHERE source = 'test'`);
-    await pgPool.query(`DELETE FROM questions WHERE array_length(string_to_array(trim(question), ' '), 1) < 8`);
+    // Use both word count AND char length — CJK text has no spaces so word count is always 1
+    await pgPool.query(`DELETE FROM questions WHERE array_length(string_to_array(trim(question), ' '), 1) < 8 AND length(trim(question)) < 20`);
     console.log('Questions table ready (with geo columns)');
   } catch (err) {
     console.error('DB init error:', err.message);
@@ -48,14 +49,21 @@ async function initDB() {
 initDB();
 
 async function getGeo(ip) {
-  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168') || ip.startsWith('10.')) return {};
+  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168') || ip.startsWith('10.')) {
+    console.log(`[geo] skipping private/missing IP: "${ip}"`);
+    return {};
+  }
   try {
     const res = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,regionName`);
     if (res.ok) {
       const data = await res.json();
+      console.log(`[geo] ${ip} → ${data.city}, ${data.country} (status: ${data.status})`);
       return { country: data.country || '', city: data.city || '' };
     }
-  } catch (e) { /* silent */ }
+    console.log(`[geo] ip-api.com returned HTTP ${res.status} for ${ip}`);
+  } catch (e) {
+    console.error(`[geo] fetch failed for ${ip}:`, e.message);
+  }
   return {};
 }
 
@@ -67,7 +75,10 @@ function getClientIp(req) {
 
 function logQuestion(question, source = 'text', ip = '') {
   if (!pgPool || !question) return;
-  if (question.trim().split(/\s+/).length < 8) return;
+  const q = question.trim();
+  // Allow CJK/non-spaced languages (≥20 chars); require 8+ words for spaced languages
+  if (q.split(/\s+/).length < 8 && q.length < 20) return;
+  console.log(`[log-question] source=${source} ip="${ip}" q="${q.substring(0, 60)}"`);
   getGeo(ip).then(geo => {
     pgPool.query(
       'INSERT INTO questions (question, source, country, city, ip_address) VALUES ($1, $2, $3, $4, $5)',
