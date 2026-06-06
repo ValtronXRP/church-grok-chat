@@ -772,7 +772,7 @@ const CHURCH_INFO_KEYWORDS = [
   'church camp', 'summer camp',
   'blessfest', 'cars and coffee', 'cars & coffee',
   'royal rangers', 'mpact girls', 'adventure kids',
-  'griefshare', 'divorcecare', 'divorce care', 'grief share',
+  'griefshare', 'divorcecare', 'divorce care ministry', 'grief share',
   'newcomer', 'newcomers dinner',
   'how much does', 'what is the cost', 'what is the price',
 ];
