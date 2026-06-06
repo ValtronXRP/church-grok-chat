@@ -526,6 +526,7 @@ async def entrypoint(ctx: JobContext):
         log(f"Session started (reranker: {RERANKER_URL})")
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
+        await asyncio.sleep(1.5)  # Wait for client audio to be ready before greeting
         try:
             await session.generate_reply(instructions="You are a voice assistant for a church. Say only this greeting and then go silent: 'Welcome to Ask Pastor Bob! How can I help you today?' Do not add anything else.")
             log("Greeting sent - LISTENING")
