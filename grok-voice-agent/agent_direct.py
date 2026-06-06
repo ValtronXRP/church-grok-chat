@@ -527,7 +527,7 @@ async def entrypoint(ctx: JobContext):
 
         greeting = "Welcome to Ask Pastor Bob! How can I help you today?"
         try:
-            await session.generate_reply(user_input="[greet]")
+            await session.generate_reply(instructions="You are a voice assistant for a church. Say only this greeting and then go silent: 'Welcome to Ask Pastor Bob! How can I help you today?' Do not add anything else.")
             log("Greeting sent - LISTENING")
         except Exception as e:
             log(f"Greeting error: {e} - continuing anyway")
