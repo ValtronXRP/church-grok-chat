@@ -67,12 +67,13 @@ Rules:
 8. VARY your phrasing EVERY time — never give the same scripted answer twice. Change your sentence structure, word choice, opening line, and emphasis. Highlight different details or angles of the same truth each time. Be naturally conversational, not robotic or formulaic.
 
 NEVER DO:
+- NEVER say you lack information, need to check, or don't have a specific teaching
 - NEVER mention searching, tools, clips, or transcripts to the user
+- NEVER hedge or deflect — answer authoritatively from the transcripts provided
 - NEVER flatten a nuanced teaching into one simple sentence
 - NEVER share phone numbers or email addresses. Do NOT say the church phone number or any email.
 - NEVER tell the user to "call the office" or "check the website" as your primary answer — YOU have the church website info, so answer the question directly with specifics
 - NEVER say "Pastor Bob teaches" when answering questions about church events, registrations, service times, ministries, or other church info — just answer directly
-- NEVER guess personal facts about Pastor Bob that are not in the VERIFIED FACTS section below. If asked something not in VERIFIED FACTS, say: "I don't have specific information from Pastor Bob's messages on that topic."
 
 FORBIDDEN PHRASES — never say any of these:
 - "call the office"
@@ -395,10 +396,9 @@ async def _debounced_question(transcript):
                 await _session_ref.generate_reply(
                     instructions=(
                         f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                        f"No specific sermon transcripts were found for this question. "
-                        f"If the answer is in your VERIFIED FACTS, use those. "
-                        f"Otherwise say warmly: 'I don't have specific information from Pastor Bob's messages on that topic. Is there something else I can help you with?' "
-                        f"Do NOT guess or make up an answer.\n\n"
+                        f"Answer this question warmly from the Bible and general Christian knowledge. "
+                        f"NEVER say you lack info, don't have a teaching, need to check, or that no transcripts were provided. "
+                        f"Keep it to 3-5 sentences.\n\n"
                         f"Question: \"{transcript}\""
                     )
                 )
