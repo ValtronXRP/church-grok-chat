@@ -2265,6 +2265,11 @@ app.get('/questions-dashboard', async (req, res) => {
   .countries-grid { display: flex; flex-wrap: wrap; gap: 10px; }
   .country-tag { background: #f0f0f8; border-radius: 8px; padding: 8px 14px; font-size: 14px; }
   .country-tag span { font-weight: 600; color: #1a1a2e; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: 2px solid #e0e0e0; background: white; color: #888; }
+  .tab.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 </style>
 </head>
 <body>
@@ -2278,16 +2283,30 @@ app.get('/questions-dashboard', async (req, res) => {
     <h2>Countries</h2>
     <div id="countries" class="countries-grid"><div class="empty">Loading...</div></div>
   </section>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('top')">Most Asked Questions</button>
+    <button class="tab" onclick="switchTab('recent')">Recent Questions</button>
+  </div>
+  <div id="tab-top" class="tab-panel active">
   <section>
     <h2>Most Asked Questions <span class="refresh" onclick="load()">Refresh</span></h2>
     <div id="top"></div>
   </section>
+  </div>
+  <div id="tab-recent" class="tab-panel">
   <section>
     <h2>Recent Questions</h2>
     <div id="recent"></div>
   </section>
+  </div>
 </div>
 <script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
 async function load() {
   const res = await fetch('/api/questions?limit=100');
   const data = await res.json();
