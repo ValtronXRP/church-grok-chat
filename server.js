@@ -1381,7 +1381,7 @@ app.post('/api/chat', async (req, res) => {
       if (sermonResults.length > 0 || websiteResults.length > 0) {
         console.log(`Found ${sermonResults.length} sermon segments, ${websiteResults.length} website results`);
         const _topScore = sermonResults.length > 0 ? (sermonResults[0].relevance_score || 0) : 0;
-        const _strongMatch = sermonResults.length > 0 && _topScore >= 0.3;
+        const _strongMatch = sermonResults.length > 0 && _topScore >= 0.5;
         console.log(`[relevance] topScore=${_topScore.toFixed(3)} strongMatch=${_strongMatch}`);
         const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults, _strongMatch);
         console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
@@ -1509,7 +1509,7 @@ app.post('/api/chat', async (req, res) => {
     
     // Determine answer source for logging
     // If top sermon score is below threshold, treat as weak match (fallback quality)
-    const RELEVANCE_THRESHOLD = 0.3;
+    const RELEVANCE_THRESHOLD = 0.5;
     const hasSermons = sermonResults && sermonResults.length > 0;
     const hasWebsite = websiteResults && websiteResults.length > 0;
     const topScore = hasSermons ? (sermonResults[0].relevance_score || 0) : 0;
