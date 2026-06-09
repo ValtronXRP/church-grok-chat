@@ -278,8 +278,6 @@ def is_church_info_query(query):
     return False
 
 
-RELEVANCE_THRESHOLD = 0.75
-
 async def _search_reranker(query, n=10):
     is_church = is_church_info_query(query)
     n_website = 8 if is_church else 0
@@ -297,20 +295,15 @@ async def _search_reranker(query, n=10):
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    raw_sermons = data.get('sermons', [])
-                    top_score = raw_sermons[0].get('rerank_score', 0) if raw_sermons else 0
-                    strong_match = len(raw_sermons) > 0 and top_score >= RELEVANCE_THRESHOLD
-                    log(f"[relevance] topScore={top_score:.3f} strongMatch={strong_match}")
                     results = []
                     seen = set()
-                    if strong_match:
-                        for r in raw_sermons:
-                            title = r.get('title', 'Sermon')
-                            text = r.get('text', '')
-                            key = text[:100]
-                            if text and len(text) > 50 and key not in seen:
-                                seen.add(key)
-                                results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:600]}\"")
+                    for r in data.get('sermons', []):
+                        title = r.get('title', 'Sermon')
+                        text = r.get('text', '')
+                        key = text[:100]
+                        if text and len(text) > 50 and key not in seen:
+                            seen.add(key)
+                            results.append(f"[{len(results)+1}] \"{unescape(title)}\":\n\"{text[:600]}\"")
                     website_results = []
                     for r in data.get('website', []):
                         page = r.get('page', '')

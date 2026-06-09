@@ -1098,11 +1098,11 @@ async function searchSermonsOld(query) {
   return [];
 }
 
-function formatSermonContext(sermonResults, isMoreRequest = false, websiteResults = [], strongSermonMatch = true) {
+function formatSermonContext(sermonResults, isMoreRequest = false, websiteResults = []) {
   const hasSermons = sermonResults && sermonResults.length > 0;
   const hasWebsite = websiteResults && websiteResults.length > 0;
 
-  if ((!hasSermons && !hasWebsite) || (!strongSermonMatch && !hasWebsite)) {
+  if (!hasSermons && !hasWebsite) {
     return '\n\nNo specific teaching from Pastor Bob was found for this question. Begin your response with exactly this disclaimer: "I don\'t have a specific teaching from Pastor Bob on that topic, but from a general Calvary Chapel perspective..." Then give a brief, biblically sound answer consistent with Calvary Chapel evangelical teaching. NEVER present the answer as Pastor Bob\'s specific teaching.\n';
   }
   
@@ -1380,10 +1380,7 @@ app.post('/api/chat', async (req, res) => {
       
       if (sermonResults.length > 0 || websiteResults.length > 0) {
         console.log(`Found ${sermonResults.length} sermon segments, ${websiteResults.length} website results`);
-        const _topScore = sermonResults.length > 0 ? (sermonResults[0].relevance_score || 0) : 0;
-        const _strongMatch = sermonResults.length > 0 && _topScore >= 0.75;
-        console.log(`[relevance] topScore=${_topScore.toFixed(3)} strongMatch=${_strongMatch}`);
-        const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults, _strongMatch);
+        const sermonContext = formatSermonContext(sermonResults, isMoreRequest, websiteResults);
         console.log(`Added sermon context (${sermonContext.length} chars), isMore: ${isMoreRequest}`);
         if (sermonResults.length > 0) {
           console.log(`Top sermon: "${(sermonResults[0].title || '').substring(0, 60)}" text: "${(sermonResults[0].text || '').substring(0, 200)}"`);
@@ -1508,14 +1505,9 @@ app.post('/api/chat', async (req, res) => {
     }
     
     // Determine answer source for logging
-    // If top sermon score is below threshold, treat as weak match (fallback quality)
-    const RELEVANCE_THRESHOLD = 0.75;
     const hasSermons = sermonResults && sermonResults.length > 0;
     const hasWebsite = websiteResults && websiteResults.length > 0;
-    const topScore = hasSermons ? (sermonResults[0].relevance_score || 0) : 0;
-    const strongSermonMatch = hasSermons && topScore >= RELEVANCE_THRESHOLD;
-    const answerSrc = strongSermonMatch ? 'sermons' : (hasWebsite ? 'website' : 'fallback');
-    console.log(`[answer-source] topScore=${topScore.toFixed(3)} strongMatch=${strongSermonMatch} answerSrc=${answerSrc}`);
+    const answerSrc = hasSermons ? 'sermons' : (hasWebsite ? 'website' : 'fallback');
 
     // Stream the response, buffering answer text for logging
     const reader = response.body.getReader();
