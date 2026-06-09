@@ -90,6 +90,10 @@ const FALLBACK_SIGNALS = [
   "i haven't found a specific teaching",
   "from a general calvary chapel perspective",
   "not a topic pastor bob has",
+  "while pastor bob hasn't specifically addressed",
+  "while pastor bob has not specifically addressed",
+  "pastor bob hasn't specifically addressed",
+  "pastor bob has not specifically addressed",
 ];
 
 function detectAnswerSource(answerSource, answer) {
@@ -1121,11 +1125,11 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
   context += 'These are REAL transcripts from Pastor Bob\'s sermons. You MUST:\n';
   context += '1. SYNTHESIZE across ALL segments below to build a COMPLETE, NUANCED answer\n';
   context += '2. Identify the FULL theological framework Pastor Bob teaches — look for multi-part teachings, distinctions, stages, or nuances across segments\n';
-  context += '3. Say "Pastor Bob teaches..." and share his actual teaching with its full depth\n';
-  context += '4. If he makes distinctions (e.g., "there is X but there is also Y"), preserve those distinctions in your answer\n';
-  context += '5. Quote or closely paraphrase his actual words when they are powerful\n';
-  context += '6. NEVER flatten a nuanced teaching into a simple one-line answer\n';
-  context += '7. NEVER say you lack information — the transcripts below ARE your source\n';
+  context += '3. If the transcripts DIRECTLY address the question: say "Pastor Bob teaches..." and share his actual teaching with its full depth\n';
+  context += '4. If the transcripts address RELATED topics but do NOT directly answer the specific question: begin with exactly "While Pastor Bob hasn\'t specifically addressed this topic, his teachings suggest..." then draw from the related content\n';
+  context += '5. If he makes distinctions (e.g., "there is X but there is also Y"), preserve those distinctions in your answer\n';
+  context += '6. Quote or closely paraphrase his actual words when they are powerful\n';
+  context += '7. NEVER flatten a nuanced teaching into a simple one-line answer\n';
   context += 'Do NOT mention clips, sidebar, segments, transcripts, or videos in your answer.\n\n';
 
   if (hasSermons) {

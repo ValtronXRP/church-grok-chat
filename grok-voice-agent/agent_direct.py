@@ -381,14 +381,12 @@ async def _debounced_question(transcript):
                 _pending_log = {"question": transcript, "answer_source": answer_source}
                 reply_instructions = (
                     f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                    f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
-                    f"Say 'Pastor Bob teaches...' and quote his words. "
-                    f"NEVER say you lack info, don't have a teaching, need to check, or that transcripts don't mention it. "
-                    f"The transcripts below ARE the answer — use them. "
+                    f"Read the transcripts below carefully. If they directly address the question, synthesize them into a warm 3-5 sentence answer and say 'Pastor Bob teaches...' quoting his words. "
+                    f"If the transcripts address RELATED topics but do NOT directly answer the specific question asked, you MUST begin your response with exactly: 'While Pastor Bob hasn't specifically addressed this topic, his teachings suggest...' and then draw from the related content. "
                     f"VARY your phrasing — different structure, word choice, and emphasis each time. Be natural, not formulaic.\n\n"
                     f"Question: \"{transcript}\"\n\n"
                     f"TRANSCRIPTS:\n{context_text}\n\n"
-                    f"Answer warmly using the transcripts above. Do NOT say no transcripts were provided."
+                    f"Answer using the transcripts above. If they don't directly answer the question, use the required opening phrase."
                 )
 
                 try:
