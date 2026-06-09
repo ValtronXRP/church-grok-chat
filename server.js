@@ -768,7 +768,7 @@ const PINNED_STORY_CLIPS = {
     clips: []
   },
   pretrib_history: {
-    keywords: ['before darby', 'darby invented', 'did darby invent', 'who taught pre-trib', 'pre-trib before darby', 'early church fathers rapture', 'early church fathers pre-trib', 'church history rapture', 'historical pre-trib', 'irenaeus rapture', 'irenaeus pre-trib', 'cyprian rapture', 'victorinus rapture', 'pseudo-ephraem', 'ephraim rapture', 'lactantius rapture', 'ancient pre-trib', 'pre-tribulation history', 'who taught pretribulation', 'pretrib ancient', 'pre-trib ancient', 'proof pre-trib ancient', 'historical evidence pre-trib', 'pre-trib church history', 'rapture before darby', 'who believed rapture early church'],
+    keywords: ['darby', 'before darby', 'darby invented', 'did darby invent', 'who taught pre-trib', 'pre-trib before darby', 'early church fathers rapture', 'early church fathers pre-trib', 'church history rapture', 'historical pre-trib', 'irenaeus', 'cyprian', 'victorinus', 'pseudo-ephraem', 'ephraim the syrian', 'lactantius', 'ancient pre-trib', 'pre-tribulation history', 'who taught pretribulation', 'pretrib ancient', 'pre-trib ancient', 'historical evidence pre-trib', 'pre-trib church history', 'rapture before darby', 'who believed rapture early church', 'taught pre-tribulational', 'pre-tribulational rapture before', 'proof pre-trib', 'church teach pre-trib', 'church taught pre-trib', 'early church rapture', 'before the teaching of darby', 'church fathers taught', 'church fathers pre'],
     clips: [
       {
         title: 'Pre-Tribulation Rapture: Historical Roots in Early Church',

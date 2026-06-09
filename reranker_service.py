@@ -109,14 +109,16 @@ PINNED_STORIES = {
         ]
     },
     "pretrib_history": {
-        "keywords": ["before darby", "darby invented", "did darby invent", "who taught pre-trib", "pre-trib before darby",
-                      "early church fathers rapture", "early church fathers pre-trib", "church history rapture",
-                      "historical pre-trib", "irenaeus rapture", "irenaeus pre-trib", "cyprian rapture",
-                      "victorinus rapture", "pseudo-ephraem", "ephraim rapture", "lactantius rapture",
-                      "ancient pre-trib", "pre-tribulation history", "who taught pretribulation",
-                      "pretribulation ancient", "pretrib ancient", "pre-trib ancient",
-                      "proof pre-trib ancient", "historical evidence pre-trib", "pre-trib church history",
-                      "rapture before darby", "rapture history", "who believed rapture early church"],
+        "keywords": ["darby", "before darby", "darby invented", "did darby invent", "who taught pre-trib",
+                      "pre-trib before darby", "early church fathers rapture", "early church fathers pre-trib",
+                      "church history rapture", "historical pre-trib", "irenaeus", "cyprian", "victorinus",
+                      "pseudo-ephraem", "ephraim the syrian", "lactantius", "ancient pre-trib",
+                      "pre-tribulation history", "who taught pretribulation", "pretrib ancient",
+                      "pre-trib ancient", "historical evidence pre-trib", "pre-trib church history",
+                      "rapture before darby", "rapture history", "who believed rapture early church",
+                      "taught pre-tribulational", "pre-tribulational rapture before", "proof pre-trib",
+                      "church teach pre-trib", "church taught pre-trib", "early church rapture",
+                      "before the teaching of darby", "church fathers taught", "church fathers pre"],
         "results": [
             {
                 "text": "Pastor Bob teaches that the pre-tribulation rapture — the Church being removed before God's wrath fully falls — was not invented by John Nelson Darby in the 1800s. The core concept has ancient roots in early Christian writings. Irenaeus of Lyons (c. 130-202 AD), a disciple of Polycarp who knew the Apostle John, wrote in Against Heresies (Book 5.29.1): 'And therefore, when in the end the Church shall be suddenly caught up from this, it is said, There shall be tribulation such as has not been since the beginning, neither shall be.' Cyprian of Carthage (200-258 AD) emphasized believers being delivered before coming horrors, writing that those who see terrible things beginning may regard departing quickly as the greatest advantage. Lactantius (260-330 AD) wrote of Christ's imminent return and the faithful being protected or removed as wrath falls on the wicked.",
