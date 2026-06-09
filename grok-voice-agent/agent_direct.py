@@ -165,7 +165,7 @@ CHURCH_INFO_KEYWORDS = [
     'church info', 'church information', 'about the church', 'about ccea',
     'calvary chapel east anaheim',
     'bulletin', 'announcements',
-    'worship team', 'worship lyrics',
+    'join the worship team', 'worship team audition', 'worship lyrics',
     'baptism class', 'membership class',
     'highlights',
     'school of discipleship',
@@ -309,8 +309,12 @@ async def _search_reranker(query, n=10):
                         page = r.get('page', '')
                         text = r.get('text', '')
                         url = r.get('url', '')
-                        if text and len(text) > 20:
-                            website_results.append(f"[{page}] ({url}):\n{text[:400]}")
+                        # Skip nav-heavy snippets (short text with multiple arrows/links)
+                        if not text or len(text) < 40:
+                            continue
+                        if text.count('→') > 2 or text.count('Give') + text.count('Ministries') > 2:
+                            continue
+                        website_results.append(f"[{page}] ({url}):\n{text[:400]}")
                     return results, website_results
                 else:
                     body = await response.text()

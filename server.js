@@ -816,7 +816,7 @@ const CHURCH_INFO_KEYWORDS = [
   'church info', 'church information', 'about the church', 'about ccea',
   'calvary chapel east anaheim',
   'bulletin', 'announcements',
-  'worship team', 'worship lyrics',
+  'join the worship team', 'worship team audition', 'worship lyrics',
   'baptism class', 'membership class',
   'highlights',
   'school of discipleship',
