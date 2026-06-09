@@ -278,7 +278,7 @@ def is_church_info_query(query):
     return False
 
 
-RELEVANCE_THRESHOLD = 0.5
+RELEVANCE_THRESHOLD = 0.75
 
 async def _search_reranker(query, n=10):
     is_church = is_church_info_query(query)
