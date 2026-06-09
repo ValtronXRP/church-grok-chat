@@ -309,10 +309,10 @@ async def _search_reranker(query, n=10):
                         page = r.get('page', '')
                         text = r.get('text', '')
                         url = r.get('url', '')
-                        # Skip nav-heavy snippets (short text with multiple arrows/links)
+                        # Skip nav snippets and any content with arrows (not useful for voice)
                         if not text or len(text) < 40:
                             continue
-                        if text.count('→') > 2 or text.count('Give') + text.count('Ministries') > 2:
+                        if '→' in text:
                             continue
                         website_results.append(f"[{page}] ({url}):\n{text[:400]}")
                     return results, website_results
