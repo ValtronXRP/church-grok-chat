@@ -2276,6 +2276,9 @@ app.get('/questions-dashboard', async (req, res) => {
   .badge.voice { background: #e8f4fd; color: #1a78c2; }
   .badge.text { background: #e8fdf0; color: #1a7a42; }
   .badge.alexa { background: #fdf3e8; color: #b06820; }
+  .badge.sermons { background: #e8fdf0; color: #1a7a42; }
+  .badge.website { background: #e8f4fd; color: #1a78c2; }
+  .badge.fallback { background: #fdf0e8; color: #b05010; }
   .geo { font-size: 12px; color: #888; white-space: nowrap; flex-shrink: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
   .recent-row { padding: 10px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 10px; align-items: flex-start; }
   .recent-row:last-child { border-bottom: none; }
@@ -2403,8 +2406,11 @@ async function load() {
       const d = new Date(q.asked_at);
       const time = d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
       const geo = [q.city, q.country].filter(Boolean).join(', ');
+      const src = q.answer_source || 'sermons';
+      const srcLabel = src === 'sermons' ? 'transcripts' : src === 'website' ? 'website' : 'general knowledge';
+      const srcBadge = '<span class="badge ' + src + '" title="Answered from: ' + srcLabel + '">' + srcLabel + '</span>';
       return '<div class="recent-row">' +
-        '<div class="recent-q">' + q.question + ' <span class="badge ' + q.source + '">' + q.source + '</span></div>' +
+        '<div class="recent-q">' + q.question + ' <span class="badge ' + q.source + '">' + q.source + '</span> ' + srcBadge + '</div>' +
         '<div class="recent-meta">' + time + (geo ? '<div class="recent-geo">' + geo + '</div>' : '') + '</div>' +
         '</div>';
     }).join('');
@@ -2475,9 +2481,9 @@ app.get('/api/questions', async (req, res) => {
       GROUP BY country ORDER BY count DESC
     `);
 
-    // Recent questions with geo
+    // Recent questions with geo and answer source
     const recent = await pgPool.query(`
-      SELECT question, source, country, city, asked_at FROM questions
+      SELECT question, source, answer_source, country, city, asked_at FROM questions
       ORDER BY asked_at DESC LIMIT 30
     `);
 
