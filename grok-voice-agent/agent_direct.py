@@ -396,9 +396,11 @@ async def _debounced_question(transcript):
                 await _session_ref.generate_reply(
                     instructions=(
                         f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
-                        f"Answer this question warmly from the Bible and general Christian knowledge. "
-                        f"NEVER say you lack info, don't have a teaching, need to check, or that no transcripts were provided. "
-                        f"Keep it to 3-5 sentences.\n\n"
+                        f"No specific teaching from Pastor Bob was found for this question. "
+                        f"Begin your answer with exactly this disclaimer: 'I don't have a specific teaching from Pastor Bob on that topic, but from a general Calvary Chapel perspective...' "
+                        f"Then give a brief, biblically sound answer consistent with Calvary Chapel evangelical teaching. "
+                        f"Keep the total response to 3-5 sentences. "
+                        f"NEVER present the answer as Pastor Bob's specific teaching.\n\n"
                         f"Question: \"{transcript}\""
                     )
                 )

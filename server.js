@@ -1075,7 +1075,7 @@ function formatSermonContext(sermonResults, isMoreRequest = false, websiteResult
   const hasWebsite = websiteResults && websiteResults.length > 0;
 
   if (!hasSermons && !hasWebsite) {
-    return '\n\nAnswer the question directly from the Bible. Do NOT say you need to check, do NOT say you lack information, do NOT mention sermons or searching. Just give a warm, helpful biblical answer.\n';
+    return '\n\nNo specific teaching from Pastor Bob was found for this question. Begin your response with exactly this disclaimer: "I don\'t have a specific teaching from Pastor Bob on that topic, but from a general Calvary Chapel perspective..." Then give a brief, biblically sound answer consistent with Calvary Chapel evangelical teaching. NEVER present the answer as Pastor Bob\'s specific teaching.\n';
   }
   
   if (isMoreRequest && hasSermons) {
