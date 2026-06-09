@@ -79,16 +79,37 @@ function getClientIp(req) {
   return req.ip || req.connection?.remoteAddress || '';
 }
 
+const FALLBACK_SIGNALS = [
+  "i don't have a specific teaching from pastor bob",
+  "i don't have specific teaching from pastor bob",
+  "no specific teaching from pastor bob",
+  "pastor bob has not addressed",
+  "pastor bob hasn't addressed",
+  "pastor bob has not spoken",
+  "pastor bob hasn't spoken",
+  "i haven't found a specific teaching",
+  "from a general calvary chapel perspective",
+  "not a topic pastor bob has",
+];
+
+function detectAnswerSource(answerSource, answer) {
+  if (!answer) return answerSource;
+  const lower = answer.toLowerCase();
+  if (FALLBACK_SIGNALS.some(sig => lower.includes(sig))) return 'fallback';
+  return answerSource;
+}
+
 function logQuestion(question, source = 'text', ip = '', answerSource = 'sermons', answer = '') {
   if (!pgPool || !question) return;
   const q = question.trim();
   // Block only very short junk (under 3 words AND under 8 chars)
   if (q.split(/\s+/).length < 3 && q.length < 8) return;
-  console.log(`[log-question] source=${source} answer_source=${answerSource} ip="${ip}" q="${q.substring(0, 60)}"`);
+  const effectiveSource = detectAnswerSource(answerSource, answer);
+  console.log(`[log-question] source=${source} answer_source=${effectiveSource} ip="${ip}" q="${q.substring(0, 60)}"`);
   getGeo(ip).then(geo => {
     pgPool.query(
       'INSERT INTO questions (question, source, country, city, ip_address, answer_source, answer) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [question, source, geo.country || '', geo.city || '', ip, answerSource, answer.substring(0, 2000)]
+      [question, source, geo.country || '', geo.city || '', ip, effectiveSource, answer.substring(0, 2000)]
     ).catch(err => console.error('logQuestion failed:', err.message));
   });
 }
