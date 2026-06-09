@@ -766,6 +766,29 @@ const PINNED_STORY_CLIPS = {
   matthew20_laborers: {
     keywords: ['matthew 20', 'laborers in the vineyard', 'workers in the vineyard', 'parable of the laborers', 'parable of the workers', 'denarius', 'last shall be first', 'last will be first', 'hired workers', 'vineyard workers'],
     clips: []
+  },
+  pretrib_history: {
+    keywords: ['before darby', 'darby invented', 'did darby invent', 'who taught pre-trib', 'pre-trib before darby', 'early church fathers rapture', 'early church fathers pre-trib', 'church history rapture', 'historical pre-trib', 'irenaeus rapture', 'irenaeus pre-trib', 'cyprian rapture', 'victorinus rapture', 'pseudo-ephraem', 'ephraim rapture', 'lactantius rapture', 'ancient pre-trib', 'pre-tribulation history', 'who taught pretribulation', 'pretrib ancient', 'pre-trib ancient', 'proof pre-trib ancient', 'historical evidence pre-trib', 'pre-trib church history', 'rapture before darby', 'who believed rapture early church'],
+    clips: [
+      {
+        title: 'Pre-Tribulation Rapture: Historical Roots in Early Church',
+        url: '',
+        timestamped_url: '',
+        start_time: '',
+        video_id: 'pretrib_history_1',
+        text: 'Pastor Bob teaches that the pre-tribulation rapture was not invented by John Nelson Darby in the 1800s. The core concept has ancient roots. Irenaeus of Lyons (c. 130-202 AD), disciple of Polycarp who knew the Apostle John, wrote: "When in the end the Church shall be suddenly caught up from this, it is said, There shall be tribulation such as has not been since the beginning." Cyprian of Carthage (200-258 AD) emphasized believers being delivered before coming horrors. Lactantius (260-330 AD) wrote of Christ\'s imminent return and the faithful being protected or removed as wrath falls on the wicked.',
+        relevance_score: 1.0
+      },
+      {
+        title: 'Pre-Tribulation Rapture: Victorinus and Pseudo-Ephraem',
+        url: '',
+        timestamped_url: '',
+        start_time: '',
+        video_id: 'pretrib_history_2',
+        text: 'Pastor Bob points to two especially strong early witnesses. Victorinus (d. 304 AD) wrote: "These shall be in the last time, when the Church shall have gone out of the midst" — placing the Church\'s removal before the final bowl judgments. Most compelling is Pseudo-Ephraem (4th-7th century): "For all the saints and elect of God are gathered, prior to the tribulation that is to come, and are taken to the Lord lest they see the confusion which overwhelms the world." This is the clearest early statement resembling a pre-trib rapture. Darby systematized these biblical truths, but the heartbeat goes back to the apostles: "We are not appointed to wrath" (1 Thessalonians 5:9). Maranatha!',
+        relevance_score: 0.95
+      }
+    ]
   }
 };
 
