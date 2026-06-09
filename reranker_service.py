@@ -271,15 +271,18 @@ def search_and_rerank(query, collection, n_candidates=20, n_results=6, source_ty
     if not candidates:
         return []
 
-    pairs = [[query, c['text']] for c in candidates]
+    # Truncate passages to ~400 chars to stay within 512-token limit when combined with query
+    pairs = [[query, c['text'][:400]] for c in candidates]
     try:
         scores = reranker.predict(pairs)
-        import math
+        import math, numpy as np
+        nan_count = sum(1 for s in scores if math.isnan(float(s)))
+        logger.info(f"Cross-encoder scores: min={float(np.nanmin(scores)):.3f} max={float(np.nanmax(scores)):.3f} nan={nan_count}/{len(scores)}")
         for i, c in enumerate(candidates):
             score = float(scores[i])
-            c['rerank_score'] = (1.0 - c['vector_dist']) if math.isnan(score) else score
+            c['rerank_score'] = (1.0 - c['vector_dist']) if (math.isnan(score) or not math.isfinite(score)) else score
     except Exception as e:
-        logger.error(f"Reranker error: {e}, using vector distance")
+        logger.error(f"Reranker predict error: {e}, using vector distance")
         for c in candidates:
             c['rerank_score'] = 1.0 - c['vector_dist']
 
