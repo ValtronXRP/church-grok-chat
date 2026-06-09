@@ -2456,8 +2456,11 @@ async function loadFallback() {
       const geo = [q.city, q.country].filter(Boolean).join(', ');
       const src = q.answer_source || 'fallback';
       const srcLabel = src === 'website' ? 'Church Website' : 'General Knowledge (no transcripts found)';
-      return '<div class="fallback-row">' +
+      return '<div class="fallback-row" id="row-' + q.id + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
         '<div class="fallback-q">' + q.question + '</div>' +
+        '<button onclick="deleteEntry(' + q.id + ')" style="flex-shrink:0;margin-left:12px;background:none;border:1px solid #ddd;border-radius:6px;padding:3px 10px;font-size:12px;color:#aaa;cursor:pointer;" title="Remove this entry">✕ Remove</button>' +
+        '</div>' +
         '<span class="fallback-source ' + src + '">' + srcLabel + '</span>' +
         ' <span class="badge ' + q.source + '" style="margin-left:4px">' + q.source + '</span>' +
         (q.answer ? '<div class="fallback-answer">' + q.answer.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '<div class="fallback-answer" style="color:#bbb;font-style:italic">Answer not captured (question logged before this feature was added)</div>') +
@@ -2466,6 +2469,20 @@ async function loadFallback() {
     }).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty">Error loading data</div>';
+  }
+}
+async function deleteEntry(id) {
+  if (!confirm('Remove this entry?')) return;
+  try {
+    const res = await fetch('/api/questions/' + id, { method: 'DELETE' });
+    if (res.ok) {
+      const row = document.getElementById('row-' + id);
+      if (row) row.remove();
+    } else {
+      alert('Failed to delete entry');
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
   }
 }
 load();
@@ -2537,7 +2554,7 @@ app.get('/api/questions/non-transcript', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const result = await pgPool.query(`
-      SELECT question, source, answer_source, answer, country, city, asked_at
+      SELECT id, question, source, answer_source, answer, country, city, asked_at
       FROM questions
       WHERE answer_source IN ('fallback', 'website')
       ORDER BY asked_at DESC
@@ -2546,6 +2563,20 @@ app.get('/api/questions/non-transcript', async (req, res) => {
     res.json({ rows: result.rows });
   } catch (err) {
     console.error('Non-transcript query error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE A QUESTION ENTRY
+app.delete('/api/questions/:id', async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await pgPool.query('DELETE FROM questions WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete question error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
