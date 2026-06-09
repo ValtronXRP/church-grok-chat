@@ -12,7 +12,8 @@ from html import unescape
 _last_logged_question = ""
 _SERVER_URL = os.environ.get('SERVER_URL', 'http://localhost:8080')
 
-async def log_voice_question(question):
+
+async def log_voice_question(question, answer_source='sermons', answer=''):
     global _last_logged_question
     # Skip short responses like "Sure.", "Yeah.", "Yes, that is right."
     if len(question.split()) < 8:
@@ -27,9 +28,10 @@ async def log_voice_question(question):
     try:
         async with aiohttp.ClientSession() as http:
             await http.post(f"{_SERVER_URL}/api/log-question",
-                json={"question": question, "source": "voice", "roomName": room_name},
+                json={"question": question, "source": "voice", "roomName": room_name,
+                      "answerSource": answer_source, "answer": answer[:2000]},
                 timeout=aiohttp.ClientTimeout(total=5))
-        log(f"Logged voice question: {question[:60]}")
+        log(f"Logged voice question ({answer_source}): {question[:60]}")
     except Exception as e:
         log(f"Failed to log voice question: {e}")
 
@@ -323,6 +325,7 @@ _room_ref = None
 _session_ref = None
 _searching = False
 _pending_question_task = None
+_pending_log = None  # {question, answer_source} — completed when agent speaks
 
 
 async def _send_data_message(message_type, data):
@@ -340,14 +343,13 @@ async def _send_data_message(message_type, data):
 
 async def _debounced_question(transcript):
     """Called after 2s debounce — cancels if a newer transcript arrives first."""
-    global _searching
+    global _searching, _pending_log
     if _searching:
         log(f"Already searching (debounced), skipping: {transcript[:40]}")
         return
     _searching = True
     try:
         log(f"SEARCHING for: {transcript[:80]}")
-        asyncio.create_task(log_voice_question(transcript))
         await _send_data_message("user_transcript", {"text": transcript})
         results, website_results = await _search_reranker(transcript)
 
@@ -356,6 +358,8 @@ async def _debounced_question(transcript):
             log(f"Search returned {len(results)} sermon results, {len(website_results)} website results")
 
             if website_results:
+                answer_source = 'website'
+                _pending_log = {"question": transcript, "answer_source": answer_source}
                 website_text = "\n\n".join(website_results[:6])
                 today_str = date.today().strftime('%B %d, %Y')
                 injected_input = (
@@ -373,6 +377,8 @@ async def _debounced_question(transcript):
                 except Exception as e:
                     log(f"generate_reply error (website): {e}")
             else:
+                answer_source = 'sermons'
+                _pending_log = {"question": transcript, "answer_source": answer_source}
                 reply_instructions = (
                     f"You are APB, voice assistant for Calvary Chapel East Anaheim. "
                     f"Synthesize these sermon transcripts into a warm 3-5 sentence answer. "
@@ -392,6 +398,7 @@ async def _debounced_question(transcript):
                     log(f"generate_reply error: {e}")
         else:
             log("Search returned 0 results, generating fallback reply")
+            _pending_log = {"question": transcript, "answer_source": "fallback"}
             try:
                 await _session_ref.generate_reply(
                     instructions=(
@@ -409,6 +416,7 @@ async def _debounced_question(transcript):
                 log(f"Fallback generate_reply error: {e}")
     except asyncio.CancelledError:
         log(f"Question cancelled (newer transcript arrived): {transcript[:40]}")
+        _pending_log = None
     except Exception as e:
         log(f"Handle question error: {e}")
     finally:
@@ -481,6 +489,7 @@ async def entrypoint(ctx: JobContext):
 
         @session.on("conversation_item_added")
         def on_conversation_item(event):
+            nonlocal last_sent_message
             try:
                 item = event.item
                 role = getattr(item, 'role', None)
@@ -505,6 +514,16 @@ async def entrypoint(ctx: JobContext):
                         last_sent_message["text"] = text
                         logger.info(f"AGENT SAID: {text[:100]}...")
                         asyncio.create_task(_send_data_message("agent_transcript", {"text": text}))
+                        # Complete pending question log with the actual answer
+                        global _pending_log
+                        if _pending_log:
+                            pending = _pending_log
+                            _pending_log = None
+                            asyncio.create_task(log_voice_question(
+                                pending["question"],
+                                pending["answer_source"],
+                                text
+                            ))
             except Exception as e:
                 logger.error(f"Error in conversation_item_added: {e}")
 

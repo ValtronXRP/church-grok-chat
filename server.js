@@ -37,6 +37,9 @@ async function initDB() {
     await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS country TEXT`);
     await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS city TEXT`);
     await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS ip_address TEXT`);
+    // Add answer tracking columns
+    await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS answer_source VARCHAR(20) DEFAULT 'sermons'`);
+    await pgPool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS answer TEXT`);
     // Clean up old bad data
     await pgPool.query(`DELETE FROM questions WHERE source = 'test'`);
     // Only delete very short junk (under 3 words AND under 8 chars) — preserves Alexa slot values and CJK text
@@ -76,16 +79,16 @@ function getClientIp(req) {
   return req.ip || req.connection?.remoteAddress || '';
 }
 
-function logQuestion(question, source = 'text', ip = '') {
+function logQuestion(question, source = 'text', ip = '', answerSource = 'sermons', answer = '') {
   if (!pgPool || !question) return;
   const q = question.trim();
   // Block only very short junk (under 3 words AND under 8 chars)
   if (q.split(/\s+/).length < 3 && q.length < 8) return;
-  console.log(`[log-question] source=${source} ip="${ip}" q="${q.substring(0, 60)}"`);
+  console.log(`[log-question] source=${source} answer_source=${answerSource} ip="${ip}" q="${q.substring(0, 60)}"`);
   getGeo(ip).then(geo => {
     pgPool.query(
-      'INSERT INTO questions (question, source, country, city, ip_address) VALUES ($1, $2, $3, $4, $5)',
-      [question, source, geo.country || '', geo.city || '', ip]
+      'INSERT INTO questions (question, source, country, city, ip_address, answer_source, answer) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [question, source, geo.country || '', geo.city || '', ip, answerSource, answer.substring(0, 2000)]
     ).catch(err => console.error('logQuestion failed:', err.message));
   });
 }
@@ -1239,11 +1242,12 @@ app.post('/api/chat', async (req, res) => {
     
     console.log(`Chat request - Model: ${model}, Messages: ${messages.length}`);
 
-    // Log question for analytics (fire and forget)
+    // Capture question for logging after we know answer_source
     const clientIp = getClientIp(req);
+    let questionToLog = '';
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'user' && messages[i].content) {
-        logQuestion(messages[i].content, 'text', clientIp);
+        questionToLog = messages[i].content;
         break;
       }
     }
@@ -1476,19 +1480,37 @@ app.post('/api/chat', async (req, res) => {
       }
     }
     
-    // Stream the response
+    // Determine answer source for logging
+    const hasSermons = sermonResults && sermonResults.length > 0;
+    const hasWebsite = websiteResults && websiteResults.length > 0;
+    const answerSrc = hasSermons ? 'sermons' : (hasWebsite ? 'website' : 'fallback');
+
+    // Stream the response, buffering answer text for logging
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    
+    let answerBuffer = '';
+
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         res.write(chunk);
+        // Extract text content from SSE chunks for logging
+        chunk.split('\n').forEach(line => {
+          if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+            try {
+              const json = JSON.parse(line.slice(6));
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) answerBuffer += delta;
+            } catch (e) {}
+          }
+        });
       }
     } finally {
       res.end();
+      // Log question with answer source and answer text
+      if (questionToLog) logQuestion(questionToLog, 'text', clientIp, answerSrc, answerBuffer);
     }
     
   } catch (error) {
@@ -2201,10 +2223,10 @@ app.get('/chat.html/a', (req, res) => {
 // ============================================
 // VOICE QUESTION LOGGING (called by Python voice agent)
 app.post('/api/log-question', async (req, res) => {
-  const { question, source = 'voice', roomName = '' } = req.body;
+  const { question, source = 'voice', roomName = '', answerSource = 'sermons', answer = '' } = req.body;
   if (!question) return res.json({ ok: false });
   const ip = roomIpMap.get(roomName) || '';
-  logQuestion(question, source, ip);
+  logQuestion(question, source, ip, answerSource, answer);
   res.json({ ok: true });
 });
 
@@ -2265,11 +2287,21 @@ app.get('/questions-dashboard', async (req, res) => {
   .countries-grid { display: flex; flex-wrap: wrap; gap: 10px; }
   .country-tag { background: #f0f0f8; border-radius: 8px; padding: 8px 14px; font-size: 14px; }
   .country-tag span { font-weight: 600; color: #1a1a2e; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
   .tab { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: 2px solid #e0e0e0; background: white; color: #888; }
   .tab.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+  .tab.warn { border-color: #e07030; color: #b05010; }
+  .tab.warn.active { background: #e07030; border-color: #e07030; color: white; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+  .fallback-row { padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+  .fallback-row:last-child { border-bottom: none; }
+  .fallback-q { font-size: 14px; font-weight: 500; color: #222; margin-bottom: 6px; }
+  .fallback-source { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 500; display: inline-block; margin-bottom: 6px; }
+  .fallback-source.fallback { background: #fdf0e8; color: #b05010; }
+  .fallback-source.website { background: #e8f4fd; color: #1a78c2; }
+  .fallback-answer { font-size: 13px; color: #555; line-height: 1.5; background: #fafafa; border-left: 3px solid #e0e0e0; padding: 8px 12px; border-radius: 0 6px 6px 0; white-space: pre-wrap; }
+  .fallback-meta { font-size: 11px; color: #aaa; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -2284,8 +2316,9 @@ app.get('/questions-dashboard', async (req, res) => {
     <div id="countries" class="countries-grid"><div class="empty">Loading...</div></div>
   </section>
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('top')">Most Asked Questions</button>
-    <button class="tab" onclick="switchTab('recent')">Recent Questions</button>
+    <button class="tab active" onclick="switchTab('top', this)">Most Asked Questions</button>
+    <button class="tab" onclick="switchTab('recent', this)">Recent Questions</button>
+    <button class="tab warn" onclick="switchTab('fallback', this)">Non-Transcript Answers <span id="fallback-count-badge"></span></button>
   </div>
   <div id="tab-top" class="tab-panel active">
   <section>
@@ -2299,13 +2332,21 @@ app.get('/questions-dashboard', async (req, res) => {
     <div id="recent"></div>
   </section>
   </div>
+  <div id="tab-fallback" class="tab-panel">
+  <section>
+    <h2>Non-Transcript Answers <span class="refresh" onclick="loadFallback()">Refresh</span></h2>
+    <p style="font-size:13px;color:#888;margin-bottom:16px;">Questions where the app answered from general knowledge rather than Pastor Bob's sermon transcripts. Review these to ensure the answers align with your teaching.</p>
+    <div id="fallback-list"><div class="empty">Loading...</div></div>
+  </section>
+  </div>
 </div>
 <script>
-function switchTab(name) {
+function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
   document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
+  btn.classList.add('active');
+  if (name === 'fallback') loadFallback();
 }
 async function load() {
   const res = await fetch('/api/questions?limit=100');
@@ -2314,12 +2355,17 @@ async function load() {
   const voice = data.totals.find(r => r.source === 'voice');
   const text = data.totals.find(r => r.source === 'text');
   const alexa = data.totals.find(r => r.source === 'alexa');
+  const fallbackCount = data.fallback_count || 0;
   document.getElementById('cards').innerHTML =
     '<div class="card"><div class="num">' + totalAll + '</div><div class="label">Total Questions</div></div>' +
     '<div class="card"><div class="num">' + (voice ? voice.count : 0) + '</div><div class="label">Voice</div></div>' +
     '<div class="card"><div class="num">' + (alexa ? alexa.count : 0) + '</div><div class="label">Alexa</div></div>' +
     '<div class="card"><div class="num">' + (text ? text.count : 0) + '</div><div class="label">Text Chat</div></div>' +
+    '<div class="card"><div class="num" style="color:#e07030">' + fallbackCount + '</div><div class="label">Non-Transcript Answers</div></div>' +
     '<div class="card"><div class="num">' + (data.country_count || 0) + '</div><div class="label">Countries</div></div>';
+  if (fallbackCount > 0) {
+    document.getElementById('fallback-count-badge').textContent = '(' + fallbackCount + ')';
+  }
 
   // Countries
   if (data.countries && data.countries.length > 0) {
@@ -2362,6 +2408,34 @@ async function load() {
         '<div class="recent-meta">' + time + (geo ? '<div class="recent-geo">' + geo + '</div>' : '') + '</div>' +
         '</div>';
     }).join('');
+  }
+}
+async function loadFallback() {
+  const el = document.getElementById('fallback-list');
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  try {
+    const res = await fetch('/api/questions/non-transcript?limit=50');
+    const data = await res.json();
+    if (!data.rows || data.rows.length === 0) {
+      el.innerHTML = '<div class="empty">No non-transcript answers recorded yet. These will appear as the app is used.</div>';
+      return;
+    }
+    el.innerHTML = data.rows.map(function(q) {
+      const d = new Date(q.asked_at);
+      const time = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+      const geo = [q.city, q.country].filter(Boolean).join(', ');
+      const src = q.answer_source || 'fallback';
+      const srcLabel = src === 'website' ? 'Church Website' : 'General Knowledge (no transcripts found)';
+      return '<div class="fallback-row">' +
+        '<div class="fallback-q">' + q.question + '</div>' +
+        '<span class="fallback-source ' + src + '">' + srcLabel + '</span>' +
+        ' <span class="badge ' + q.source + '" style="margin-left:4px">' + q.source + '</span>' +
+        (q.answer ? '<div class="fallback-answer">' + q.answer.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '<div class="fallback-answer" style="color:#bbb;font-style:italic">Answer not captured (question logged before this feature was added)</div>') +
+        '<div class="fallback-meta">' + time + (geo ? ' · ' + geo : '') + '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Error loading data</div>';
   }
 }
 load();
@@ -2407,15 +2481,41 @@ app.get('/api/questions', async (req, res) => {
       ORDER BY asked_at DESC LIMIT 30
     `);
 
+    // Count of non-transcript answers (fallback + website)
+    const fallbackCountQ = await pgPool.query(`
+      SELECT COUNT(*) as count FROM questions
+      WHERE answer_source IN ('fallback', 'website')
+    `);
+
     res.json({
       top_questions: topQ.rows,
       totals: totals.rows,
       countries: countries.rows,
       country_count: countries.rows.length,
-      recent: recent.rows
+      recent: recent.rows,
+      fallback_count: parseInt(fallbackCountQ.rows[0].count)
     });
   } catch (err) {
     console.error('Questions analytics error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// NON-TRANSCRIPT ANSWERS ENDPOINT
+app.get('/api/questions/non-transcript', async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const result = await pgPool.query(`
+      SELECT question, source, answer_source, answer, country, city, asked_at
+      FROM questions
+      WHERE answer_source IN ('fallback', 'website')
+      ORDER BY asked_at DESC
+      LIMIT $1
+    `, [limit]);
+    res.json({ rows: result.rows });
+  } catch (err) {
+    console.error('Non-transcript query error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
