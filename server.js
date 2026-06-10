@@ -106,8 +106,8 @@ function detectAnswerSource(answerSource, answer) {
 function logQuestion(question, source = 'text', ip = '', answerSource = 'sermons', answer = '') {
   if (!pgPool || !question) return;
   const q = question.trim();
-  // Block only very short junk (under 3 words AND under 8 chars)
-  if (q.split(/\s+/).length < 3 && q.length < 8) return;
+  // Block only very short junk (under 3 words AND under 5 chars)
+  if (q.split(/\s+/).length < 3 && q.length < 5) return;
   const effectiveSource = detectAnswerSource(answerSource, answer);
   console.log(`[log-question] source=${source} answer_source=${effectiveSource} ip="${ip}" q="${q.substring(0, 60)}"`);
   getGeo(ip).then(geo => {
