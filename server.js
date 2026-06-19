@@ -2051,7 +2051,7 @@ app.post('/api/liveavatar/session', async (req, res) => {
       headers: { 'X-API-KEY': LIVEAVATAR_API_KEY, 'Content-Type': 'application/json' }
     });
 
-    if (tokenRes.data.code !== 100) {
+    if (tokenRes.data.code !== 1000) {
       throw new Error(tokenRes.data.message || 'Token creation failed');
     }
     const { session_id, session_token } = tokenRes.data.data;
@@ -2061,7 +2061,7 @@ app.post('/api/liveavatar/session', async (req, res) => {
       headers: { 'Authorization': `Bearer ${session_token}`, 'Content-Type': 'application/json' }
     });
 
-    if (startRes.data.code !== 100) {
+    if (startRes.data.code !== 1000) {
       throw new Error(startRes.data.message || 'Session start failed');
     }
     const { livekit_url, livekit_client_token } = startRes.data.data;
