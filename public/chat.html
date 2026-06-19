@@ -385,6 +385,102 @@
             position: relative;
         }
 
+        /* Video Avatar */
+        .avatar-divider {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 24px 0 20px;
+            color: rgba(255,255,255,0.2);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .avatar-divider::before, .avatar-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+        }
+
+        #avatarBtn {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #1a1a3e 0%, #2a2a5e 100%);
+            border: 2px solid rgba(100, 120, 255, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        #avatarBtn:hover {
+            border-color: rgba(100, 120, 255, 0.7);
+            background: linear-gradient(135deg, #2a2a5e 0%, #3a3a8e 100%);
+            transform: scale(1.05);
+        }
+        #avatarBtn.connecting {
+            border-color: rgba(255, 200, 0, 0.6);
+            animation: pulse 1.5s infinite;
+        }
+        #avatarBtn.live {
+            border-color: rgba(100, 200, 100, 0.8);
+            background: linear-gradient(135deg, #1a3a1a 0%, #2a5a2a 100%);
+        }
+        #avatarBtn svg {
+            width: 28px;
+            height: 28px;
+            fill: rgba(255,255,255,0.85);
+        }
+        .avatar-status {
+            font-size: 13px;
+            color: rgba(255,255,255,0.45);
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .avatar-video-container {
+            width: 100%;
+            max-width: 360px;
+            margin-top: 16px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+            display: none;
+            position: relative;
+            aspect-ratio: 16/9;
+            border: 1px solid rgba(100, 120, 255, 0.3);
+        }
+        .avatar-video-container.visible {
+            display: block;
+        }
+        #avatarVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .avatar-live-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(200, 50, 50, 0.9);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: none;
+        }
+        .avatar-video-container.visible .avatar-live-badge {
+            display: block;
+        }
+
         /* Chat Window */
         .chat-window {
             width: 100%;
@@ -1511,7 +1607,29 @@
             <div id="countdownTimer"></div>
             
             <div class="agent-status" id="agentStatus">🤖 Agent Connected</div>
-            
+
+            <!-- ── Video Avatar ── -->
+            <div class="avatar-divider">or talk face-to-face</div>
+
+            <button id="avatarBtn" onclick="toggleAvatar()" title="Video Avatar — Pastor Bob answers live">
+                <!-- Camera icon -->
+                <svg id="avatarCamIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                </svg>
+                <!-- Stop icon (hidden initially) -->
+                <svg id="avatarStopIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:none;">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+            </button>
+            <p class="avatar-status" id="avatarStatus">Video Avatar — tap to connect</p>
+
+            <div class="avatar-video-container" id="avatarVideoContainer">
+                <div class="avatar-live-badge">● LIVE</div>
+                <video id="avatarVideo" autoplay playsinline muted></video>
+                <audio id="avatarAudio" autoplay></audio>
+            </div>
+            <!-- ── end Video Avatar ── -->
+
             <!-- Audio Level Indicator -->
             <div class="audio-level-container">
                 <div class="audio-level-label">
@@ -1701,6 +1819,116 @@
         let countdownSeconds = 0;
         let hasExchanged = false; // Only start countdown after user has asked at least one question
         const AUTO_DISCONNECT_DELAY = 10000;
+
+        // LIVEAVATAR STATE
+        let avatarRoom = null;
+        let isAvatarConnected = false;
+
+        // ============================================
+        // LIVEAVATAR — connect / disconnect
+        // ============================================
+        async function toggleAvatar() {
+            if (isAvatarConnected) {
+                disconnectAvatar();
+            } else {
+                await connectAvatar();
+            }
+        }
+
+        async function connectAvatar() {
+            const btn = document.getElementById('avatarBtn');
+            const status = document.getElementById('avatarStatus');
+
+            // Disconnect existing voice session first
+            if (isConnected) disconnect();
+
+            btn.classList.add('connecting');
+            btn.disabled = true;
+            status.textContent = 'Starting video avatar…';
+
+            try {
+                // Request microphone permission
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+
+                // Get LiveAvatar session credentials from our backend
+                const res = await fetch('/api/liveavatar/session', { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Server error ${res.status}`);
+                }
+                const { livekit_url, livekit_client_token } = await res.json();
+
+                // Connect to the LiveAvatar LiveKit room
+                avatarRoom = new LivekitClient.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                    audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                });
+
+                // Handle incoming tracks from the avatar
+                avatarRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+                    if (track.kind === 'video') {
+                        track.attach(document.getElementById('avatarVideo'));
+                    } else if (track.kind === 'audio') {
+                        track.attach(document.getElementById('avatarAudio'));
+                        document.getElementById('avatarAudio').play().catch(() => {});
+                    }
+                });
+
+                avatarRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+                    track.detach();
+                });
+
+                avatarRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+                    _setAvatarDisconnected();
+                });
+
+                await avatarRoom.connect(livekit_url, livekit_client_token);
+                await avatarRoom.localParticipant.setMicrophoneEnabled(true);
+
+                // Update UI
+                isAvatarConnected = true;
+                btn.classList.remove('connecting');
+                btn.classList.add('live');
+                btn.disabled = false;
+                document.getElementById('avatarCamIcon').style.display = 'none';
+                document.getElementById('avatarStopIcon').style.display = 'block';
+                document.getElementById('avatarVideoContainer').classList.add('visible');
+                status.textContent = 'Connected — speak now';
+
+            } catch (err) {
+                console.error('Avatar connect error:', err);
+                btn.classList.remove('connecting');
+                btn.disabled = false;
+                status.textContent = 'Connection failed — tap to retry';
+                if (avatarRoom) { try { avatarRoom.disconnect(); } catch(e) {} avatarRoom = null; }
+            }
+        }
+
+        function disconnectAvatar() {
+            if (avatarRoom) {
+                try { avatarRoom.disconnect(); } catch(e) {}
+                avatarRoom = null;
+            }
+            _setAvatarDisconnected();
+        }
+
+        function _setAvatarDisconnected() {
+            isAvatarConnected = false;
+            const btn = document.getElementById('avatarBtn');
+            btn.classList.remove('connecting', 'live');
+            btn.disabled = false;
+            document.getElementById('avatarCamIcon').style.display = 'block';
+            document.getElementById('avatarStopIcon').style.display = 'none';
+            document.getElementById('avatarVideoContainer').classList.remove('visible');
+            document.getElementById('avatarStatus').textContent = 'Video Avatar — tap to connect';
+            // Detach video/audio
+            const vid = document.getElementById('avatarVideo');
+            const aud = document.getElementById('avatarAudio');
+            vid.srcObject = null;
+            aud.srcObject = null;
+        }
 
         function startCountdown() {
             stopCountdown();
@@ -3194,9 +3422,11 @@ When asked about theological topics listed above, use these verified positions a
         // ============================================
         window.addEventListener('beforeunload', () => {
             if (room) room.disconnect();
+            if (avatarRoom) avatarRoom.disconnect();
         });
         window.addEventListener('pagehide', () => {
             if (room) room.disconnect();
+            if (avatarRoom) avatarRoom.disconnect();
         });
 
         // Enable audio on click (for autoplay policy)

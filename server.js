@@ -67,6 +67,13 @@ const SERMON_API_URL = process.env.SERMON_API_URL || 'http://localhost:5001';
 const RERANKER_URL = process.env.RERANKER_URL || 'http://127.0.0.1:5050';
 const LIVEKIT_HTTP_URL = LIVEKIT_URL ? LIVEKIT_URL.replace('wss://', 'https://') : '';
 
+// LiveAvatar constants
+const LIVEAVATAR_API_KEY = process.env.LIVEAVATAR_API_KEY;
+const LIVEAVATAR_API_BASE = 'https://api.liveavatar.com';
+const LIVEAVATAR_AVATAR_ID = 'e7e1fefe-cc82-47da-80e5-bc53caaa1ebd';
+const LIVEAVATAR_VOICE_ID = 'b92938db-6045-47fc-af85-a1d96f70a11a';
+const LIVEAVATAR_CONTEXT_ID = 'd2983cd6-d93d-4e00-b5c9-3723023497ce';
+
 // Initialize local sermon search
 const sermonSearcher = new SermonSearch();
 
@@ -2018,6 +2025,54 @@ app.get('/api/ingest/history', (req, res) => {
 
 app.get('/chat.html/a', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
+});
+
+// ============================================
+// LIVEAVATAR SESSION ENDPOINT
+// Creates a LiveAvatar streaming session and returns LiveKit credentials.
+// The avatar handles STT + LLM (using uploaded context) + TTS internally.
+// ============================================
+app.post('/api/liveavatar/session', async (req, res) => {
+  if (!LIVEAVATAR_API_KEY) {
+    return res.status(503).json({ error: 'LIVEAVATAR_API_KEY not configured' });
+  }
+  try {
+    // Step 1: Create session token
+    const tokenRes = await axios.post(`${LIVEAVATAR_API_BASE}/v1/sessions/token`, {
+      avatar_id: LIVEAVATAR_AVATAR_ID,
+      avatar_persona: {
+        voice_id: LIVEAVATAR_VOICE_ID,
+        context_id: LIVEAVATAR_CONTEXT_ID,
+        language: 'en'
+      },
+      mode: 'FULL',
+      interactivity_type: 'CONVERSATIONAL'
+    }, {
+      headers: { 'X-API-KEY': LIVEAVATAR_API_KEY, 'Content-Type': 'application/json' }
+    });
+
+    if (tokenRes.data.code !== 100) {
+      throw new Error(tokenRes.data.message || 'Token creation failed');
+    }
+    const { session_id, session_token } = tokenRes.data.data;
+
+    // Step 2: Start the session
+    const startRes = await axios.post(`${LIVEAVATAR_API_BASE}/v1/sessions/start`, {}, {
+      headers: { 'Authorization': `Bearer ${session_token}`, 'Content-Type': 'application/json' }
+    });
+
+    if (startRes.data.code !== 100) {
+      throw new Error(startRes.data.message || 'Session start failed');
+    }
+    const { livekit_url, livekit_client_token } = startRes.data.data;
+
+    console.log(`[LiveAvatar] Session started: ${session_id}`);
+    res.json({ session_id, livekit_url, livekit_client_token });
+  } catch (err) {
+    const detail = err.response?.data?.message || err.message;
+    console.error('[LiveAvatar] Session error:', detail);
+    res.status(500).json({ error: 'Failed to create LiveAvatar session', detail });
+  }
 });
 
 app.listen(PORT, () => {
