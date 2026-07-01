@@ -381,14 +381,16 @@ async def _send_data_message(message_type, data):
 
 
 async def _call_grok_streaming(transcript: str):
-    """Stream Grok response, yielding complete sentences as tokens arrive."""
+    """Stream Grok response, yielding complete sentences as tokens arrive.
+    Uses grok-3-mini for faster first token. Properly parses SSE by accumulating
+    raw byte chunks into a line buffer before splitting on newlines."""
     url = "https://api.x.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['XAI_API_KEY']}",
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "grok-3",
+        "model": "grok-3-mini",
         "messages": [
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
@@ -397,39 +399,46 @@ async def _call_grok_streaming(transcript: str):
         "temperature": 0.7,
         "stream": True,
     }
-    buf = ""
+    text_buf = ""   # accumulates tokens until a sentence boundary
+    line_buf = ""   # accumulates raw bytes until a complete SSE line
     async with aiohttp.ClientSession() as http:
         async with http.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status != 200:
                 body = await resp.text()
                 log(f"Grok streaming error {resp.status}: {body[:200]}")
                 return
-            async for raw in resp.content:
-                line = raw.decode("utf-8").strip()
-                if not line.startswith("data: "):
-                    continue
-                data_str = line[6:]
-                if data_str == "[DONE]":
-                    break
-                try:
-                    data = json.loads(data_str)
-                    token = data["choices"][0]["delta"].get("content", "")
-                    if not token:
+            async for chunk in resp.content.iter_any():
+                line_buf += chunk.decode("utf-8")
+                # Split accumulated bytes on newlines to get complete SSE lines
+                while "\n" in line_buf:
+                    line, line_buf = line_buf.split("\n", 1)
+                    line = line.strip()
+                    if not line.startswith("data: "):
                         continue
-                    buf += token
-                    # Yield complete sentences at punctuation boundaries
-                    while True:
-                        idx = next((i for i, c in enumerate(buf) if c in ".!?" and i >= 8), -1)
-                        if idx == -1:
-                            break
-                        sentence = buf[:idx + 1].strip()
-                        buf = buf[idx + 1:].lstrip()
-                        if len(sentence.split()) >= 3:
-                            yield sentence
-                except (json.JSONDecodeError, KeyError):
-                    continue
-    if buf.strip() and len(buf.strip().split()) >= 2:
-        yield buf.strip()
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        if text_buf.strip() and len(text_buf.strip().split()) >= 2:
+                            yield text_buf.strip()
+                        return
+                    try:
+                        data = json.loads(data_str)
+                        token = data["choices"][0]["delta"].get("content", "")
+                        if not token:
+                            continue
+                        text_buf += token
+                        # Yield complete sentences at punctuation boundaries
+                        while True:
+                            idx = next((i for i, c in enumerate(text_buf) if c in ".!?" and i >= 8), -1)
+                            if idx == -1:
+                                break
+                            sentence = text_buf[:idx + 1].strip()
+                            text_buf = text_buf[idx + 1:].lstrip()
+                            if len(sentence.split()) >= 3:
+                                yield sentence
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+    if text_buf.strip() and len(text_buf.strip().split()) >= 2:
+        yield text_buf.strip()
 
 
 async def _handle_user_question(transcript):
@@ -474,7 +483,7 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        stt = deepgram.STT(endpointing_ms=200)
+        stt = deepgram.STT(endpointing_ms=400)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
