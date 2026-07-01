@@ -350,7 +350,7 @@ _last_transcript = ""
 # TRUE_SILENCE_SECS of complete silence with zero speech activity.
 _speech_buffer = ""         # accumulated final-transcript text
 _speech_timer: asyncio.Task | None = None  # cancellable silence timer
-TRUE_SILENCE_SECS = 0.8     # seconds of no speech before processing question
+TRUE_SILENCE_SECS = 0.3     # seconds of no speech before processing question
 
 
 async def _silence_timer():
@@ -474,9 +474,7 @@ async def entrypoint(ctx: JobContext):
     try:
         log(f"[ENTRYPOINT] Agent dispatched to room: {ctx.room.name}")
 
-        # endpointing_ms=500 — Deepgram finalizes segments quickly so interim transcripts
-        # keep flowing; our _silence_timer (3s) does the real turn detection.
-        stt = deepgram.STT(endpointing_ms=500)
+        stt = deepgram.STT(endpointing_ms=200)
 
         # No TTS plugin — audio is pre-synthesized via ElevenLabs HTTP REST in _elevenlabs_frames()
         # and passed directly to session.say(audio=...), bypassing the WebSocket entirely.
@@ -499,14 +497,14 @@ async def entrypoint(ctx: JobContext):
             text = event.transcript.strip()
             if not text:
                 return
-            # Accumulate final transcripts into the buffer (finals are more accurate)
+            # Only accumulate and trigger on final transcripts — interim events
+            # would keep resetting the silence timer and delay response start.
             if event.is_final:
                 _speech_buffer = (_speech_buffer + " " + text).strip() if _speech_buffer else text
                 log(f"TRANSCRIPT FINAL: {text[:60]}")
-            # Cancel existing silence timer and restart — any speech activity resets the clock
-            if _speech_timer and not _speech_timer.done():
-                _speech_timer.cancel()
-            _speech_timer = asyncio.create_task(_silence_timer())
+                if _speech_timer and not _speech_timer.done():
+                    _speech_timer.cancel()
+                _speech_timer = asyncio.create_task(_silence_timer())
 
         log("Starting session...")
         await session.start(room=ctx.room, agent=apb_agent)
