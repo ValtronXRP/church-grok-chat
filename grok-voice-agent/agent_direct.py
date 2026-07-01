@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import random
 import sys
 import json
 import time
@@ -64,21 +63,6 @@ async def _elevenlabs_frames(text: str):
 
 RERANKER_URL = os.environ.get('RERANKER_URL', 'http://127.0.0.1:5050')
 
-THINKING_TEXTS = [
-    "Let me think about that…",
-    "Good question. Let me pull that up…",
-    "Interesting. Give me a moment…",
-    "Looking through my teachings on this…",
-    "Let's see what I've taught about that…",
-]
-
-VERBAL_BRIDGES = [
-    "Good question. Let me think about that.",
-    "Let me pull up what I've taught on that.",
-    "Interesting. Let me see.",
-    "Let me think about that for a moment.",
-    "Let me find the answer for you.",
-]
 
 PASTOR_BOB_INSTRUCTIONS = """You ARE Pastor Bob Kopeny. You speak in first person as yourself — not as an assistant talking about Pastor Bob.
 
@@ -366,34 +350,7 @@ _last_transcript = ""
 # TRUE_SILENCE_SECS of complete silence with zero speech activity.
 _speech_buffer = ""         # accumulated final-transcript text
 _speech_timer: asyncio.Task | None = None  # cancellable silence timer
-TRUE_SILENCE_SECS = 2.0     # seconds of no speech before processing question
-
-# Pre-cached bridge audio — fetched at startup so bridge plays INSTANTLY
-_bridge_cache: dict[str, list[rtc.AudioFrame]] = {}
-
-
-async def _precache_bridges():
-    """Fetch all bridge phrases from ElevenLabs at startup and cache the frames."""
-    global _bridge_cache
-    log("Pre-caching bridge audio...")
-    for phrase in VERBAL_BRIDGES:
-        frames = []
-        async for frame in _elevenlabs_frames(phrase):
-            frames.append(frame)
-        if frames:
-            _bridge_cache[phrase] = frames
-            log(f"Cached bridge: '{phrase[:45]}' ({len(frames)} frames)")
-    log(f"Bridge cache ready: {len(_bridge_cache)}/{len(VERBAL_BRIDGES)} phrases")
-
-
-async def _cached_bridge_frames(phrase: str):
-    """Yield pre-cached frames instantly, or fall back to live fetch."""
-    if phrase in _bridge_cache:
-        for frame in _bridge_cache[phrase]:
-            yield frame
-    else:
-        async for frame in _elevenlabs_frames(phrase):
-            yield frame
+TRUE_SILENCE_SECS = 0.8     # seconds of no speech before processing question
 
 
 async def _silence_timer():
@@ -423,7 +380,8 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-async def _call_grok_direct(transcript: str) -> str:
+async def _call_grok_streaming(transcript: str):
+    """Stream Grok response, yielding complete sentences as tokens arrive."""
     url = "https://api.x.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['XAI_API_KEY']}",
@@ -437,14 +395,41 @@ async def _call_grok_direct(transcript: str) -> str:
         ],
         "max_tokens": 220,
         "temperature": 0.7,
+        "stream": True,
     }
+    buf = ""
     async with aiohttp.ClientSession() as http:
         async with http.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            data = await resp.json()
-            if "choices" not in data:
-                log(f"Grok API error (status={resp.status}): {data}")
-                raise ValueError(f"Grok API error: {data}")
-            return data["choices"][0]["message"]["content"].strip()
+            if resp.status != 200:
+                body = await resp.text()
+                log(f"Grok streaming error {resp.status}: {body[:200]}")
+                return
+            async for raw in resp.content:
+                line = raw.decode("utf-8").strip()
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    break
+                try:
+                    data = json.loads(data_str)
+                    token = data["choices"][0]["delta"].get("content", "")
+                    if not token:
+                        continue
+                    buf += token
+                    # Yield complete sentences at punctuation boundaries
+                    while True:
+                        idx = next((i for i, c in enumerate(buf) if c in ".!?" and i >= 8), -1)
+                        if idx == -1:
+                            break
+                        sentence = buf[:idx + 1].strip()
+                        buf = buf[idx + 1:].lstrip()
+                        if len(sentence.split()) >= 3:
+                            yield sentence
+                except (json.JSONDecodeError, KeyError):
+                    continue
+    if buf.strip() and len(buf.strip().split()) >= 2:
+        yield buf.strip()
 
 
 async def _handle_user_question(transcript):
@@ -462,27 +447,21 @@ async def _handle_user_question(transcript):
     _searching = True
     _last_transcript = transcript
     await _send_data_message("user_transcript", {"text": transcript})
-    await _send_data_message("thinking_text", {"text": random.choice(THINKING_TEXTS)})
-    bridge_text = random.choice(VERBAL_BRIDGES)
     t_start = time.monotonic()
     try:
-        # Grok runs in parallel with the bridge
-        grok_task = asyncio.create_task(_call_grok_direct(transcript))
+        # Stream Grok sentence by sentence — pipe each sentence to ElevenLabs immediately
+        # so audio starts as soon as the first sentence is ready (~0.5-1s)
+        full_answer = []
+        async for sentence in _call_grok_streaming(transcript):
+            full_answer.append(sentence)
+            elapsed = time.monotonic() - t_start
+            log(f"Sentence ready ({elapsed:.2f}s): {sentence[:60]}")
+            await _session_ref.say(sentence, audio=_elevenlabs_frames(sentence), allow_interruptions=False)
 
-        # Bridge plays instantly from cache
-        await _session_ref.say(bridge_text, audio=_cached_bridge_frames(bridge_text), allow_interruptions=False)
-        await _send_data_message("bridge_complete", {})
-        await asyncio.sleep(0.8)
-
-        # Wait for Grok answer, then stream directly to speaker —
-        # ElevenLabs /stream returns first audio chunk in ~0.5s, no full-synthesis wait
-        answer = await grok_task
-        elapsed = time.monotonic() - t_start
-        log(f"Grok done in {elapsed:.2f}s — streaming answer via ElevenLabs")
-
-        await _send_data_message("agent_transcript", {"text": answer})
-        await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
-        _speaking_until = time.monotonic() + 2.0
+        complete_answer = " ".join(full_answer)
+        await _send_data_message("agent_transcript", {"text": complete_answer})
+        log(f"Answer complete in {time.monotonic() - t_start:.2f}s")
+        _speaking_until = time.monotonic() + 1.0
     except Exception as e:
         log(f"Handle question error: {e}")
         _speaking_until = 0.0
@@ -508,7 +487,6 @@ async def entrypoint(ctx: JobContext):
         apb_agent = Agent(instructions=PASTOR_BOB_INSTRUCTIONS)
 
         await fetch_dynamic_keywords()
-        await _precache_bridges()
 
         log("Connecting to room...")
         await ctx.connect()
