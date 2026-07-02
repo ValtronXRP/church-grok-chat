@@ -382,27 +382,18 @@ async def _send_data_message(message_type, data):
 
 
 async def _call_grok_direct(transcript: str) -> str:
-    url = "https://api.x.ai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {os.environ['XAI_API_KEY']}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "grok-3",
-        "messages": [
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
         ],
-        "max_tokens": 220,
-        "temperature": 0.7,
-    }
-    async with aiohttp.ClientSession() as http:
-        async with http.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            data = await resp.json()
-            if "choices" not in data:
-                log(f"Grok API error (status={resp.status}): {data}")
-                raise ValueError(f"Grok API error: {data}")
-            return data["choices"][0]["message"]["content"].strip()
+        max_tokens=120,
+        temperature=0.7,
+    )
+    return response.choices[0].message.content.strip()
 
 
 async def _handle_user_question(transcript):
