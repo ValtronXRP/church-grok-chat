@@ -381,10 +381,7 @@ async def _send_data_message(message_type, data):
         logger.error(f"Failed to send data: {e}")
 
 
-async def _call_grok_streaming(transcript: str):
-    """Stream Grok response, yielding complete sentences as tokens arrive.
-    Uses grok-3-mini for faster first token. Properly parses SSE by accumulating
-    raw byte chunks into a line buffer before splitting on newlines."""
+async def _call_grok_direct(transcript: str) -> str:
     url = "https://api.x.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['XAI_API_KEY']}",
@@ -398,48 +395,14 @@ async def _call_grok_streaming(transcript: str):
         ],
         "max_tokens": 220,
         "temperature": 0.7,
-        "stream": True,
     }
-    text_buf = ""   # accumulates tokens until a sentence boundary
-    line_buf = ""   # accumulates raw bytes until a complete SSE line
     async with aiohttp.ClientSession() as http:
         async with http.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            if resp.status != 200:
-                body = await resp.text()
-                log(f"Grok streaming error {resp.status}: {body[:200]}")
-                return
-            async for chunk in resp.content.iter_any():
-                line_buf += chunk.decode("utf-8")
-                # Split accumulated bytes on newlines to get complete SSE lines
-                while "\n" in line_buf:
-                    line, line_buf = line_buf.split("\n", 1)
-                    line = line.strip()
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
-                        if text_buf.strip() and len(text_buf.strip().split()) >= 2:
-                            yield text_buf.strip()
-                        return
-                    try:
-                        data = json.loads(data_str)
-                        token = data["choices"][0]["delta"].get("content", "")
-                        if not token:
-                            continue
-                        text_buf += token
-                        # Yield complete sentences at punctuation boundaries
-                        while True:
-                            idx = next((i for i, c in enumerate(text_buf) if c in ".!?" and i >= 8), -1)
-                            if idx == -1:
-                                break
-                            sentence = text_buf[:idx + 1].strip()
-                            text_buf = text_buf[idx + 1:].lstrip()
-                            if len(sentence.split()) >= 3:
-                                yield sentence
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-    if text_buf.strip() and len(text_buf.strip().split()) >= 2:
-        yield text_buf.strip()
+            data = await resp.json()
+            if "choices" not in data:
+                log(f"Grok API error (status={resp.status}): {data}")
+                raise ValueError(f"Grok API error: {data}")
+            return data["choices"][0]["message"]["content"].strip()
 
 
 async def _handle_user_question(transcript):
@@ -459,18 +422,11 @@ async def _handle_user_question(transcript):
     await _send_data_message("user_transcript", {"text": transcript})
     t_start = time.monotonic()
     try:
-        # Stream Grok sentence by sentence — pipe each sentence to ElevenLabs immediately
-        # so audio starts as soon as the first sentence is ready (~0.5-1s)
-        full_answer = []
-        async for sentence in _call_grok_streaming(transcript):
-            full_answer.append(sentence)
-            elapsed = time.monotonic() - t_start
-            log(f"Sentence ready ({elapsed:.2f}s): {sentence[:60]}")
-            await _session_ref.say(sentence, audio=_elevenlabs_frames(sentence), allow_interruptions=False)
-
-        complete_answer = " ".join(full_answer)
-        await _send_data_message("agent_transcript", {"text": complete_answer})
-        log(f"Answer complete in {time.monotonic() - t_start:.2f}s")
+        answer = await _call_grok_direct(transcript)
+        elapsed = time.monotonic() - t_start
+        log(f"Grok done in {elapsed:.2f}s — streaming to ElevenLabs")
+        await _send_data_message("agent_transcript", {"text": answer})
+        await _session_ref.say(answer, audio=_elevenlabs_frames(answer), allow_interruptions=False)
         _speaking_until = time.monotonic() + 1.0
     except Exception as e:
         log(f"Handle question error: {e}")
