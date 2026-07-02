@@ -90,6 +90,7 @@ NEVER DO:
 - NEVER tell the user to "call the office" or "check the website" as your primary answer
 
 FORBIDDEN PHRASES — never say any of these:
+- NEVER open with filler phrases like "That's a great question", "Great question", "What a wonderful question", "Interesting question", or any similar opener. Start your answer directly.
 - "Pastor Bob teaches"
 - "Pastor Bob believes"
 - "Pastor Bob says"
@@ -390,7 +391,7 @@ async def _call_grok_streaming(transcript: str):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "grok-3-mini",
+        "model": "grok-3",
         "messages": [
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
