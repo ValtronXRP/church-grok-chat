@@ -351,7 +351,10 @@ _last_transcript = ""
 # TRUE_SILENCE_SECS of complete silence with zero speech activity.
 _speech_buffer = ""         # accumulated final-transcript text
 _speech_timer: asyncio.Task | None = None  # cancellable silence timer
-TRUE_SILENCE_SECS = 0.3     # seconds of no speech before processing question
+TRUE_SILENCE_SECS = 1.3     # seconds of no speech before processing question.
+# 0.3s was far too aggressive — natural mid-sentence breath-pauses tripped it,
+# cutting users off and splitting one question into fragments. 1.3s lets people
+# pause naturally while still feeling responsive.
 
 
 async def _silence_timer():
