@@ -1609,6 +1609,9 @@
             <div class="agent-status" id="agentStatus">🤖 Agent Connected</div>
 
             <!-- ── Video Avatar ── -->
+            <!-- Hidden by default (avatar billing is ~$0.24/answer). Reveal only via the
+                 private demo link: append ?avatar=1 to the URL. See reveal script below. -->
+            <div id="avatarSection" style="display:none;">
             <div class="avatar-divider">or talk face-to-face</div>
 
             <button id="avatarBtn" onclick="toggleAvatar()" title="Video Avatar — Pastor Bob answers live">
@@ -1628,6 +1631,18 @@
                 <video id="avatarVideo" autoplay playsinline muted></video>
                 <audio id="avatarAudio" autoplay></audio>
             </div>
+            </div><!-- #avatarSection -->
+            <!-- Reveal the avatar only on the private demo link (…?avatar=1). Otherwise it
+                 stays hidden so it can never be triggered (and billed) by normal visitors. -->
+            <script>
+              (function () {
+                var params = new URLSearchParams(window.location.search);
+                if (params.get('avatar') === '1') {
+                  var sec = document.getElementById('avatarSection');
+                  if (sec) sec.style.display = '';
+                }
+              })();
+            </script>
             <!-- ── end Video Avatar ── -->
 
             <!-- Audio Level Indicator -->

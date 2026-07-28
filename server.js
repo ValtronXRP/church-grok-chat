@@ -72,7 +72,9 @@ const LIVEAVATAR_API_KEY = process.env.LIVEAVATAR_API_KEY;
 const LIVEAVATAR_API_BASE = 'https://api.liveavatar.com';
 const LIVEAVATAR_AVATAR_ID = 'e7e1fefe-cc82-47da-80e5-bc53caaa1ebd';
 const LIVEAVATAR_VOICE_ID = 'b92938db-6045-47fc-af85-a1d96f70a11a';
-const LIVEAVATAR_CONTEXT_ID = 'd2983cd6-d93d-4e00-b5c9-3723023497ce';
+// Was 'd2983cd6-…' which LiveAvatar now rejects with "Context not found" (deleted).
+// Current valid context on the account is the "Bob Kopeny" context below.
+const LIVEAVATAR_CONTEXT_ID = process.env.LIVEAVATAR_CONTEXT_ID || '9b807e56-1378-47ea-a110-d38b5cfc6bb1';
 
 // Initialize local sermon search
 const sermonSearcher = new SermonSearch();
