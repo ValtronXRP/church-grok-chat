@@ -382,15 +382,21 @@ async def _send_data_message(message_type, data):
 
 
 async def _call_grok_direct(transcript: str) -> str:
+    # xAI (Grok) is OpenAI-API-compatible, so we reuse the OpenAI SDK pointed at
+    # the xAI endpoint with XAI_API_KEY. (Previously used gpt-4o-mini, which
+    # required OPENAI_API_KEY — unset in this env — and broke every voice answer.)
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = AsyncOpenAI(
+        api_key=os.environ["XAI_API_KEY"],
+        base_url="https://api.x.ai/v1",
+    )
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="grok-3",
         messages=[
             {"role": "system", "content": PASTOR_BOB_INSTRUCTIONS},
             {"role": "user", "content": transcript},
         ],
-        max_tokens=120,
+        max_tokens=200,
         temperature=0.7,
     )
     return response.choices[0].message.content.strip()
