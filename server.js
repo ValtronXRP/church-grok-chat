@@ -2077,6 +2077,28 @@ app.post('/api/liveavatar/session', async (req, res) => {
   }
 });
 
+// Stop a LiveAvatar session immediately so billing ends the moment the user
+// closes the demo (instead of waiting for LiveAvatar's idle timeout).
+// Accepts JSON or sendBeacon Blob { session_id }. Valid reasons per LiveAvatar:
+// USER_CLOSED, USER_DISCONNECTED, IDLE_TIMEOUT, etc.
+app.post('/api/liveavatar/stop', async (req, res) => {
+  const sessionId = req.body && req.body.session_id;
+  if (!sessionId) return res.status(400).json({ error: 'session_id required' });
+  if (!LIVEAVATAR_API_KEY) return res.status(503).json({ error: 'LIVEAVATAR_API_KEY not configured' });
+  try {
+    await axios.post(`${LIVEAVATAR_API_BASE}/v1/sessions/stop`,
+      { session_id: sessionId, reason: 'USER_CLOSED' },
+      { headers: { 'X-API-KEY': LIVEAVATAR_API_KEY, 'Content-Type': 'application/json' } });
+    console.log(`[LiveAvatar] Session stopped: ${sessionId}`);
+    res.json({ stopped: true });
+  } catch (err) {
+    const detail = err.response?.data?.message || err.message;
+    console.error('[LiveAvatar] Stop error:', detail);
+    // Best-effort: report but don't hard-fail the client cleanup.
+    res.status(200).json({ stopped: false, detail });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running on http://localhost:${PORT}`);
   console.log(`📺 Open chat at: http://localhost:${PORT}/chat.html`);

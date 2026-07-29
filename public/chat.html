@@ -1837,6 +1837,28 @@
 
         // LIVEAVATAR STATE
         let avatarRoom = null;
+        let avatarSessionId = null;
+
+        // Tell the backend to stop the LiveAvatar session so billing ends immediately.
+        // useBeacon=true for page-unload (fetch may be cancelled as the tab closes).
+        function stopAvatarSession(useBeacon) {
+            if (!avatarSessionId) return;
+            const sid = avatarSessionId;
+            avatarSessionId = null;
+            const body = JSON.stringify({ session_id: sid });
+            try {
+                if (useBeacon && navigator.sendBeacon) {
+                    navigator.sendBeacon('/api/liveavatar/stop', new Blob([body], { type: 'application/json' }));
+                } else {
+                    fetch('/api/liveavatar/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body,
+                        keepalive: true
+                    }).catch(() => {});
+                }
+            } catch (e) { /* best-effort */ }
+        }
         let isAvatarConnected = false;
 
         // ============================================
@@ -1872,7 +1894,8 @@
                     const err = await res.json().catch(() => ({}));
                     throw new Error(err.detail || `Server error ${res.status}`);
                 }
-                const { livekit_url, livekit_client_token } = await res.json();
+                const { session_id, livekit_url, livekit_client_token } = await res.json();
+                avatarSessionId = session_id;  // remember so we can stop billing on exit
 
                 // Connect to the LiveAvatar LiveKit room
                 avatarRoom = new LivekitClient.Room({
@@ -1896,6 +1919,7 @@
                 });
 
                 avatarRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+                    stopAvatarSession(false);  // also stop billing on unexpected drops
                     _setAvatarDisconnected();
                 });
 
@@ -1922,6 +1946,7 @@
         }
 
         function disconnectAvatar() {
+            stopAvatarSession(false);  // end LiveAvatar billing immediately
             if (avatarRoom) {
                 try { avatarRoom.disconnect(); } catch(e) {}
                 avatarRoom = null;
@@ -3436,10 +3461,12 @@ When asked about theological topics listed above, use these verified positions a
         // PAGE EVENTS
         // ============================================
         window.addEventListener('beforeunload', () => {
+            stopAvatarSession(true);  // beacon: end avatar billing even as the tab closes
             if (room) room.disconnect();
             if (avatarRoom) avatarRoom.disconnect();
         });
         window.addEventListener('pagehide', () => {
+            stopAvatarSession(true);
             if (room) room.disconnect();
             if (avatarRoom) avatarRoom.disconnect();
         });
